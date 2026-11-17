@@ -12,11 +12,11 @@
       </p>
     </div>
     <div class="heading-actions">
-      <a href="{{ route('operator.elections.monitor', $election) }}" class="btn btn-primary">
+      <a href="{{ route('operator.elections.monitor', $election) }}" wire:navigate class="btn btn-primary">
         <svg class="icon"><use href="#i-users"></use></svg>
         <span>Buka Pantau Pemilih</span>
       </a>
-      <a href="{{ route('operator.elections.recap', $election) }}" class="btn btn-secondary">
+      <a href="{{ route('operator.elections.recap', $election) }}" wire:navigate class="btn btn-secondary">
         <svg class="icon"><use href="#i-chart"></use></svg>
         <span>Rekapitulasi</span>
       </a>

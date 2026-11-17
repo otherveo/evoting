@@ -108,7 +108,7 @@ class BallotPage extends Component
                 ip: request()->ip()
             );
 
-            if ($result['election_id']) {
+            if ($result['election_id'] && ! $this->electionId) {
                 $this->electionId = $result['election_id'];
                 $el = Election::find($this->electionId);
                 if ($el) {
@@ -131,7 +131,9 @@ class BallotPage extends Component
                 return;
             }
 
-            $this->applySessionExpiry($voting->databaseNow()->addMinutes(10));
+            $this->applySessionExpiry(
+                CarbonImmutable::now('UTC')->addMilliseconds(VotingService::$dbOffsetMs)->addMinutes(10)
+            );
             $this->stage = 'memilih';
             $this->dispatch('step-changed');
         } catch (Throwable $e) {
@@ -181,8 +183,12 @@ class BallotPage extends Component
         $this->dispatch('step-changed');
     }
 
-    public function confirmVote(VotingService $voting): void
+    public function confirmVote(VotingService $voting, ?string $candidateId = null): void
     {
+        if ($candidateId !== null && $candidateId !== '') {
+            $this->selectedCandidateId = $candidateId;
+        }
+
         if (! $this->selectedCandidateId) {
             $this->stage = 'memilih';
 

@@ -81,15 +81,15 @@
           </div>
 
           <div class="election-card-actions">
-            <a href="{{ route('operator.elections.monitor', $el) }}" class="btn btn-sm btn-primary">
+            <a href="{{ route('operator.elections.monitor', $el) }}" wire:navigate class="btn btn-sm btn-primary">
               <svg class="icon"><use href="#i-users"></use></svg>
               <span>Pantau &amp; Registrasi QR</span>
             </a>
-            <a href="{{ route('operator.elections.detail', $el) }}" class="btn btn-sm btn-secondary">
+            <a href="{{ route('operator.elections.detail', $el) }}" wire:navigate class="btn btn-sm btn-secondary">
               <svg class="icon"><use href="#i-calendar"></use></svg>
               <span>Konfigurasi &amp; Paslon</span>
             </a>
-            <a href="{{ route('operator.elections.recap', $el) }}" class="btn btn-sm btn-soft">
+            <a href="{{ route('operator.elections.recap', $el) }}" wire:navigate class="btn btn-sm btn-soft">
               <svg class="icon"><use href="#i-chart"></use></svg>
               <span>Rekapitulasi</span>
             </a>

@@ -4,8 +4,11 @@ namespace App\Livewire\Admin;
 
 use App\Livewire\Concerns\HandlesSafeErrors;
 use App\Models\StaffAccount;
+use App\Services\AuditService;
 use App\Services\StaffAccountService;
+use App\Services\TokenService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use InvalidArgumentException;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
@@ -183,38 +186,75 @@ class OperatorIndexPage extends Component
         }
     }
 
-    public function render()
+    public function setQrMode(string $mode, TokenService $tokens, AuditService $audit): void
     {
-        $baseQuery = StaffAccount::query()->where('role', 'operator');
+        try {
+            /** @var StaffAccount $admin */
+            $admin = Auth::guard('staff')->user();
+            $normalized = $tokens->setQrMode($mode, $admin, $audit);
 
-        $totalOperators = (clone $baseQuery)->count();
-        $activeOperators = (clone $baseQuery)->where('is_active', true)->count();
-        $pendingPasswordChange = (clone $baseQuery)->where('must_change_password', true)->count();
+            $label = $normalized === TokenService::QR_MODE_CUSTOM
+                ? 'Mode Kustom (dengan logo di tengah)'
+                : 'Mode Standar (tanpa logo tengah)';
+
+            $this->dispatch('toast', message: "Konfigurasi QR pemilih diubah ke {$label}.", type: 'success');
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal menyimpan konfigurasi mode QR. Silakan coba kembali.');
+        }
+    }
+
+    public function render(TokenService $tokens)
+    {
+        $allOperators = StaffAccount::query()
+            ->where('role', 'operator')
+            ->orderByDesc('created_at')
+            ->get();
+
+        $totalOperators = $allOperators->count();
+        $activeOperators = $allOperators->where('is_active', true)->count();
+        $pendingPasswordChange = $allOperators->where('must_change_password', true)->count();
         $inactiveOperators = $totalOperators - $activeOperators;
 
-        $query = clone $baseQuery;
-        if ($this->filterStatus === 'active') {
-            $query->where('is_active', true);
-        } elseif ($this->filterStatus === 'inactive') {
-            $query->where('is_active', false);
-        }
+        $operators = $allOperators->filter(function (StaffAccount $op) {
+            if ($this->filterStatus === 'active' && ! $op->is_active) {
+                return false;
+            }
+            if ($this->filterStatus === 'inactive' && $op->is_active) {
+                return false;
+            }
+            if (trim($this->search) !== '') {
+                $needle = mb_strtolower(trim($this->search));
+                if (
+                    ! str_contains(mb_strtolower($op->username), $needle) &&
+                    ! str_contains(mb_strtolower($op->full_name), $needle)
+                ) {
+                    return false;
+                }
+            }
 
-        if (trim($this->search) !== '') {
-            $q = '%'.mb_strtolower(trim($this->search)).'%';
-            $query->where(function ($sub) use ($q) {
-                $sub->whereRaw('lower(username) like ?', [$q])
-                    ->orWhereRaw('lower(full_name) like ?', [$q]);
-            });
-        }
+            return true;
+        })->values();
 
-        $operators = $query->orderByDesc('created_at')->get();
+        $sampleUrl = url('/v/contoh-token-verifikasi-scanner');
+        $qrMode = $tokens->getQrMode();
+        $customQrPreviewSvg = Cache::rememberForever(
+            'evoting_preview_qr_custom_v1',
+            fn () => $tokens->renderQrSvg($sampleUrl, 160, TokenService::QR_MODE_CUSTOM)
+        );
+        $standardQrPreviewSvg = Cache::rememberForever(
+            'evoting_preview_qr_standard_v1',
+            fn () => $tokens->renderQrSvg($sampleUrl, 160, TokenService::QR_MODE_STANDARD)
+        );
 
         return view('livewire.admin.operator-index-page', [
-            'operators' => $operators,
+            'operators' => $allOperators,
             'totalOperators' => $totalOperators,
             'activeOperators' => $activeOperators,
             'pendingPasswordChange' => $pendingPasswordChange,
             'inactiveOperators' => $inactiveOperators,
+            'qrMode' => $qrMode,
+            'customQrPreviewSvg' => $customQrPreviewSvg,
+            'standardQrPreviewSvg' => $standardQrPreviewSvg,
         ]);
     }
 }

@@ -1,13 +1,17 @@
+@php
+  $appName = config('app.name') ?: 'E-Voting';
+@endphp
 <!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="csrf-token" content="{{ csrf_token() }}" />
-  <meta name="description" content="SuaraSekolah — Sistem E-Voting Sekolah Berbasis QR Token Sekali Pakai" />
+  <meta name="description" content="{{ $appName }} — Sistem E-Voting Sekolah Berbasis QR Token Sekali Pakai" />
   <meta name="theme-color" content="#132a63" />
-  <title>{{ isset($title) ? $title . ' — SuaraSekolah' : 'SuaraSekolah — Sistem E-Voting' }}</title>
-  <link rel="stylesheet" href="{{ asset('css/suarasekolah.css') }}?v=2" />
+  <link rel="icon" type="image/png" href="{{ asset('SMPN7-e-voting_logo.png') }}" />
+  <title>{{ isset($title) ? $title . ' — ' . $appName : $appName . ' — Sistem E-Voting' }}</title>
+  <link rel="stylesheet" href="{{ asset('css/suarasekolah.css') }}?v=4" />
   @livewireStyles
 </head>
 <body>
@@ -27,12 +31,10 @@
 
   <header class="site-header {{ $isPublicRoute ? 'public-site-header' : '' }}">
     <div class="container header-inner">
-      <a href="{{ $staffUser ? ($staffUser->isAdmin() ? route('admin.operators') : route('operator.elections')) : route('login') }}" class="brand">
-        <span class="brand-mark" aria-hidden="true">
-          <svg class="icon"><use href="#i-ballot"></use></svg>
-        </span>
+      <a href="{{ $staffUser ? ($staffUser->isAdmin() ? route('admin.operators') : route('operator.elections')) : route('login') }}" wire:navigate class="brand">
+        <img src="{{ asset('SMPN7-e-voting_logo.png') }}" alt="{{ $appName }}" class="brand-logo" />
         <span class="brand-text">
-          <strong>SuaraSekolah</strong>
+          <strong>{{ $appName }}</strong>
           <small>Sistem E-Voting QR Token</small>
         </span>
       </a>
@@ -41,34 +43,34 @@
       @if($staffUser && !$staffUser->needsActivation() && (!$staffUser->isAdmin() || session('staff_2fa_verified', false)))
         <nav class="main-nav" aria-label="Navigasi Utama">
           @if($staffUser->isAdmin())
-            <a href="{{ route('admin.operators') }}" class="nav-link {{ request()->routeIs('admin.operators*') ? 'is-active' : '' }}">
+            <a href="{{ route('admin.operators') }}" wire:navigate class="nav-link {{ request()->routeIs('admin.operators*') ? 'is-active' : '' }}">
               <svg class="icon"><use href="#i-users"></use></svg>
               <span class="nav-label-full">Akun Operator</span>
               <span class="nav-label-short">Operator</span>
             </a>
-            <a href="{{ route('admin.audit-logs') }}" class="nav-link {{ request()->routeIs('admin.audit-logs*') ? 'is-active' : '' }}">
+            <a href="{{ route('admin.audit-logs') }}" wire:navigate class="nav-link {{ request()->routeIs('admin.audit-logs*') ? 'is-active' : '' }}">
               <svg class="icon"><use href="#i-activity"></use></svg>
               <span class="nav-label-full">Log Audit</span>
               <span class="nav-label-short">Audit</span>
             </a>
           @elseif($staffUser->isOperator())
-            <a href="{{ route('operator.elections') }}" class="nav-link {{ request()->routeIs('operator.elections') ? 'is-active' : '' }}">
+            <a href="{{ route('operator.elections') }}" wire:navigate class="nav-link {{ request()->routeIs('operator.elections') ? 'is-active' : '' }}">
               <svg class="icon"><use href="#i-dashboard"></use></svg>
               <span class="nav-label-full">Daftar Pemilihan</span>
               <span class="nav-label-short">Pemilihan</span>
             </a>
             @if(isset($activeElection) && $activeElection instanceof \App\Models\Election)
-              <a href="{{ route('operator.elections.detail', $activeElection) }}" class="nav-link {{ request()->routeIs('operator.elections.detail') ? 'is-active' : '' }}">
+              <a href="{{ route('operator.elections.detail', $activeElection) }}" wire:navigate class="nav-link {{ request()->routeIs('operator.elections.detail') ? 'is-active' : '' }}">
                 <svg class="icon"><use href="#i-calendar"></use></svg>
                 <span class="nav-label-full">Konfigurasi &amp; Paslon</span>
                 <span class="nav-label-short">Detail</span>
               </a>
-              <a href="{{ route('operator.elections.monitor', $activeElection) }}" class="nav-link {{ request()->routeIs('operator.elections.monitor') ? 'is-active' : '' }}">
+              <a href="{{ route('operator.elections.monitor', $activeElection) }}" wire:navigate class="nav-link {{ request()->routeIs('operator.elections.monitor') ? 'is-active' : '' }}">
                 <svg class="icon"><use href="#i-users"></use></svg>
                 <span class="nav-label-full">Pantau Pemilih</span>
                 <span class="nav-label-short">Pantau</span>
               </a>
-              <a href="{{ route('operator.elections.recap', $activeElection) }}" class="nav-link {{ request()->routeIs('operator.elections.recap') ? 'is-active' : '' }}">
+              <a href="{{ route('operator.elections.recap', $activeElection) }}" wire:navigate class="nav-link {{ request()->routeIs('operator.elections.recap') ? 'is-active' : '' }}">
                 <svg class="icon"><use href="#i-chart"></use></svg>
                 <span class="nav-label-full">Rekapitulasi</span>
                 <span class="nav-label-short">Rekap</span>
@@ -78,12 +80,12 @@
         </nav>
       @elseif($isPublicRoute && isset($publicElection) && $publicElection instanceof \App\Models\Election)
         <nav class="main-nav" aria-label="Navigasi Halaman Publik">
-          <a href="{{ route('public.turnout', $publicElection) }}" class="nav-link {{ request()->routeIs('public.turnout') ? 'is-active' : '' }}">
+          <a href="{{ route('public.turnout', $publicElection) }}" wire:navigate class="nav-link {{ request()->routeIs('public.turnout') ? 'is-active' : '' }}">
             <svg class="icon"><use href="#i-users"></use></svg>
             <span class="nav-label-full">Jumlah Pemilih</span>
             <span class="nav-label-short">Partisipasi</span>
           </a>
-          <a href="{{ route('public.results', $publicElection) }}" class="nav-link {{ request()->routeIs('public.results') ? 'is-active' : '' }}">
+          <a href="{{ route('public.results', $publicElection) }}" wire:navigate class="nav-link {{ request()->routeIs('public.results') ? 'is-active' : '' }}">
             <svg class="icon"><use href="#i-trophy"></use></svg>
             <span class="nav-label-full">Hasil Pemilihan</span>
             <span class="nav-label-short">Hasil</span>
@@ -123,13 +125,45 @@
   </header>
 
   <main>
-    {{ $slot }}
+    {{-- Skeleton Loading saat berpindah halaman (wire:navigate) --}}
+    <div id="page-skeleton" class="container page page-skeleton-overlay" aria-hidden="true">
+      <div class="skeleton-heading">
+        <div style="flex: 1;">
+          <div class="skeleton-block" style="width: 180px; height: 14px; border-radius: 99px;"></div>
+          <div class="skeleton-block" style="width: min(420px, 85%); height: 34px; margin-top: 10px; border-radius: 10px;"></div>
+          <div class="skeleton-block" style="width: min(560px, 95%); height: 16px; margin-top: 10px; border-radius: 8px;"></div>
+        </div>
+        <div class="skeleton-block" style="width: 190px; height: 42px; border-radius: 12px;"></div>
+      </div>
+      <div class="stat-grid" style="margin-bottom: 18px;">
+        <div class="stat-card"><div class="skeleton-block" style="height: 86px; border-radius: 12px;"></div></div>
+        <div class="stat-card"><div class="skeleton-block" style="height: 86px; border-radius: 12px;"></div></div>
+        <div class="stat-card"><div class="skeleton-block" style="height: 86px; border-radius: 12px;"></div></div>
+        <div class="stat-card"><div class="skeleton-block" style="height: 86px; border-radius: 12px;"></div></div>
+      </div>
+      <div class="panel" style="padding: 22px;">
+        <div class="skeleton-block" style="width: 240px; height: 22px; border-radius: 8px; margin-bottom: 16px;"></div>
+        <div class="skeleton-block" style="height: 54px; border-radius: 12px; margin-bottom: 10px;"></div>
+        <div class="skeleton-block" style="height: 54px; border-radius: 12px; margin-bottom: 10px;"></div>
+        <div class="skeleton-block" style="height: 54px; border-radius: 12px;"></div>
+      </div>
+    </div>
+
+    <div class="page-live-content">
+      {{ $slot }}
+    </div>
   </main>
 
   <div id="toast-root" class="toast-root" aria-live="polite" aria-atomic="false"></div>
 
   @livewireScripts
   <script>
+    document.addEventListener('livewire:navigate', () => {
+      document.body.classList.add('is-navigating');
+    });
+    document.addEventListener('livewire:navigated', () => {
+      document.body.classList.remove('is-navigating');
+    });
     window.showToast = function (message, type = 'info') {
       const root = document.getElementById('toast-root');
       if (!root || !message) return;

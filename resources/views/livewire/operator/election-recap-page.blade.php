@@ -12,7 +12,7 @@
       </p>
     </div>
     <div class="heading-actions">
-      <a href="{{ route('operator.elections.monitor', $election) }}" class="btn btn-secondary">
+      <a href="{{ route('operator.elections.monitor', $election) }}" wire:navigate class="btn btn-secondary">
         <svg class="icon"><use href="#i-users"></use></svg>
         <span>Pantau Pemilih</span>
       </a>

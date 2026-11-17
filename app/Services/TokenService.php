@@ -2,17 +2,30 @@
 
 namespace App\Services;
 
+use App\Models\StaffAccount;
+use BaconQrCode\Common\ErrorCorrectionLevel;
+use BaconQrCode\Encoder\Encoder;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\ImageRenderer;
 use BaconQrCode\Renderer\RendererStyle\RendererStyle;
 use BaconQrCode\Writer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Cookie;
+use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
+use Throwable;
 
 class TokenService
 {
+    public const QR_MODE_CUSTOM = 'custom';
+
+    public const QR_MODE_STANDARD = 'standard';
+
+    private const QR_MODE_CACHE_KEY = 'evoting_config:qr_mode';
+
     /**
-     * Menghasilkan pasangan token acak 256-bit (base64url) dan hash SHA-256 hex 64 karakter (NFR-002).
+     * NFR-002, BR-012: Menghasilkan pasangan token acak 256-bit (base64url) dan hash SHA-256 hex 64 karakter.
      *
      * @return array{raw: string, hash: string}
      */
@@ -38,19 +51,121 @@ class TokenService
         return route('voter.ballot', ['token' => $rawToken]);
     }
 
-    public function renderQrSvg(string $url, int $size = 240): string
+    /**
+     * Membaca mode konfigurasi QR saat ini ('custom' dengan logo tengah, atau 'standard' polos).
+     */
+    public function getQrMode(): string
     {
+        $cached = Cache::get(self::QR_MODE_CACHE_KEY);
+        if (is_string($cached) && in_array($cached, [self::QR_MODE_CUSTOM, self::QR_MODE_STANDARD], true)) {
+            return $cached;
+        }
+
+        try {
+            $row = DB::table('evoting.cache')
+                ->where('key', self::QR_MODE_CACHE_KEY)
+                ->first();
+
+            if ($row && in_array($row->value, [self::QR_MODE_CUSTOM, self::QR_MODE_STANDARD], true)) {
+                $mode = (string) $row->value;
+                Cache::forever(self::QR_MODE_CACHE_KEY, $mode);
+
+                return $mode;
+            }
+        } catch (Throwable) {
+            // Fallback ke mode bawaan bila koneksi belum tersedia
+        }
+
+        Cache::forever(self::QR_MODE_CACHE_KEY, self::QR_MODE_CUSTOM);
+
+        return self::QR_MODE_CUSTOM;
+    }
+
+    /**
+     * Mengubah mode konfigurasi QR oleh Admin ('custom' atau 'standard') dan mencatatnya ke Log Audit.
+     */
+    public function setQrMode(string $mode, StaffAccount $admin, AuditService $audit): string
+    {
+        if (! in_array($mode, [self::QR_MODE_CUSTOM, self::QR_MODE_STANDARD], true)) {
+            throw new InvalidArgumentException('Mode QR tidak valid.');
+        }
+
+        Cache::forever(self::QR_MODE_CACHE_KEY, $mode);
+
+        DB::table('evoting.cache')->updateOrInsert(
+            ['key' => self::QR_MODE_CACHE_KEY],
+            [
+                'value' => $mode,
+                'expiration' => 2147483647,
+            ]
+        );
+
+        $audit->log(
+            actorType: 'admin',
+            actorId: $admin->id,
+            action: 'ubah_mode_qr',
+            objectType: 'system_config',
+            objectId: null,
+            detail: [
+                'qr_mode' => $mode,
+                'label' => $mode === self::QR_MODE_CUSTOM ? 'QR Kustom (Dengan Logo Tengah)' : 'QR Standar (Tanpa Logo)',
+            ]
+        );
+
+        return $mode;
+    }
+
+    /**
+     * Menghasilkan SVG QR Code. Pada mode 'custom', memakai ErrorCorrectionLevel::H() (30%)
+     * dan menyematkan logo SMPN7-e-voting_logo.png di bagian tengah.
+     */
+    public function renderQrSvg(string $url, int $size = 240, ?string $forceMode = null): string
+    {
+        $mode = $forceMode ?? $this->getQrMode();
+        $ecLevel = $mode === self::QR_MODE_CUSTOM
+            ? ErrorCorrectionLevel::H()
+            : ErrorCorrectionLevel::M();
+
         $renderer = new ImageRenderer(
             new RendererStyle($size, 1),
             new SvgImageBackEnd
         );
         $writer = new Writer($renderer);
+        $svg = $writer->writeString($url, Encoder::DEFAULT_BYTE_MODE_ENCODING, $ecLevel);
 
-        return $writer->writeString($url);
+        if ($mode !== self::QR_MODE_CUSTOM) {
+            return $svg;
+        }
+
+        $logoUrl = htmlspecialchars(asset('SMPN7-e-voting_logo.png'), ENT_QUOTES, 'UTF-8');
+        $logoSize = (int) round($size * 0.225);
+        $borderSize = $logoSize + 4;
+        $padSize = $logoSize + 8;
+
+        $logoX = (int) round(($size - $logoSize) / 2);
+        $borderX = (int) round(($size - $borderSize) / 2);
+        $padX = (int) round(($size - $padSize) / 2);
+
+        $rxLogo = (int) round($logoSize * 0.185);
+        $rxBorder = $rxLogo + 2;
+        $rxPad = $rxLogo + 4;
+        $clipId = 'qr-logo-clip-'.$size.'-'.substr(md5($url.$size), 0, 6);
+
+        $overlay = <<<SVG
+<defs><clipPath id="{$clipId}"><rect x="{$logoX}" y="{$logoX}" width="{$logoSize}" height="{$logoSize}" rx="{$rxLogo}" ry="{$rxLogo}"/></clipPath></defs><rect x="{$padX}" y="{$padX}" width="{$padSize}" height="{$padSize}" rx="{$rxPad}" ry="{$rxPad}" fill="#ffffff"/><rect x="{$borderX}" y="{$borderX}" width="{$borderSize}" height="{$borderSize}" rx="{$rxBorder}" ry="{$rxBorder}" fill="#000000"/><image x="{$logoX}" y="{$logoX}" width="{$logoSize}" height="{$logoSize}" href="{$logoUrl}" xlink:href="{$logoUrl}" preserveAspectRatio="xMidYMid slice" clip-path="url(#{$clipId})"/>
+SVG;
+
+        $svg = str_replace(
+            '<svg xmlns="http://www.w3.org/2000/svg"',
+            '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"',
+            $svg
+        );
+
+        return str_replace('</svg>', $overlay.'</svg>', $svg);
     }
 
     /**
-     * Memastikan browser memiliki Pengenal Browser di cookie HttpOnly (MOD-005, FR-024, NFR-003).
+     * MOD-005, FR-024, NFR-003: Memastikan browser memiliki Pengenal Browser di cookie HttpOnly.
      */
     public function resolveOrCreateBrowserId(Request $request): string
     {

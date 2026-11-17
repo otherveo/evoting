@@ -57,8 +57,9 @@ class TotpService
 
     public function getProvisioningUri(string $username, string $secret): string
     {
-        $issuer = rawurlencode((string) config('app.name', 'SuaraSekolah'));
-        $label = rawurlencode(config('app.name', 'SuaraSekolah').':'.$username);
+        $appName = (string) (config('app.name') ?: 'E-Voting');
+        $issuer = rawurlencode($appName);
+        $label = rawurlencode($appName.':'.$username);
 
         return "otpauth://totp/{$label}?secret={$secret}&issuer={$issuer}&algorithm=SHA1&digits=6&period=30";
     }

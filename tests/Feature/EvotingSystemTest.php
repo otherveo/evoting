@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Admin\OperatorIndexPage;
 use App\Livewire\Auth\ActivateAccountPage;
 use App\Livewire\Auth\LoginPage;
 use App\Livewire\Auth\VerifyTwoFactorPage;
@@ -12,6 +13,7 @@ use App\Models\Election;
 use App\Models\StaffAccount;
 use App\Services\StaffAccountService;
 use App\Services\SupabaseStorageService;
+use App\Services\TokenService;
 use App\Services\TotpService;
 use App\Services\VotingService;
 use Carbon\CarbonImmutable;
@@ -392,5 +394,56 @@ class EvotingSystemTest extends TestCase
         $this->assertCount(2, $finalResults['items']);
         $this->assertSame(1, $finalResults['items'][0]['vote_count']);
         $this->assertSame(0, $finalResults['items'][1]['vote_count']);
+    }
+
+    public function test_qr_custom_logo_mode_and_admin_fallback_toggle_and_app_name_branding(): void
+    {
+        $tokens = app(TokenService::class);
+        $totp = app(TotpService::class);
+
+        $admin = StaffAccount::create([
+            'username' => 'admin_qr_mode',
+            'full_name' => 'Admin QR Mode',
+            'password_hash' => Hash::make('AdminStrongPass123!'),
+            'role' => 'admin',
+            'is_active' => true,
+            'totp_secret' => $totp->generateSecret(),
+            'totp_enabled' => true,
+            'must_change_password' => false,
+        ]);
+
+        // Default mode is custom with embedded center logo
+        $customSvg = $tokens->renderQrSvg('https://example.test/v/sample-token', 240, TokenService::QR_MODE_CUSTOM);
+        $this->assertStringContainsString('<image ', $customSvg);
+        $this->assertStringContainsString('SMPN7-e-voting_logo.png', $customSvg);
+
+        // Standard fallback mode renders QR without embedded center logo
+        $standardSvg = $tokens->renderQrSvg('https://example.test/v/sample-token', 240, TokenService::QR_MODE_STANDARD);
+        $this->assertStringNotContainsString('<image ', $standardSvg);
+
+        // Admin can toggle QR mode to standard and back to custom from OperatorIndexPage
+        $this->withSession(['staff_2fa_verified' => true]);
+        Livewire::actingAs($admin, 'staff')
+            ->test(OperatorIndexPage::class)
+            ->call('setQrMode', TokenService::QR_MODE_STANDARD)
+            ->assertSet('showCreateModal', false);
+
+        $this->assertSame(TokenService::QR_MODE_STANDARD, $tokens->getQrMode());
+        $this->assertStringNotContainsString('<image ', $tokens->renderQrSvg('https://example.test/v/sample-token', 240));
+
+        Livewire::actingAs($admin, 'staff')
+            ->test(OperatorIndexPage::class)
+            ->call('setQrMode', TokenService::QR_MODE_CUSTOM);
+
+        $this->assertSame(TokenService::QR_MODE_CUSTOM, $tokens->getQrMode());
+        $this->assertStringContainsString('<image ', $tokens->renderQrSvg('https://example.test/v/sample-token', 240));
+
+        // Header uses SMPN7-e-voting_logo.png and APP_NAME with fallback "E-Voting"
+        config(['app.name' => '']);
+        $this->get(route('admin.operators'))
+            ->assertStatus(200)
+            ->assertSee('SMPN7-e-voting_logo.png')
+            ->assertSee('E-Voting')
+            ->assertDontSee('SuaraSekolah');
     }
 }

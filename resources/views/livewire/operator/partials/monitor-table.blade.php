@@ -1,5 +1,21 @@
-{{-- UI-009, FR-023, FR-025, BR-016, BR-017: Tabel Monitoring Aktivitas Pemilih --}}
-<section class="panel" aria-label="Daftar Hak Pilih">
+{{-- UI-009, FR-023, FR-025, BR-016, BR-017: Tabel Monitoring Aktivitas Pemilih (Filter & Pencarian Instan di Client) --}}
+<section
+  class="panel"
+  aria-label="Daftar Hak Pilih"
+  x-data="{
+    clientSearch: $wire.entangle('search'),
+    clientStatus: $wire.entangle('statusFilter'),
+    matchesRow(name, status, attention) {
+      if (this.clientStatus === 'belum_memilih' && status !== 'belum_memilih') return false;
+      if (this.clientStatus === 'sedang_memilih' && status !== 'sedang_memilih') return false;
+      if (this.clientStatus === 'sudah_memilih' && status !== 'sudah_memilih') return false;
+      if (this.clientStatus === 'attention' && !attention) return false;
+      const q = (this.clientSearch || '').trim().toLowerCase();
+      if (q !== '' && !name.toLowerCase().includes(q)) return false;
+      return true;
+    }
+  }"
+>
   <div class="panel-head">
     <div>
       <h2 class="panel-title">
@@ -17,7 +33,7 @@
         <svg class="icon"><use href="#i-search"></use></svg>
         <input
           type="search"
-          wire:model.live.debounce.250ms="search"
+          x-model="clientSearch"
           class="field-input"
           placeholder="Cari nama pemilih..."
           aria-label="Cari nama pemilih"
@@ -25,24 +41,24 @@
       </div>
 
       <div class="filter-row" role="tablist" aria-label="Filter Status Hak Pilih">
-        <button type="button" class="filter-pill {{ $statusFilter === 'all' ? 'is-active' : '' }}" wire:click="$set('statusFilter', 'all')">
+        <button type="button" class="filter-pill" :class="{ 'is-active': clientStatus === 'all' }" x-on:click="clientStatus = 'all'">
           <span>Semua</span>
           <span class="count">{{ $totalRights }}</span>
         </button>
-        <button type="button" class="filter-pill {{ $statusFilter === 'belum_memilih' ? 'is-active' : '' }}" wire:click="$set('statusFilter', 'belum_memilih')">
+        <button type="button" class="filter-pill" :class="{ 'is-active': clientStatus === 'belum_memilih' }" x-on:click="clientStatus = 'belum_memilih'">
           <span>Belum memilih</span>
           <span class="count">{{ $countBelum }}</span>
         </button>
-        <button type="button" class="filter-pill {{ $statusFilter === 'sedang_memilih' ? 'is-active' : '' }}" wire:click="$set('statusFilter', 'sedang_memilih')">
+        <button type="button" class="filter-pill" :class="{ 'is-active': clientStatus === 'sedang_memilih' }" x-on:click="clientStatus = 'sedang_memilih'">
           <span>Sedang memilih</span>
           <span class="count">{{ $countSedang }}</span>
         </button>
-        <button type="button" class="filter-pill {{ $statusFilter === 'sudah_memilih' ? 'is-active' : '' }}" wire:click="$set('statusFilter', 'sudah_memilih')">
+        <button type="button" class="filter-pill" :class="{ 'is-active': clientStatus === 'sudah_memilih' }" x-on:click="clientStatus = 'sudah_memilih'">
           <span>Sudah memilih</span>
           <span class="count">{{ $countSudah }}</span>
         </button>
         @if($countAttention > 0)
-          <button type="button" class="filter-pill {{ $statusFilter === 'attention' ? 'is-active' : '' }}" wire:click="$set('statusFilter', 'attention')">
+          <button type="button" class="filter-pill" :class="{ 'is-active': clientStatus === 'attention' }" x-on:click="clientStatus = 'attention'">
             <span>Perhatian</span>
             <span class="count">{{ $countAttention }}</span>
           </button>
@@ -82,7 +98,11 @@
           $hue = abs(crc32((string) $row->id)) % 360;
           $updatedAt = \Carbon\CarbonImmutable::parse($row->updated_at)->setTimezone($tz);
         @endphp
-        <div class="voter-row" wire:key="vr-{{ $row->id }}">
+        <div
+          class="voter-row"
+          wire:key="vr-{{ $row->id }}"
+          x-show="matchesRow(@js((string) $row->name), @js((string) $row->status), @js((bool) ($row->session_expired || $row->device_warning)))"
+        >
           <div class="voter-identity">
             <span class="avatar" style="--avatar-h: {{ $hue }};">{{ $initials }}</span>
             <div class="voter-id-copy">
@@ -147,7 +167,7 @@
                 :variant="$row->session_expired ? 'warn-ghost' : 'secondary'"
                 size="xs"
                 icon="#i-rotate"
-                wire:click="openDetailModal('{{ $row->id }}')"
+                wire:click="openDetailModal('{{ $row->id }}', 'reset')"
                 loadingText="Membuka..."
               >
                 Reset Sesi
@@ -157,7 +177,7 @@
                 variant="secondary"
                 size="xs"
                 icon="#i-qr"
-                wire:click="openDetailModal('{{ $row->id }}')"
+                wire:click="openDetailModal('{{ $row->id }}', 'reissue')"
                 loadingText="Membuka..."
               >
                 QR Ulang
@@ -168,7 +188,7 @@
               variant="soft"
               size="xs"
               icon="#i-eye"
-              wire:click="openDetailModal('{{ $row->id }}')"
+              wire:click="openDetailModal('{{ $row->id }}', 'detail')"
               loadingText="Membuka..."
             >
               Detail

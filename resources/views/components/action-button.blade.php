@@ -14,7 +14,7 @@
   $wireClick = $attributes->get('wire:click');
   $resolvedTarget = $target;
   if ($resolvedTarget === null && is_string($wireClick) && $wireClick !== '') {
-      $resolvedTarget = preg_replace('/\(.*\)$/', '', trim($wireClick));
+      $resolvedTarget = trim($wireClick);
   }
 
   $classes = collect([

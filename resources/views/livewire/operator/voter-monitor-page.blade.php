@@ -1,10 +1,10 @@
-{{-- UI-009, FR-023, FR-025, KP-003, NFR-016: Halaman Pantau Pemilih Operator (Polling 3 Detik) --}}
-<div class="container page view-enter" wire:poll.3s>
+{{-- UI-009, FR-023, FR-025, KP-003, NFR-016: Halaman Pantau Pemilih Operator (Polling Aktif Saat Tidak Ada Modal) --}}
+<div class="container page view-enter" @if(!$showRegisterModal && !$showQrModal && !$showDetailModal) wire:poll.5s.visible @endif>
   <div class="page-heading">
     <div>
       <div class="eyebrow">
         <svg class="icon"><use href="#i-monitor"></use></svg>
-        <span>DASHBOARD MONITORING OPERATOR · PEMBARUAN OTOMATIS TIAP 3 DETIK</span>
+        <span>DASHBOARD MONITORING OPERATOR · PEMBARUAN OTOMATIS</span>
       </div>
       <h1>{{ $election->name }}</h1>
       <p class="lede">
@@ -13,7 +13,7 @@
     </div>
 
     <div class="heading-actions">
-      <a href="{{ route('operator.elections.detail', $election) }}" class="btn btn-secondary">
+      <a href="{{ route('operator.elections.detail', $election) }}" wire:navigate class="btn btn-secondary">
         <svg class="icon"><use href="#i-calendar"></use></svg>
         <span>Jadwal &amp; Paslon</span>
       </a>

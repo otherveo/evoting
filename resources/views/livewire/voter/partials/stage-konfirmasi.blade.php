@@ -15,20 +15,16 @@
       </p>
     </div>
 
-    <div class="confirm-summary">
+    <div class="confirm-summary" x-show="selectedCand">
       <img
-        src="{{ $selectedCandidate->photoUrl() }}"
-        alt="Foto {{ $selectedCandidate->name }}"
+        :src="selectedCand ? selectedCand.photoUrl : ''"
+        :alt="selectedCand ? ('Foto ' + selectedCand.name) : ''"
         class="confirm-photo"
       />
       <div class="confirm-candidate">
-        <span>PASANGAN CALON NOMOR URUT {{ $selectedCandidate->formattedNumber() }}</span>
-        <h2>{{ $selectedCandidate->name }}</h2>
-        @if($selectedCandidate->vision)
-          <p>{{ $selectedCandidate->vision }}</p>
-        @else
-          <p>Pemilihan: {{ $electionName }}</p>
-        @endif
+        <span>PASANGAN CALON NOMOR URUT <span x-text="selectedCand ? selectedCand.number : ''"></span></span>
+        <h2 x-text="selectedCand ? selectedCand.name : ''"></h2>
+        <p x-text="(selectedCand && selectedCand.vision) ? selectedCand.vision : @js('Pemilihan: ' . $electionName)"></p>
       </div>
     </div>
 
@@ -41,25 +37,34 @@
     </div>
 
     <div class="confirm-actions">
-      <x-action-button
-        variant="secondary"
-        size="lg"
-        icon="#i-arrow-left"
-        wire:click="backToBallot"
-        loadingText="Kembali..."
+      <button
+        type="button"
+        class="btn btn-secondary btn-lg"
+        x-on:click="goBackToBallot()"
+        x-bind:disabled="submittingVote"
       >
-        Ubah pilihan
-      </x-action-button>
+        <span class="btn-label-idle">
+          <svg class="icon"><use href="#i-arrow-left"></use></svg>
+          <span>Ubah pilihan</span>
+        </span>
+      </button>
 
-      <x-action-button
-        variant="primary"
-        size="lg"
-        icon="#i-check-circle"
-        wire:click="confirmVote"
-        loadingText="Menyimpan suara..."
+      <button
+        type="button"
+        class="btn btn-primary btn-lg"
+        x-on:click="submitFinalVote()"
+        x-bind:disabled="submittingVote || !selectedCand"
+        x-bind:data-loading="submittingVote ? 'true' : null"
       >
-        Konfirmasi pilihan
-      </x-action-button>
+        <span class="btn-label-idle" x-show="!submittingVote">
+          <svg class="icon"><use href="#i-check-circle"></use></svg>
+          <span>Konfirmasi pilihan</span>
+        </span>
+        <span class="btn-label-loading" x-show="submittingVote" x-cloak style="display: inline-flex;">
+          <span class="spinner" aria-hidden="true"></span>
+          <span>Menyimpan suara...</span>
+        </span>
+      </button>
     </div>
   </section>
 </div>

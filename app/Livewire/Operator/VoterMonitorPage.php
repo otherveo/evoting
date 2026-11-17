@@ -140,16 +140,14 @@ class VoterMonitorPage extends Component
                 ->count();
 
             // FR-013, BR-003, BR-004, AC-015: Deteksi Nama Kembar & konfirmasi orang berbeda
-            if ($currentDuplicatesCount > 0) {
-                if (! $this->confirmDifferentPerson || $currentDuplicatesCount !== $this->expectedDuplicateCount) {
-                    $this->checkDuplicates();
-                    $this->confirmDifferentPerson = false;
-                    $msg = 'Nama ini sudah terdaftar. Pastikan keduanya adalah orang yang berbeda lalu centang pernyataan konfirmasi di bawah.';
-                    $this->addError('voterName', $msg);
-                    $this->dispatch('toast', message: $msg, type: 'warning');
+            if ($currentDuplicatesCount > 0 && ! $this->confirmDifferentPerson) {
+                $this->checkDuplicates();
+                $this->confirmDifferentPerson = false;
+                $msg = 'Nama ini sudah terdaftar. Pastikan keduanya adalah orang yang berbeda lalu centang pernyataan konfirmasi di bawah.';
+                $this->addError('voterName', $msg);
+                $this->dispatch('toast', message: $msg, type: 'warning');
 
-                    return;
-                }
+                return;
             }
 
             /** @var StaffAccount $operator */
@@ -198,7 +196,7 @@ class VoterMonitorPage extends Component
         $this->issuedIsReissue = false;
     }
 
-    public function openDetailModal(string $voterRightId): void
+    public function openDetailModal(string $voterRightId, string $intent = 'detail'): void
     {
         $this->resetValidation();
         $this->selectedVoterRightId = $voterRightId;
@@ -310,25 +308,33 @@ class VoterMonitorPage extends Component
 
     public function render(VotingService $voting)
     {
-        $this->election->refresh();
         View::share('activeElection', $this->election);
 
         $phase = $this->election->currentPhase();
         $tz = (string) config('evoting.display_timezone', 'Asia/Makassar');
 
         $allMonitorRows = DB::select('
+            with ir as materialized (
+                select total_votes, is_consistent
+                from evoting.fn_integrity_report(?::uuid)
+            )
             select
                 m.*,
+                vr.name_normalized,
+                vr.created_at as vr_created_at,
                 (
                     select count(*)
                     from evoting.voter_rights vr_dup
                     where vr_dup.election_id = m.election_id
                       and vr_dup.name_normalized = vr.name_normalized
                 ) as same_name_count,
+                ir.total_votes as total_votes_cast,
+                ir.is_consistent as ir_consistent,
                 d_last.browser_id as last_browser_id,
                 d_last.user_agent as last_user_agent,
                 d_last.access_type as last_access_type
             from evoting.v_voter_right_monitor m
+            cross join ir
             join evoting.voter_rights vr on vr.id = m.id
             left join lateral (
                 select d.browser_id, d.user_agent, d.access_type
@@ -339,7 +345,7 @@ class VoterMonitorPage extends Component
             ) d_last on true
             where m.election_id = ?::uuid
             order by m.updated_at desc
-        ', [$this->election->id]);
+        ', [$this->election->id, $this->election->id]);
 
         $allCollection = collect($allMonitorRows);
 
@@ -350,6 +356,26 @@ class VoterMonitorPage extends Component
         $countExpired = $allCollection->where('session_expired', true)->count();
         $countDeviceWarning = $allCollection->where('device_warning', true)->count();
         $countAttention = $allCollection->filter(fn ($r) => $r->session_expired || $r->device_warning)->count();
+
+        $totalVotesCast = $totalRights > 0 ? (int) ($allCollection->first()->total_votes_cast ?? 0) : 0;
+        $integrity = [
+            'ok' => true,
+            'code' => 'ok',
+            'total_votes' => $totalVotesCast,
+            'total_voted' => $countSudah,
+            'total_rights' => $totalRights,
+            'is_consistent' => ($totalVotesCast === $countSudah) && ($countSudah <= $totalRights),
+        ];
+
+        $existingVotersForClient = $allCollection->map(fn ($row) => [
+            'id' => (string) $row->id,
+            'name' => (string) $row->name,
+            'normalized' => (string) $row->name_normalized,
+            'status' => VoterRight::statusLabel((string) $row->status),
+            'created_at' => ! empty($row->vr_created_at)
+                ? CarbonImmutable::parse($row->vr_created_at)->setTimezone($tz)->format('H:i:s')
+                : '-',
+        ])->values()->all();
 
         $filtered = $allCollection->filter(function ($row) {
             if ($this->statusFilter === 'belum_memilih' && $row->status !== 'belum_memilih') {
@@ -373,8 +399,6 @@ class VoterMonitorPage extends Component
 
             return true;
         })->values();
-
-        $integrity = $voting->integrityReport($this->election->id);
 
         $detailData = null;
         if ($this->showDetailModal && $this->selectedVoterRightId) {
@@ -413,7 +437,8 @@ class VoterMonitorPage extends Component
         return view('livewire.operator.voter-monitor-page', [
             'phase' => $phase,
             'tz' => $tz,
-            'voterRows' => $filtered,
+            'voterRows' => $allCollection,
+            'existingVotersForClient' => $existingVotersForClient,
             'totalRights' => $totalRights,
             'countBelum' => $countBelum,
             'countSedang' => $countSedang,

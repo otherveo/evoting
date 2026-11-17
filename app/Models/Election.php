@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
+use App\Services\VotingService;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\DB;
 
 class Election extends Model
 {
@@ -48,15 +48,15 @@ class Election extends Model
 
     public function currentPhase(): string
     {
-        $row = DB::selectOne('select fase from evoting.v_elections where id = ?', [$this->id]);
-        if ($row && isset($row->fase)) {
-            return (string) $row->fase;
+        if (isset(VotingService::$scheduleCache[$this->id])) {
+            $this->starts_at = VotingService::$scheduleCache[$this->id]['starts_at'];
+            $this->ends_at = VotingService::$scheduleCache[$this->id]['ends_at'];
         }
 
         if (! $this->starts_at || ! $this->ends_at) {
             return 'persiapan';
         }
-        $now = now();
+        $now = now()->addMilliseconds(VotingService::$dbOffsetMs);
         if ($now->lt($this->starts_at)) {
             return 'persiapan';
         }

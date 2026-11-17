@@ -9,6 +9,11 @@ use Illuminate\Support\Facades\DB;
 
 class VotingService
 {
+    public static int $dbOffsetMs = 0;
+
+    /** @var array<string, array{starts_at: CarbonImmutable, ends_at: CarbonImmutable}> */
+    public static array $scheduleCache = [];
+
     public function __construct(
         private readonly TokenService $tokens
     ) {}
@@ -20,9 +25,14 @@ class VotingService
     {
         $row = DB::selectOne('select now() as db_now');
 
-        return $row && isset($row->db_now)
-            ? CarbonImmutable::parse($row->db_now)->setTimezone('UTC')
-            : CarbonImmutable::now('UTC');
+        if ($row && isset($row->db_now)) {
+            $dbTime = CarbonImmutable::parse($row->db_now)->setTimezone('UTC');
+            self::$dbOffsetMs = (int) round(($dbTime->getTimestamp() - CarbonImmutable::now('UTC')->getTimestamp()) * 1000);
+
+            return $dbTime;
+        }
+
+        return CarbonImmutable::now('UTC');
     }
 
     /**
@@ -203,6 +213,12 @@ class VotingService
         );
 
         $code = (string) ($row->o_result_code ?? 'error');
+        if ($code === 'ok') {
+            self::$scheduleCache[$electionId] = [
+                'starts_at' => CarbonImmutable::instance($startsAtUtc)->setTimezone('UTC'),
+                'ends_at' => CarbonImmutable::instance($endsAtUtc)->setTimezone('UTC'),
+            ];
+        }
 
         return [
             'ok' => $code === 'ok',

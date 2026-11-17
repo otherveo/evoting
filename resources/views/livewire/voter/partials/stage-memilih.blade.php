@@ -43,9 +43,10 @@
       <button
         type="button"
         role="radio"
-        aria-checked="{{ $isSelected ? 'true' : 'false' }}"
+        :aria-checked="clientSelectedId === '{{ $cand->id }}' ? 'true' : 'false'"
         class="candidate-card {{ $isSelected ? 'is-selected' : '' }}"
-        wire:click="selectCandidate('{{ $cand->id }}')"
+        :class="{ 'is-selected': clientSelectedId === '{{ $cand->id }}' }"
+        x-on:click="chooseCandidate('{{ $cand->id }}')"
         wire:key="ballot-cand-{{ $cand->id }}"
       >
         <div class="candidate-media">
@@ -87,24 +88,27 @@
   <div class="ballot-bar">
     <div class="ballot-bar-info">
       <span>PILIHAN SEMENTARA (BELUM TERSIMPAN)</span>
-      @if($selectedCandidate)
-        <strong>Paslon {{ $selectedCandidate->formattedNumber() }} — {{ $selectedCandidate->name }}</strong>
-      @else
-        <strong>Belum ada pasangan calon yang dipilih</strong>
-      @endif
+      <strong x-text="selectedCand ? ('Paslon ' + selectedCand.number + ' — ' + selectedCand.name) : 'Belum ada pasangan calon yang dipilih'">
+        @if($selectedCandidate)
+          Paslon {{ $selectedCandidate->formattedNumber() }} — {{ $selectedCandidate->name }}
+        @else
+          Belum ada pasangan calon yang dipilih
+        @endif
+      </strong>
     </div>
 
-    <x-action-button
+    <button
       id="btn-to-confirm"
-      variant="primary"
-      size="lg"
-      wire:click="proceedToConfirm"
-      iconRight="#i-arrow-right"
-      loadingText="Membuka konfirmasi..."
-      :disabled="!$selectedCandidate"
+      type="button"
+      class="btn btn-primary btn-lg"
+      x-on:click="goToConfirm()"
+      x-bind:disabled="!selectedCand"
     >
-      Lanjut ke Konfirmasi
-    </x-action-button>
+      <span class="btn-label-idle">
+        <span>Lanjut ke Konfirmasi</span>
+        <svg class="icon"><use href="#i-arrow-right"></use></svg>
+      </span>
+    </button>
   </div>
 
   <p class="session-note">

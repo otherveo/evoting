@@ -57,7 +57,21 @@
     />
   </div>
 
-  <section class="panel" aria-label="Tabel Akun Operator">
+  <section
+    class="panel"
+    aria-label="Tabel Akun Operator"
+    x-data="{
+      clientSearch: $wire.entangle('search'),
+      clientStatus: $wire.entangle('filterStatus'),
+      matchesOperator(username, fullName, isActive) {
+        if (this.clientStatus === 'active' && !isActive) return false;
+        if (this.clientStatus === 'inactive' && isActive) return false;
+        const q = (this.clientSearch || '').trim().toLowerCase();
+        if (q !== '' && !username.toLowerCase().includes(q) && !fullName.toLowerCase().includes(q)) return false;
+        return true;
+      }
+    }"
+  >
     <div class="panel-head">
       <div>
         <h2 class="panel-title">
@@ -73,7 +87,7 @@
           <svg class="icon"><use href="#i-search"></use></svg>
           <input
             type="search"
-            wire:model.live.debounce.250ms="search"
+            x-model="clientSearch"
             class="field-input"
             placeholder="Cari username atau nama..."
             aria-label="Cari akun Operator"
@@ -81,15 +95,15 @@
         </div>
 
         <div class="filter-row" role="tablist" aria-label="Filter status akun">
-          <button type="button" class="filter-pill {{ $filterStatus === 'all' ? 'is-active' : '' }}" wire:click="$set('filterStatus', 'all')">
+          <button type="button" class="filter-pill" :class="{ 'is-active': clientStatus === 'all' }" x-on:click="clientStatus = 'all'">
             <span>Semua</span>
             <span class="count">{{ $totalOperators }}</span>
           </button>
-          <button type="button" class="filter-pill {{ $filterStatus === 'active' ? 'is-active' : '' }}" wire:click="$set('filterStatus', 'active')">
+          <button type="button" class="filter-pill" :class="{ 'is-active': clientStatus === 'active' }" x-on:click="clientStatus = 'active'">
             <span>Aktif</span>
             <span class="count">{{ $activeOperators }}</span>
           </button>
-          <button type="button" class="filter-pill {{ $filterStatus === 'inactive' ? 'is-active' : '' }}" wire:click="$set('filterStatus', 'inactive')">
+          <button type="button" class="filter-pill" :class="{ 'is-active': clientStatus === 'inactive' }" x-on:click="clientStatus = 'inactive'">
             <span>Nonaktif</span>
             <span class="count">{{ $inactiveOperators }}</span>
           </button>
@@ -118,7 +132,7 @@
           </thead>
           <tbody>
             @foreach($operators as $op)
-              <tr wire:key="op-{{ $op->id }}">
+              <tr wire:key="op-{{ $op->id }}" x-show="matchesOperator(@js($op->username), @js($op->full_name), @js((bool) $op->is_active))">
                 <td>
                   <div class="voter-identity">
                     <span class="avatar">{{ $op->initials() }}</span>
@@ -205,6 +219,81 @@
     <div class="panel-foot">
       <span>Menampilkan <strong>{{ $operators->count() }}</strong> dari <strong>{{ $totalOperators }}</strong> akun Operator</span>
       <span>Seluruh perubahan akun tercatat otomatis di Log Audit</span>
+    </div>
+  </section>
+
+  {{-- Konfigurasi Mode Kode QR Pemilih (Custom Logo vs Standar Fallback Scanner) --}}
+  <section class="panel" aria-label="Konfigurasi Mode Kode QR Pemilih">
+    <div class="panel-head">
+      <div>
+        <h2 class="panel-title">
+          <svg class="icon"><use href="#i-qr"></use></svg>
+          <span>Konfigurasi Mode Kode QR Pemilih</span>
+        </h2>
+        <p class="panel-sub">
+          Pilih tampilan kode QR yang diterbitkan Operator untuk pemilih. Jika kamera perangkat pemilih di lapangan mengalami kendala membaca QR berlogo tengah, kembalikan ke <strong>Mode QR Standar</strong> kapan saja.
+        </p>
+      </div>
+      <div>
+        <span class="status-badge {{ $qrMode === 'custom' ? 'is-sudah' : 'is-sedang' }}">
+          <span class="status-dot"></span>
+          <span>Mode Aktif: {{ $qrMode === 'custom' ? 'QR Kustom (Dengan Logo)' : 'QR Standar (Tanpa Logo)' }}</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="qr-mode-grid">
+      <div class="qr-mode-card {{ $qrMode === 'custom' ? 'is-active' : '' }}">
+        <div class="qr-mode-preview" aria-label="Pratinjau QR Kustom">
+          {!! $customQrPreviewSvg !!}
+        </div>
+        <div class="qr-mode-copy">
+          <span class="status-badge {{ $qrMode === 'custom' ? 'is-sudah' : 'is-belum' }}">
+            <span class="status-dot"></span>
+            <span>{{ $qrMode === 'custom' ? 'Sedang Digunakan' : 'Tersedia' }}</span>
+          </span>
+          <h3>QR Kustom (Logo Sekolah di Tengah)</h3>
+          <p>
+            Menggunakan tingkat koreksi kesalahan tinggi (Level H) dengan penyematan logo identitas sekolah di bagian tengah kode QR.
+          </p>
+          <x-action-button
+            :variant="$qrMode === 'custom' ? 'secondary' : 'primary'"
+            size="sm"
+            icon="#i-check"
+            wire:click="setQrMode('custom')"
+            :disabled="$qrMode === 'custom'"
+            loadingText="Menyimpan..."
+          >
+            {{ $qrMode === 'custom' ? 'Mode Kustom Aktif' : 'Gunakan QR Kustom' }}
+          </x-action-button>
+        </div>
+      </div>
+
+      <div class="qr-mode-card {{ $qrMode === 'standard' ? 'is-active' : '' }}">
+        <div class="qr-mode-preview" aria-label="Pratinjau QR Standar">
+          {!! $standardQrPreviewSvg !!}
+        </div>
+        <div class="qr-mode-copy">
+          <span class="status-badge {{ $qrMode === 'standard' ? 'is-sudah' : 'is-belum' }}">
+            <span class="status-dot"></span>
+            <span>{{ $qrMode === 'standard' ? 'Sedang Digunakan' : 'Fallback Scanner' }}</span>
+          </span>
+          <h3>QR Standar (Tanpa Logo Tengah)</h3>
+          <p>
+            Tampilan matriks QR murni tanpa gambar di tengah untuk kompatibilitas maksimal apabila kamera atau pemindai lawas kesulitan membaca mode kustom.
+          </p>
+          <x-action-button
+            :variant="$qrMode === 'standard' ? 'secondary' : 'soft'"
+            size="sm"
+            icon="#i-rotate"
+            wire:click="setQrMode('standard')"
+            :disabled="$qrMode === 'standard'"
+            loadingText="Menyimpan..."
+          >
+            {{ $qrMode === 'standard' ? 'Mode Standar Aktif' : 'Kembalikan ke QR Standar' }}
+          </x-action-button>
+        </div>
+      </div>
     </div>
   </section>
 

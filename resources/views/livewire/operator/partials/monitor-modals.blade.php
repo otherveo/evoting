@@ -1,4 +1,4 @@
-{{-- UI-010, FR-012, FR-013, BR-003, BR-004, AC-014, AC-015: Modal Registrasi Pemilih --}}
+{{-- UI-010, FR-012, FR-013, BR-003, BR-004, AC-014, AC-015: Modal Registrasi Pemilih (Deteksi Duplikat Instan di Client + Validasi Server) --}}
 @if($showRegisterModal)
   <x-modal
     title="Registrasi Pemilih & Terbitkan QR"
@@ -6,14 +6,40 @@
     icon="#i-user-check"
     closeAction="closeRegisterModal"
   >
-    <form wire:submit="registerVoter" novalidate>
+    <form
+      novalidate
+      x-data="{
+        localName: $wire.entangle('voterName'),
+        confirmed: $wire.entangle('confirmDifferentPerson'),
+        submitting: false,
+        existingVoters: @js($existingVotersForClient ?? []),
+        get normalizedInput() {
+          return (this.localName || '').trim().replace(/\s+/g, ' ').toLowerCase();
+        },
+        get clientDuplicates() {
+          const norm = this.normalizedInput;
+          if (norm.length < 2) return [];
+          return this.existingVoters.filter(v => v.normalized === norm);
+        },
+        submitRegistration() {
+          if (this.submitting) return;
+          this.submitting = true;
+          $wire.registerVoter().finally(() => {
+            this.submitting = false;
+          });
+        }
+      }"
+      x-on:submit.prevent="submitRegistration()"
+      x-effect="if (clientDuplicates.length === 0) confirmed = false"
+    >
       <div class="modal-body">
         <div class="form-field">
           <label for="reg-voter-name" class="field-label">Nama Lengkap Pemilih (Terverifikasi) <span class="req">*</span></label>
           <input
             id="reg-voter-name"
             type="text"
-            wire:model.live.debounce.250ms="voterName"
+            x-model="localName"
+            x-on:input="confirmed = false"
             class="field-input @error('voterName') is-invalid @enderror"
             placeholder="Masukkan nama lengkap sesuai identitas..."
             autocomplete="off"
@@ -28,43 +54,51 @@
           @enderror
         </div>
 
-        {{-- FR-013, BR-004, AC-015: Peringatan Nama Kembar & konfirmasi eksplisit orang berbeda --}}
-        @if(!empty($duplicateMatches))
-          <div class="inline-alert inline-alert-warning" role="alert">
-            <strong>
-              <svg class="icon"><use href="#i-alert"></use></svg>
-              <span>Terdeteksi Nama Kembar ({{ count($duplicateMatches) }} Hak Pilih terdaftar)</span>
-            </strong>
-            <p>
-              Nama ini sudah terdaftar pada pemilihan ini. Pastikan pemilih di hadapan Anda adalah <strong>orang yang berbeda</strong> (bukan pemilih yang sama meminta QR kedua):
-            </p>
-            <ul class="confirm-list" style="margin: 8px 0;">
-              @foreach($duplicateMatches as $dup)
-                <li>
-                  <strong>{{ $dup['name'] }}</strong> — Status: <code>{{ $dup['status'] }}</code> (terdaftar pukul {{ $dup['created_at'] }})
-                </li>
-              @endforeach
-            </ul>
-            <label class="check-row">
-              <input type="checkbox" wire:model.live="confirmDifferentPerson" />
-              <span>Saya telah memverifikasi identitas secara langsung dan menyatakan bahwa pemilih ini adalah <strong>orang yang berbeda</strong> dari daftar di atas.</span>
-            </label>
-          </div>
-        @endif
+        {{-- FR-013, BR-004, AC-015: Peringatan Nama Kembar secara instan di client & dikunci di server --}}
+        <div
+          class="inline-alert inline-alert-warning"
+          role="alert"
+          x-show="clientDuplicates.length > 0"
+          x-cloak
+        >
+          <strong>
+            <svg class="icon"><use href="#i-alert"></use></svg>
+            <span>Terdeteksi Nama Kembar (<span x-text="clientDuplicates.length"></span> Hak Pilih terdaftar)</span>
+          </strong>
+          <p>
+            Nama ini sudah terdaftar pada pemilihan ini. Pastikan pemilih di hadapan Anda adalah <strong>orang yang berbeda</strong> (bukan pemilih yang sama meminta QR kedua):
+          </p>
+          <ul class="confirm-list" style="margin: 8px 0;">
+            <template x-for="dup in clientDuplicates" :key="dup.id">
+              <li>
+                <strong x-text="dup.name"></strong> — Status: <code x-text="dup.status"></code> (terdaftar pukul <span x-text="dup.created_at"></span>)
+              </li>
+            </template>
+          </ul>
+          <label class="check-row">
+            <input type="checkbox" x-model="confirmed" />
+            <span>Saya telah memverifikasi identitas secara langsung dan menyatakan bahwa pemilih ini adalah <strong>orang yang berbeda</strong> dari daftar di atas.</span>
+          </label>
+        </div>
       </div>
 
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" wire:click="closeRegisterModal">Batal</button>
-        <x-action-button
+        <button type="button" class="btn btn-secondary" wire:click="closeRegisterModal" x-bind:disabled="submitting">Batal</button>
+        <button
           type="submit"
-          variant="primary"
-          target="registerVoter"
-          icon="#i-qr"
-          loadingText="Menerbitkan Token QR..."
-          :disabled="!empty($duplicateMatches) && !$confirmDifferentPerson"
+          class="btn btn-primary"
+          x-bind:disabled="submitting || (clientDuplicates.length > 0 && !confirmed)"
+          x-bind:data-loading="submitting ? 'true' : null"
         >
-          Buat Hak Pilih &amp; Tampilkan QR
-        </x-action-button>
+          <span class="btn-label-idle" x-show="!submitting">
+            <svg class="icon"><use href="#i-qr"></use></svg>
+            <span>Buat Hak Pilih &amp; Tampilkan QR</span>
+          </span>
+          <span class="btn-label-loading" x-show="submitting" x-cloak style="display: inline-flex;">
+            <span class="spinner" aria-hidden="true"></span>
+            <span>Menerbitkan Token QR...</span>
+          </span>
+        </button>
       </div>
     </form>
   </x-modal>
