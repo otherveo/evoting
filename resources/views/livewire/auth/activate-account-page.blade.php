@@ -37,16 +37,29 @@
         </div>
 
         <form wire:submit="updatePassword" novalidate style="margin-top: 12px;">
-          <div class="form-field">
+          <div class="form-field" x-data="{ showPw: false }">
             <label for="act-current-pw" class="field-label">Kata Sandi Sementara Saat Ini <span class="req">*</span></label>
-            <input
-              id="act-current-pw"
-              type="password"
-              wire:model="currentPassword"
-              class="field-input @error('currentPassword') is-invalid @enderror"
-              placeholder="Masukkan kata sandi sementara"
-              autocomplete="current-password"
-            />
+            <div class="password-field-wrap">
+              <input
+                id="act-current-pw"
+                type="password"
+                :type="showPw ? 'text' : 'password'"
+                wire:model="currentPassword"
+                class="field-input has-pw-toggle @error('currentPassword') is-invalid @enderror"
+                placeholder="Masukkan kata sandi sementara"
+                autocomplete="current-password"
+              />
+              <button
+                type="button"
+                class="password-toggle-btn"
+                x-on:click="showPw = !showPw"
+                :aria-label="showPw ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'"
+                :title="showPw ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'"
+              >
+                <svg class="icon" x-show="!showPw"><use href="#i-eye"></use></svg>
+                <svg class="icon" x-show="showPw" x-cloak><use href="#i-eye-off"></use></svg>
+              </button>
+            </div>
             @error('currentPassword')
               <div class="field-error" role="alert">
                 <svg class="icon"><use href="#i-alert"></use></svg>
@@ -55,16 +68,29 @@
             @enderror
           </div>
 
-          <div class="form-field">
+          <div class="form-field" x-data="{ showPw: false }">
             <label for="act-new-pw" class="field-label">Kata Sandi Baru (Minimal 8 Karakter) <span class="req">*</span></label>
-            <input
-              id="act-new-pw"
-              type="password"
-              wire:model="newPassword"
-              class="field-input @error('newPassword') is-invalid @enderror"
-              placeholder="Buat kata sandi baru yang kuat"
-              autocomplete="new-password"
-            />
+            <div class="password-field-wrap">
+              <input
+                id="act-new-pw"
+                type="password"
+                :type="showPw ? 'text' : 'password'"
+                wire:model="newPassword"
+                class="field-input has-pw-toggle @error('newPassword') is-invalid @enderror"
+                placeholder="Buat kata sandi baru yang kuat"
+                autocomplete="new-password"
+              />
+              <button
+                type="button"
+                class="password-toggle-btn"
+                x-on:click="showPw = !showPw"
+                :aria-label="showPw ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'"
+                :title="showPw ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'"
+              >
+                <svg class="icon" x-show="!showPw"><use href="#i-eye"></use></svg>
+                <svg class="icon" x-show="showPw" x-cloak><use href="#i-eye-off"></use></svg>
+              </button>
+            </div>
             @error('newPassword')
               <div class="field-error" role="alert">
                 <svg class="icon"><use href="#i-alert"></use></svg>
@@ -73,16 +99,29 @@
             @enderror
           </div>
 
-          <div class="form-field">
+          <div class="form-field" x-data="{ showPw: false }">
             <label for="act-confirm-pw" class="field-label">Ulangi Kata Sandi Baru <span class="req">*</span></label>
-            <input
-              id="act-confirm-pw"
-              type="password"
-              wire:model="newPasswordConfirmation"
-              class="field-input @error('newPasswordConfirmation') is-invalid @enderror"
-              placeholder="Ketik ulang kata sandi baru"
-              autocomplete="new-password"
-            />
+            <div class="password-field-wrap">
+              <input
+                id="act-confirm-pw"
+                type="password"
+                :type="showPw ? 'text' : 'password'"
+                wire:model="newPasswordConfirmation"
+                class="field-input has-pw-toggle @error('newPasswordConfirmation') is-invalid @enderror"
+                placeholder="Ketik ulang kata sandi baru"
+                autocomplete="new-password"
+              />
+              <button
+                type="button"
+                class="password-toggle-btn"
+                x-on:click="showPw = !showPw"
+                :aria-label="showPw ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'"
+                :title="showPw ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'"
+              >
+                <svg class="icon" x-show="!showPw"><use href="#i-eye"></use></svg>
+                <svg class="icon" x-show="showPw" x-cloak><use href="#i-eye-off"></use></svg>
+              </button>
+            </div>
             @error('newPasswordConfirmation')
               <div class="field-error" role="alert">
                 <svg class="icon"><use href="#i-alert"></use></svg>

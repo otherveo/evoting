@@ -6026,3 +6026,54 @@ body.is-navigating .page-live-content {
     justify-content: center;
   }
 }
+
+/* Password Field Eye Toggle */
+.password-field-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.field-input.has-pw-toggle {
+  padding-right: 44px;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.password-toggle-btn:hover {
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.password-toggle-btn:focus-visible {
+  outline: 2px solid rgba(36, 87, 197, 0.35);
+  outline-offset: 1px;
+}
+
+.password-toggle-btn .icon {
+  width: 17px;
+  height: 17px;
+  display: block;
+}
+
+/* Hide native Edge/IE password reveal icon so it doesn't double up with our custom toggle */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}

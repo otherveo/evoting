@@ -43,16 +43,29 @@
         @enderror
       </div>
 
-      <div class="form-field">
+      <div class="form-field" x-data="{ showPw: false }">
         <label for="login-password" class="field-label">Kata Sandi <span class="req">*</span></label>
-        <input
-          id="login-password"
-          type="password"
-          wire:model="password"
-          class="field-input @error('password') is-invalid @enderror"
-          placeholder="Masukkan kata sandi"
-          autocomplete="current-password"
-        />
+        <div class="password-field-wrap">
+          <input
+            id="login-password"
+            type="password"
+            :type="showPw ? 'text' : 'password'"
+            wire:model="password"
+            class="field-input has-pw-toggle @error('password') is-invalid @enderror"
+            placeholder="Masukkan kata sandi"
+            autocomplete="current-password"
+          />
+          <button
+            type="button"
+            class="password-toggle-btn"
+            x-on:click="showPw = !showPw"
+            :aria-label="showPw ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'"
+            :title="showPw ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'"
+          >
+            <svg class="icon" x-show="!showPw"><use href="#i-eye"></use></svg>
+            <svg class="icon" x-show="showPw" x-cloak><use href="#i-eye-off"></use></svg>
+          </button>
+        </div>
         @error('password')
           <div class="field-error" role="alert">
             <svg class="icon"><use href="#i-alert"></use></svg>
