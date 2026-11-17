@@ -1,3 +1,4 @@
+{{-- UI-003, FR-002, Amandemen PRD §2.8: Aktivasi akun pertama (Admin: Sandi + TOTP; Operator: Sandi saja) --}}
 <div class="auth-shell view-enter">
   <div class="auth-card {{ $user->isAdmin() ? 'auth-card-wide' : '' }}">
     <div class="auth-head">
@@ -91,16 +92,16 @@
           </div>
 
           <div style="margin-top: 18px;">
-            <button type="submit" class="btn btn-primary btn-block" wire:loading.attr="disabled">
-              <span wire:loading.remove wire:target="updatePassword" style="display:inline-flex;align-items:center;gap:8px;">
-                <svg class="icon"><use href="#i-check"></use></svg>
-                <span>Simpan Kata Sandi Baru</span>
-              </span>
-              <span wire:loading wire:target="updatePassword" style="display:inline-flex;align-items:center;gap:8px;">
-                <span class="spinner" aria-hidden="true"></span>
-                <span>Menyimpan kata sandi...</span>
-              </span>
-            </button>
+            <x-action-button
+              type="submit"
+              variant="primary"
+              :block="true"
+              target="updatePassword"
+              icon="#i-check"
+              loadingText="Menyimpan kata sandi..."
+            >
+              Simpan Kata Sandi Baru
+            </x-action-button>
           </div>
         </form>
       </div>
@@ -136,20 +137,13 @@
           </div>
 
           <div class="qr-details">
-            <div class="token-box" style="margin-top: 0;">
-              <div>
-                <span>KUNCI RAHASIA MANUAL (BASE32)</span>
-                <code id="totp-secret-code">{{ $pendingTotpSecret }}</code>
-              </div>
-              <button
-                type="button"
-                class="icon-btn"
-                title="Salin kunci TOTP"
-                onclick="navigator.clipboard.writeText('{{ $pendingTotpSecret }}'); window.showToast('Kunci TOTP disalin ke papan klip.', 'info');"
-              >
-                <svg class="icon"><use href="#i-copy"></use></svg>
-              </button>
-            </div>
+            <x-copy-link-box
+              label="KUNCI RAHASIA MANUAL (BASE32)"
+              :url="$pendingTotpSecret"
+              copyToast="Kunci TOTP disalin ke papan klip."
+              :showOpenLink="false"
+              style="margin-top: 0;"
+            />
 
             <form wire:submit="confirmTotp" novalidate style="margin-top: 16px;">
               <div class="form-field">
@@ -174,21 +168,17 @@
               </div>
 
               <div style="margin-top: 14px;">
-                <button
+                <x-action-button
                   type="submit"
-                  class="btn btn-primary btn-block"
-                  {{ $user->must_change_password ? 'disabled' : '' }}
-                  wire:loading.attr="disabled"
+                  variant="primary"
+                  :block="true"
+                  target="confirmTotp"
+                  icon="#i-check-circle"
+                  loadingText="Memverifikasi TOTP..."
+                  :disabled="$user->must_change_password"
                 >
-                  <span wire:loading.remove wire:target="confirmTotp" style="display:inline-flex;align-items:center;gap:8px;">
-                    <svg class="icon"><use href="#i-check-circle"></use></svg>
-                    <span>Konfirmasi &amp; Aktifkan TOTP</span>
-                  </span>
-                  <span wire:loading wire:target="confirmTotp" style="display:inline-flex;align-items:center;gap:8px;">
-                    <span class="spinner" aria-hidden="true"></span>
-                    <span>Memverifikasi TOTP...</span>
-                  </span>
-                </button>
+                  Konfirmasi &amp; Aktifkan TOTP
+                </x-action-button>
               </div>
             </form>
           </div>

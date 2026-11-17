@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin;
 
+use App\Livewire\Concerns\HandlesSafeErrors;
 use App\Models\StaffAccount;
 use App\Services\StaffAccountService;
 use Illuminate\Support\Facades\Auth;
@@ -9,23 +10,26 @@ use InvalidArgumentException;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Throwable;
 
 #[Layout('layouts.app')]
 #[Title('Kelola Akun Operator')]
 class OperatorIndexPage extends Component
 {
+    use HandlesSafeErrors;
+
     public string $search = '';
 
     public string $filterStatus = 'all';
 
-    // Modal Buat Akun (UI-005)
+    // UI-005: Modal Buat Akun Operator
     public bool $showCreateModal = false;
 
     public string $newUsername = '';
 
     public string $newFullName = '';
 
-    // Modal Kredensial Sekali Tampil (UI-005 / Reset Sandi)
+    // UI-005 / FR-007: Modal Kredensial Sekali Tampil
     public bool $showCredentialModal = false;
 
     public string $credentialUsername = '';
@@ -36,7 +40,7 @@ class OperatorIndexPage extends Component
 
     public string $credentialContext = 'create';
 
-    // Modal Konfirmasi Aksi (Aktif/Nonaktif & Reset Sandi)
+    // FR-006 / FR-007: Modal Konfirmasi Aksi (Aktif/Nonaktif & Reset Sandi)
     public bool $showConfirmModal = false;
 
     public ?string $targetOperatorId = null;
@@ -83,6 +87,11 @@ class OperatorIndexPage extends Component
             );
         } catch (InvalidArgumentException $e) {
             $this->addError('newUsername', $e->getMessage());
+            $this->dispatch('toast', message: $e->getMessage(), type: 'error');
+
+            return;
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal membuat akun Operator. Silakan coba kembali.', 'newUsername');
 
             return;
         }
@@ -137,35 +146,40 @@ class OperatorIndexPage extends Component
             return;
         }
 
-        /** @var StaffAccount $admin */
-        $admin = Auth::guard('staff')->user();
-        $operator = StaffAccount::where('role', 'operator')->findOrFail($this->targetOperatorId);
-        $action = $this->confirmActionType;
+        try {
+            /** @var StaffAccount $admin */
+            $admin = Auth::guard('staff')->user();
+            $operator = StaffAccount::where('role', 'operator')->findOrFail($this->targetOperatorId);
+            $action = $this->confirmActionType;
 
-        $this->closeConfirmModal();
+            $this->closeConfirmModal();
 
-        if ($action === 'deactivate') {
-            $service->setOperatorActiveStatus($operator, false, $admin);
-            $this->dispatch('toast', message: "Akun @{$operator->username} dinonaktifkan dan sesi aktifnya diakhiri.", type: 'warning');
+            if ($action === 'deactivate') {
+                $service->setOperatorActiveStatus($operator, false, $admin);
+                $this->dispatch('toast', message: "Akun @{$operator->username} dinonaktifkan dan sesi aktifnya diakhiri.", type: 'warning');
 
-            return;
-        }
+                return;
+            }
 
-        if ($action === 'activate') {
-            $service->setOperatorActiveStatus($operator, true, $admin);
-            $this->dispatch('toast', message: "Akun @{$operator->username} diaktifkan kembali.", type: 'success');
+            if ($action === 'activate') {
+                $service->setOperatorActiveStatus($operator, true, $admin);
+                $this->dispatch('toast', message: "Akun @{$operator->username} diaktifkan kembali.", type: 'success');
 
-            return;
-        }
+                return;
+            }
 
-        if ($action === 'reset_password') {
-            $tempPassword = $service->resetOperatorPassword($operator, $admin);
-            $this->credentialUsername = $operator->username;
-            $this->credentialFullName = $operator->full_name;
-            $this->credentialTempPassword = $tempPassword;
-            $this->credentialContext = 'reset';
-            $this->showCredentialModal = true;
-            $this->dispatch('toast', message: "Kata sandi sementara baru untuk @{$operator->username} telah dibuat.", type: 'success');
+            if ($action === 'reset_password') {
+                $tempPassword = $service->resetOperatorPassword($operator, $admin);
+                $this->credentialUsername = $operator->username;
+                $this->credentialFullName = $operator->full_name;
+                $this->credentialTempPassword = $tempPassword;
+                $this->credentialContext = 'reset';
+                $this->showCredentialModal = true;
+                $this->dispatch('toast', message: "Kata sandi sementara baru untuk @{$operator->username} telah dibuat.", type: 'success');
+            }
+        } catch (Throwable $e) {
+            $this->closeConfirmModal();
+            $this->reportSafeError($e, 'Gagal memproses perubahan akun Operator. Silakan coba kembali.');
         }
     }
 

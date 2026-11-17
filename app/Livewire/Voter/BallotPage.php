@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Voter;
 
+use App\Livewire\Concerns\HandlesSafeErrors;
 use App\Models\Candidate;
 use App\Models\Election;
 use App\Services\TokenService;
@@ -10,11 +11,14 @@ use Carbon\CarbonImmutable;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Throwable;
 
 #[Layout('layouts.voter')]
 #[Title('Bilik Suara Elektronik')]
 class BallotPage extends Component
 {
+    use HandlesSafeErrors;
+
     public string $token = '';
 
     public string $browserId = '';
@@ -36,7 +40,7 @@ class BallotPage extends Component
 
     public string $sessionExpiresLabel = '';
 
-    // Detail Kendala (UI-017)
+    // UI-017: Detail Kendala
     public string $errorCode = '';
 
     public string $errorTitle = '';
@@ -50,80 +54,89 @@ class BallotPage extends Component
         $this->token = trim($token);
         $this->browserId = $tokens->resolveOrCreateBrowserId(request());
 
-        $openResult = $voting->openQr(
-            rawToken: $this->token,
-            browserId: $this->browserId,
-            userAgent: request()->userAgent(),
-            ip: request()->ip()
-        );
+        try {
+            $openResult = $voting->openQr(
+                rawToken: $this->token,
+                browserId: $this->browserId,
+                userAgent: request()->userAgent(),
+                ip: request()->ip()
+            );
 
-        if ($openResult['election_id']) {
-            $this->electionId = $openResult['election_id'];
-            $el = Election::find($this->electionId);
-            if ($el) {
-                $this->electionName = $el->name;
+            if ($openResult['election_id']) {
+                $this->electionId = $openResult['election_id'];
+                $el = Election::find($this->electionId);
+                if ($el) {
+                    $this->electionName = $el->name;
+                }
             }
+
+            if ($openResult['code'] === 'already_voted') {
+                $this->stage = 'selesai';
+                $this->selectedCandidateId = null;
+
+                return;
+            }
+
+            if (! $openResult['ok']) {
+                $this->setTroubleState($openResult['code'], $openResult['message']);
+
+                return;
+            }
+
+            if ($openResult['status'] === 'sedang_memilih') {
+                $this->stage = 'memilih';
+                $this->isResumedSession = true;
+                $this->applySessionExpiry($openResult['session_expires_at']);
+
+                return;
+            }
+
+            $this->stage = 'verifikasi';
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Terjadi kendala saat membuka halaman bilik suara.');
+            $this->setTroubleState('system_error', 'Terjadi kendala saat memvalidasi kode QR Anda.');
         }
-
-        if ($openResult['code'] === 'already_voted') {
-            $this->stage = 'selesai';
-            $this->selectedCandidateId = null;
-
-            return;
-        }
-
-        if (! $openResult['ok']) {
-            $this->setTroubleState($openResult['code'], $openResult['message']);
-
-            return;
-        }
-
-        if ($openResult['status'] === 'sedang_memilih') {
-            $this->stage = 'memilih';
-            $this->isResumedSession = true;
-            $this->applySessionExpiry($openResult['session_expires_at']);
-
-            return;
-        }
-
-        $this->stage = 'verifikasi';
     }
 
     public function startVoting(VotingService $voting): void
     {
-        $result = $voting->startVoting(
-            rawToken: $this->token,
-            browserId: $this->browserId,
-            userAgent: request()->userAgent(),
-            ip: request()->ip()
-        );
+        try {
+            $result = $voting->startVoting(
+                rawToken: $this->token,
+                browserId: $this->browserId,
+                userAgent: request()->userAgent(),
+                ip: request()->ip()
+            );
 
-        if ($result['election_id']) {
-            $this->electionId = $result['election_id'];
-            $el = Election::find($this->electionId);
-            if ($el) {
-                $this->electionName = $el->name;
+            if ($result['election_id']) {
+                $this->electionId = $result['election_id'];
+                $el = Election::find($this->electionId);
+                if ($el) {
+                    $this->electionName = $el->name;
+                }
             }
-        }
 
-        if ($result['code'] === 'already_voted') {
-            $this->selectedCandidateId = null;
-            $this->stage = 'selesai';
+            if ($result['code'] === 'already_voted') {
+                $this->selectedCandidateId = null;
+                $this->stage = 'selesai';
+                $this->dispatch('step-changed');
+
+                return;
+            }
+
+            if (! $result['ok']) {
+                $this->setTroubleState($result['code'], $result['message']);
+                $this->dispatch('step-changed');
+
+                return;
+            }
+
+            $this->applySessionExpiry($voting->databaseNow()->addMinutes(10));
+            $this->stage = 'memilih';
             $this->dispatch('step-changed');
-
-            return;
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal memulai sesi memilih. Silakan coba kembali.');
         }
-
-        if (! $result['ok']) {
-            $this->setTroubleState($result['code'], $result['message']);
-            $this->dispatch('step-changed');
-
-            return;
-        }
-
-        $this->applySessionExpiry(CarbonImmutable::now('UTC')->addMinutes(10));
-        $this->stage = 'memilih';
-        $this->dispatch('step-changed');
     }
 
     public function selectCandidate(string $candidateId): void
@@ -176,33 +189,38 @@ class BallotPage extends Component
             return;
         }
 
-        $result = $voting->confirmVote(
-            rawToken: $this->token,
-            browserId: $this->browserId,
-            candidateId: $this->selectedCandidateId,
-            userAgent: request()->userAgent(),
-            ip: request()->ip()
-        );
+        try {
+            $result = $voting->confirmVote(
+                rawToken: $this->token,
+                browserId: $this->browserId,
+                candidateId: $this->selectedCandidateId,
+                userAgent: request()->userAgent(),
+                ip: request()->ip()
+            );
 
-        if ($result['ok'] || $result['code'] === 'already_voted') {
-            // BR-028: Hapus pilihan dari memori agar halaman selesai tidak pernah menampilkan kembali pilihan
-            $this->selectedCandidateId = null;
-            $this->stage = 'selesai';
+            if ($result['ok'] || $result['code'] === 'already_voted') {
+                // BR-028: Hapus pilihan dari memori agar halaman selesai tidak pernah menampilkan kembali pilihan
+                $this->selectedCandidateId = null;
+                $this->stage = 'selesai';
+                $this->dispatch('step-changed');
+                $this->dispatch('toast', message: 'Suara Anda berhasil disimpan secara anonim.', type: 'success');
+
+                return;
+            }
+
+            if ($result['code'] === 'invalid_candidate') {
+                $this->selectedCandidateId = null;
+                $this->stage = 'memilih';
+                $this->dispatch('toast', message: $result['message'], type: 'error');
+
+                return;
+            }
+
+            $this->setTroubleState($result['code'], $result['message']);
             $this->dispatch('step-changed');
-
-            return;
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Koneksi terputus saat menyimpan suara. Silakan coba tekan Konfirmasi pilihan kembali.');
         }
-
-        if ($result['code'] === 'invalid_candidate') {
-            $this->selectedCandidateId = null;
-            $this->stage = 'memilih';
-            $this->dispatch('toast', message: $result['message'], type: 'error');
-
-            return;
-        }
-
-        $this->setTroubleState($result['code'], $result['message']);
-        $this->dispatch('step-changed');
     }
 
     private function applySessionExpiry(?CarbonImmutable $expiresAt): void

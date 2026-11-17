@@ -1,3 +1,4 @@
+{{-- UI-004, UI-005, FR-005, FR-006, FR-007, BR-021: Halaman Admin Kelola Akun Operator --}}
 <div class="container page view-enter">
   <div class="page-heading">
     <div>
@@ -11,53 +12,49 @@
       </p>
     </div>
     <div class="heading-actions">
-      <button type="button" class="btn btn-primary" wire:click="openCreateModal">
-        <svg class="icon"><use href="#i-plus"></use></svg>
-        <span>Buat Akun Operator</span>
-      </button>
+      <x-action-button
+        variant="primary"
+        icon="#i-plus"
+        wire:click="openCreateModal"
+        loadingText="Membuka..."
+      >
+        Buat Akun Operator
+      </x-action-button>
     </div>
   </div>
 
   <div class="stat-grid">
-    <div class="stat-card">
-      <div class="stat-top">
-        <span class="stat-icon"><svg class="icon"><use href="#i-users"></use></svg></span>
-        <span class="stat-cap">Total</span>
-      </div>
-      <div class="stat-value">{{ $totalOperators }}</div>
-      <div class="stat-label">Akun Operator</div>
-      <div class="stat-hint">Terdaftar di sistem</div>
-    </div>
-
-    <div class="stat-card stat-green">
-      <div class="stat-top">
-        <span class="stat-icon"><svg class="icon"><use href="#i-user-check"></use></svg></span>
-        <span class="stat-cap">Aktif</span>
-      </div>
-      <div class="stat-value">{{ $activeOperators }}</div>
-      <div class="stat-label">Operator Aktif</div>
-      <div class="stat-hint">Dapat masuk &amp; bertugas</div>
-    </div>
-
-    <div class="stat-card stat-amber">
-      <div class="stat-top">
-        <span class="stat-icon"><svg class="icon"><use href="#i-clock"></use></svg></span>
-        <span class="stat-cap">Aktivasi</span>
-      </div>
-      <div class="stat-value">{{ $pendingPasswordChange }}</div>
-      <div class="stat-label">Wajib Ganti Sandi</div>
-      <div class="stat-hint">Menggunakan sandi sementara</div>
-    </div>
-
-    <div class="stat-card stat-violet">
-      <div class="stat-top">
-        <span class="stat-icon"><svg class="icon"><use href="#i-lock"></use></svg></span>
-        <span class="stat-cap">Nonaktif</span>
-      </div>
-      <div class="stat-value">{{ $inactiveOperators }}</div>
-      <div class="stat-label">Operator Nonaktif</div>
-      <div class="stat-hint">Akses dicabut sementara</div>
-    </div>
+    <x-stat-card
+      icon="#i-users"
+      cap="Total"
+      :value="$totalOperators"
+      label="Akun Operator"
+      hint="Terdaftar di sistem"
+    />
+    <x-stat-card
+      icon="#i-user-check"
+      cap="Aktif"
+      :value="$activeOperators"
+      label="Operator Aktif"
+      hint="Dapat masuk & bertugas"
+      variant="green"
+    />
+    <x-stat-card
+      icon="#i-clock"
+      cap="Aktivasi"
+      :value="$pendingPasswordChange"
+      label="Wajib Ganti Sandi"
+      hint="Menggunakan sandi sementara"
+      variant="amber"
+    />
+    <x-stat-card
+      icon="#i-lock"
+      cap="Nonaktif"
+      :value="$inactiveOperators"
+      label="Operator Nonaktif"
+      hint="Akses dicabut sementara"
+      variant="violet"
+    />
   </div>
 
   <section class="panel" aria-label="Tabel Akun Operator">
@@ -67,7 +64,8 @@
           <svg class="icon"><use href="#i-users"></use></svg>
           <span>Akun Operator Terdaftar</span>
         </h2>
-        <p class="panel-sub">Sesuai Amandemen PRD, Operator masuk menggunakan username dan kata sandi (tanpa TOTP).</p>
+        {{-- Amandemen PRD §1: Operator masuk menggunakan username dan kata sandi saja --}}
+        <p class="panel-sub">Operator masuk menggunakan username dan kata sandi yang kuat tanpa autentikasi dua faktor.</p>
       </div>
 
       <div class="voter-tools">
@@ -166,31 +164,34 @@
                 </td>
                 <td>
                   <div class="row-actions">
-                    <button
-                      type="button"
-                      class="btn btn-xs btn-secondary"
+                    <x-action-button
+                      variant="secondary"
+                      size="xs"
+                      icon="#i-rotate"
                       wire:click="promptResetPassword('{{ $op->id }}')"
+                      loadingText="Memuat..."
                     >
-                      <svg class="icon"><use href="#i-rotate"></use></svg>
-                      <span>Reset Kata Sandi</span>
-                    </button>
+                      Reset Kata Sandi
+                    </x-action-button>
 
                     @if($op->is_active)
-                      <button
-                        type="button"
-                        class="btn btn-xs btn-danger-ghost"
+                      <x-action-button
+                        variant="danger-ghost"
+                        size="xs"
                         wire:click="promptToggleActive('{{ $op->id }}')"
+                        loadingText="Memuat..."
                       >
-                        <span>Nonaktifkan</span>
-                      </button>
+                        Nonaktifkan
+                      </x-action-button>
                     @else
-                      <button
-                        type="button"
-                        class="btn btn-xs btn-soft"
+                      <x-action-button
+                        variant="soft"
+                        size="xs"
                         wire:click="promptToggleActive('{{ $op->id }}')"
+                        loadingText="Memuat..."
                       >
-                        <span>Aktifkan</span>
-                      </button>
+                        Aktifkan
+                      </x-action-button>
                     @endif
                   </div>
                 </td>
@@ -207,193 +208,164 @@
     </div>
   </section>
 
-  {{-- UI-005: Modal Buat Akun Operator --}}
+  {{-- UI-005, FR-005: Modal Buat Akun Operator --}}
   @if($showCreateModal)
-    <div class="modal-backdrop is-visible" role="dialog" aria-modal="true" aria-labelledby="modal-create-op-title">
-      <div class="modal">
-        <div class="modal-header">
-          <div class="modal-heading">
-            <span class="modal-icon"><svg class="icon"><use href="#i-plus"></use></svg></span>
-            <div>
-              <h2 id="modal-create-op-title">Buat Akun Operator Baru</h2>
-              <p>Sistem akan menghasilkan kata sandi sementara yang hanya ditampilkan satu kali.</p>
-            </div>
+    <x-modal
+      title="Buat Akun Operator Baru"
+      subtitle="Sistem akan menghasilkan kata sandi sementara yang hanya ditampilkan satu kali."
+      icon="#i-plus"
+      closeAction="closeCreateModal"
+    >
+      <form wire:submit="createOperator" novalidate>
+        <div class="modal-body">
+          <div class="form-field">
+            <label for="new-op-username" class="field-label">Username Operator <span class="req">*</span></label>
+            <input
+              id="new-op-username"
+              type="text"
+              wire:model="newUsername"
+              class="field-input @error('newUsername') is-invalid @enderror"
+              placeholder="Contoh: operator.bilik1"
+              autofocus
+            />
+            <p class="field-hint">3–40 karakter (huruf, angka, titik, garis bawah, atau tanda hubung).</p>
+            @error('newUsername')
+              <div class="field-error" role="alert">
+                <svg class="icon"><use href="#i-alert"></use></svg>
+                <span>{{ $message }}</span>
+              </div>
+            @enderror
           </div>
-          <button type="button" class="icon-btn" wire:click="closeCreateModal" aria-label="Tutup dialog">
-            <svg class="icon"><use href="#i-x"></use></svg>
-          </button>
+
+          <div class="form-field">
+            <label for="new-op-fullname" class="field-label">Nama Lengkap Petugas <span class="req">*</span></label>
+            <input
+              id="new-op-fullname"
+              type="text"
+              wire:model="newFullName"
+              class="field-input @error('newFullName') is-invalid @enderror"
+              placeholder="Contoh: Budi Santoso"
+            />
+            @error('newFullName')
+              <div class="field-error" role="alert">
+                <svg class="icon"><use href="#i-alert"></use></svg>
+                <span>{{ $message }}</span>
+              </div>
+            @enderror
+          </div>
         </div>
 
-        <form wire:submit="createOperator" novalidate>
-          <div class="modal-body">
-            <div class="form-field">
-              <label for="new-op-username" class="field-label">Username Operator <span class="req">*</span></label>
-              <input
-                id="new-op-username"
-                type="text"
-                wire:model="newUsername"
-                class="field-input @error('newUsername') is-invalid @enderror"
-                placeholder="Contoh: operator.bilik1"
-                autofocus
-              />
-              <p class="field-hint">3–40 karakter (huruf, angka, titik, garis bawah, atau tanda hubung).</p>
-              @error('newUsername')
-                <div class="field-error" role="alert">
-                  <svg class="icon"><use href="#i-alert"></use></svg>
-                  <span>{{ $message }}</span>
-                </div>
-              @enderror
-            </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" wire:click="closeCreateModal">Batal</button>
+          <x-action-button
+            type="submit"
+            variant="primary"
+            target="createOperator"
+            icon="#i-check"
+            loadingText="Membuat akun..."
+          >
+            Buat Akun
+          </x-action-button>
+        </div>
+      </form>
+    </x-modal>
+  @endif
 
-            <div class="form-field">
-              <label for="new-op-fullname" class="field-label">Nama Lengkap Petugas <span class="req">*</span></label>
-              <input
-                id="new-op-fullname"
-                type="text"
-                wire:model="newFullName"
-                class="field-input @error('newFullName') is-invalid @enderror"
-                placeholder="Contoh: Budi Santoso"
-              />
-              @error('newFullName')
-                <div class="field-error" role="alert">
-                  <svg class="icon"><use href="#i-alert"></use></svg>
-                  <span>{{ $message }}</span>
-                </div>
-              @enderror
-            </div>
+  {{-- UI-005, FR-005, FR-007: Modal Kata Sandi Sementara (Sekali Tampil) --}}
+  @if($showCredentialModal)
+    <x-modal
+      :title="$credentialContext === 'create' ? 'Akun Operator Berhasil Dibuat' : 'Kata Sandi Operator Direset'"
+      subtitle="Salin dan serahkan kredensial berikut kepada petugas Operator yang bersangkutan."
+      icon="#i-check-circle"
+      iconVariant="success"
+    >
+      <div class="modal-body">
+        <div class="alert alert-warning">
+          <svg class="icon"><use href="#i-alert"></use></svg>
+          <div>
+            <strong>Hanya ditampilkan satu kali</strong>
+            <p>Setelah dialog ini ditutup, kata sandi sementara tidak dapat dilihat kembali. Operator wajib menggantinya saat login pertama.</p>
           </div>
+        </div>
 
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" wire:click="closeCreateModal">Batal</button>
-            <button type="submit" class="btn btn-primary" wire:loading.attr="disabled">
-              <span wire:loading.remove wire:target="createOperator">Buat Akun</span>
-              <span wire:loading wire:target="createOperator">Membuat...</span>
+        <dl class="detail-list" style="margin-top: 14px;">
+          <div>
+            <dt>Nama Lengkap</dt>
+            <dd>{{ $credentialFullName }}</dd>
+          </div>
+          <div>
+            <dt>Username</dt>
+            <dd>{{ $credentialUsername }}</dd>
+          </div>
+        </dl>
+
+        <div class="temp-password-box">
+          <span style="font-size:0.68rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);">
+            Kata Sandi Sementara
+          </span>
+          <code>{{ $credentialTempPassword }}</code>
+          <div style="margin-top: 10px;">
+            <button
+              type="button"
+              class="btn btn-sm btn-soft"
+              onclick="navigator.clipboard.writeText(@js($credentialTempPassword)); window.showToast('Kata sandi sementara berhasil disalin.', 'success');"
+            >
+              <svg class="icon"><use href="#i-copy"></use></svg>
+              <span>Salin Kata Sandi</span>
             </button>
           </div>
-        </form>
-      </div>
-    </div>
-  @endif
-
-  {{-- Modal Kata Sandi Sementara (Sekali Tampil) --}}
-  @if($showCredentialModal)
-    <div class="modal-backdrop is-visible" role="dialog" aria-modal="true" aria-labelledby="modal-cred-title">
-      <div class="modal">
-        <div class="modal-header">
-          <div class="modal-heading">
-            <span class="modal-icon" style="color:var(--green);background:var(--green-soft);">
-              <svg class="icon"><use href="#i-check-circle"></use></svg>
-            </span>
-            <div>
-              <h2 id="modal-cred-title">
-                {{ $credentialContext === 'create' ? 'Akun Operator Berhasil Dibuat' : 'Kata Sandi Operator Direset' }}
-              </h2>
-              <p>Salin dan serahkan kredensial berikut kepada petugas Operator yang bersangkutan.</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="modal-body">
-          <div class="alert alert-warning">
-            <svg class="icon"><use href="#i-alert"></use></svg>
-            <div>
-              <strong>Hanya ditampilkan satu kali</strong>
-              <p>Setelah dialog ini ditutup, kata sandi sementara tidak dapat dilihat kembali. Operator wajib menggantinya saat login pertama.</p>
-            </div>
-          </div>
-
-          <dl class="detail-list" style="margin-top: 14px;">
-            <div>
-              <dt>Nama Lengkap</dt>
-              <dd>{{ $credentialFullName }}</dd>
-            </div>
-            <div>
-              <dt>Username</dt>
-              <dd>{{ $credentialUsername }}</dd>
-            </div>
-          </dl>
-
-          <div class="temp-password-box">
-            <span style="font-size:0.68rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);">
-              Kata Sandi Sementara
-            </span>
-            <code>{{ $credentialTempPassword }}</code>
-            <div style="margin-top: 10px;">
-              <button
-                type="button"
-                class="btn btn-sm btn-soft"
-                onclick="navigator.clipboard.writeText('{{ $credentialTempPassword }}'); window.showToast('Kata sandi sementara berhasil disalin.', 'success');"
-              >
-                <svg class="icon"><use href="#i-copy"></use></svg>
-                <span>Salin Kata Sandi</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="modal-footer">
-          <button type="button" class="btn btn-primary" wire:click="closeCredentialModal">
-            Saya Sudah Menyimpan Kata Sandi Ini
-          </button>
         </div>
       </div>
-    </div>
+
+      <x-slot:footer>
+        <x-action-button
+          variant="primary"
+          icon="#i-check"
+          wire:click="closeCredentialModal"
+          loadingText="Menutup..."
+        >
+          Saya Sudah Menyimpan Kata Sandi Ini
+        </x-action-button>
+      </x-slot:footer>
+    </x-modal>
   @endif
 
-  {{-- Modal Konfirmasi Aktif/Nonaktif & Reset Sandi --}}
+  {{-- FR-006, FR-007: Modal Konfirmasi Aktif/Nonaktif & Reset Sandi --}}
   @if($showConfirmModal)
-    <div class="modal-backdrop is-visible" role="dialog" aria-modal="true">
-      <div class="modal" style="--modal-width: 500px;">
-        <div class="modal-header">
-          <div class="modal-heading">
-            <span class="modal-icon" style="{{ $confirmActionType === 'deactivate' ? 'color:var(--red);background:var(--red-soft);' : '' }}">
-              <svg class="icon"><use href="#i-alert"></use></svg>
-            </span>
-            <div>
-              <h2>
-                @if($confirmActionType === 'deactivate')
-                  Nonaktifkan Akun Operator?
-                @elseif($confirmActionType === 'activate')
-                  Aktifkan Kembali Akun Operator?
-                @else
-                  Reset Kata Sandi Operator?
-                @endif
-              </h2>
-              <p>Target: <strong>{{ $targetOperatorName }}</strong></p>
-            </div>
-          </div>
-          <button type="button" class="icon-btn" wire:click="closeConfirmModal" aria-label="Tutup">
-            <svg class="icon"><use href="#i-x"></use></svg>
-          </button>
-        </div>
-
-        <div class="modal-body">
-          @if($confirmActionType === 'deactivate')
-            <p class="confirm-message">
-              Akun yang dinonaktifkan tidak dapat masuk ke sistem dan <strong>seluruh sesi aktifnya akan langsung diakhiri</strong>. Jejak audit akun tetap tersimpan utuh.
-            </p>
-          @elseif($confirmActionType === 'activate')
-            <p class="confirm-message">
-              Operator ini akan kembali diizinkan masuk dan mengelola pemilihan menggunakan kredensialnya.
-            </p>
-          @else
-            <p class="confirm-message">
-              Sistem akan menerbitkan kata sandi sementara baru (ditampilkan sekali), mengakhiri sesi aktif Operator saat ini, dan mewajibkan Operator mengganti kata sandi pada login berikutnya.
-            </p>
-          @endif
-        </div>
-
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" wire:click="closeConfirmModal">Batal</button>
-          <button
-            type="button"
-            class="btn {{ $confirmActionType === 'deactivate' ? 'btn-danger' : 'btn-primary' }}"
-            wire:click="executeConfirmedAction"
-          >
-            Konfirmasi
-          </button>
-        </div>
+    <x-modal
+      :title="$confirmActionType === 'deactivate' ? 'Nonaktifkan Akun Operator?' : ($confirmActionType === 'activate' ? 'Aktifkan Kembali Akun Operator?' : 'Reset Kata Sandi Operator?')"
+      :subtitle="'Target: <strong>' . e($targetOperatorName) . '</strong>'"
+      icon="#i-alert"
+      :iconVariant="$confirmActionType === 'deactivate' ? 'danger' : 'warning'"
+      maxWidth="500px"
+      closeAction="closeConfirmModal"
+    >
+      <div class="modal-body">
+        @if($confirmActionType === 'deactivate')
+          <p class="confirm-message">
+            Akun yang dinonaktifkan tidak dapat masuk ke sistem dan <strong>seluruh sesi aktifnya akan langsung diakhiri</strong>. Jejak audit akun tetap tersimpan utuh.
+          </p>
+        @elseif($confirmActionType === 'activate')
+          <p class="confirm-message">
+            Operator ini akan kembali diizinkan masuk dan mengelola pemilihan menggunakan kredensialnya.
+          </p>
+        @else
+          <p class="confirm-message">
+            Sistem akan menerbitkan kata sandi sementara baru (ditampilkan sekali), mengakhiri sesi aktif Operator saat ini, dan mewajibkan Operator mengganti kata sandi pada login berikutnya.
+          </p>
+        @endif
       </div>
-    </div>
+
+      <x-slot:footer>
+        <button type="button" class="btn btn-secondary" wire:click="closeConfirmModal">Batal</button>
+        <x-action-button
+          :variant="$confirmActionType === 'deactivate' ? 'danger' : 'primary'"
+          wire:click="executeConfirmedAction"
+          loadingText="Memproses..."
+        >
+          Konfirmasi
+        </x-action-button>
+      </x-slot:footer>
+    </x-modal>
   @endif
 </div>

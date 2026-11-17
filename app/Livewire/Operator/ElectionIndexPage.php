@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Operator;
 
+use App\Livewire\Concerns\HandlesSafeErrors;
 use App\Models\Election;
 use App\Models\StaffAccount;
 use App\Services\AuditService;
@@ -10,11 +11,14 @@ use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Throwable;
 
 #[Layout('layouts.app')]
 #[Title('Daftar Pemilihan')]
 class ElectionIndexPage extends Component
 {
+    use HandlesSafeErrors;
+
     public bool $showCreateModal = false;
 
     public string $name = '';
@@ -46,28 +50,32 @@ class ElectionIndexPage extends Component
             'maxVoterRights.min' => 'Batas maksimum hak pilih minimal 1.',
         ]);
 
-        /** @var StaffAccount $operator */
-        $operator = Auth::guard('staff')->user();
+        try {
+            /** @var StaffAccount $operator */
+            $operator = Auth::guard('staff')->user();
 
-        $election = Election::create([
-            'name' => preg_replace('/\s+/u', ' ', trim($this->name)) ?? trim($this->name),
-            'max_voter_rights' => $this->maxVoterRights,
-        ]);
+            $election = Election::create([
+                'name' => preg_replace('/\s+/u', ' ', trim($this->name)) ?? trim($this->name),
+                'max_voter_rights' => $this->maxVoterRights,
+            ]);
 
-        $audit->log(
-            actorType: 'operator',
-            actorId: $operator->id,
-            action: 'buat_pemilihan',
-            objectType: 'election',
-            objectId: $election->id,
-            detail: [
-                'name' => $election->name,
-                'max_voter_rights' => $election->max_voter_rights,
-            ]
-        );
+            $audit->log(
+                actorType: 'operator',
+                actorId: $operator->id,
+                action: 'buat_pemilihan',
+                objectType: 'election',
+                objectId: $election->id,
+                detail: [
+                    'name' => $election->name,
+                    'max_voter_rights' => $election->max_voter_rights,
+                ]
+            );
 
-        session()->flash('success', 'Pemilihan berhasil dibuat pada Fase Persiapan. Silakan tambahkan pasangan calon dan atur jadwal.');
-        $this->redirectRoute('operator.elections.detail', $election);
+            session()->flash('success', 'Pemilihan berhasil dibuat pada Fase Persiapan. Silakan tambahkan pasangan calon dan atur jadwal.');
+            $this->redirectRoute('operator.elections.detail', $election);
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal membuat pemilihan baru. Silakan coba kembali.', 'name');
+        }
     }
 
     public function render()

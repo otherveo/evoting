@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Auth;
 
+use App\Livewire\Concerns\HandlesSafeErrors;
 use App\Models\StaffAccount;
 use App\Services\AuditService;
 use App\Services\TotpService;
@@ -10,11 +11,14 @@ use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Throwable;
 
 #[Layout('layouts.app')]
 #[Title('Verifikasi 2FA Admin')]
 class VerifyTwoFactorPage extends Component
 {
+    use HandlesSafeErrors;
+
     public string $code = '';
 
     public ?string $errorMessage = null;
@@ -66,56 +70,63 @@ class VerifyTwoFactorPage extends Component
             'code.regex' => 'Kode TOTP harus terdiri dari 6 angka.',
         ]);
 
-        $throttleKey = 'staff_2fa:'.$user->id.'|'.request()->ip();
-        $maxAttempts = (int) config('evoting.login_max_attempts', 5);
-        $decaySeconds = (int) config('evoting.login_decay_seconds', 60);
+        try {
+            $throttleKey = 'staff_2fa:'.$user->id.'|'.request()->ip();
+            $maxAttempts = (int) config('evoting.login_max_attempts', 5);
+            $decaySeconds = (int) config('evoting.login_decay_seconds', 60);
 
-        if (RateLimiter::tooManyAttempts($throttleKey, $maxAttempts)) {
-            $seconds = RateLimiter::availableIn($throttleKey);
-            $this->errorMessage = "Terlalu banyak percobaan kode TOTP gagal. Silakan tunggu {$seconds} detik.";
+            if (RateLimiter::tooManyAttempts($throttleKey, $maxAttempts)) {
+                $seconds = RateLimiter::availableIn($throttleKey);
+                $this->errorMessage = "Terlalu banyak percobaan kode TOTP gagal. Silakan tunggu {$seconds} detik.";
+                $this->dispatch('toast', message: $this->errorMessage, type: 'error');
 
-            return;
-        }
+                return;
+            }
 
-        $secret = (string) $user->totp_secret;
-        if ($secret === '' || ! $totp->verifyCode($secret, $this->code, $user->id)) {
-            RateLimiter::hit($throttleKey, $decaySeconds);
+            $secret = (string) $user->totp_secret;
+            if ($secret === '' || ! $totp->verifyCode($secret, $this->code, $user->id)) {
+                RateLimiter::hit($throttleKey, $decaySeconds);
+
+                $audit->log(
+                    actorType: 'admin',
+                    actorId: $user->id,
+                    action: 'verifikasi_totp_gagal',
+                    objectType: 'staff_account',
+                    objectId: $user->id,
+                    detail: ['username' => $user->username]
+                );
+
+                $this->code = '';
+                $this->errorMessage = 'Kode autentikator tidak sesuai atau sudah kedaluwarsa. Periksa kembali aplikasi autentikator Anda.';
+                $this->dispatch('toast', message: $this->errorMessage, type: 'error');
+
+                return;
+            }
+
+            RateLimiter::clear($throttleKey);
+            session(['staff_2fa_verified' => true]);
+            session()->regenerate();
 
             $audit->log(
                 actorType: 'admin',
                 actorId: $user->id,
-                action: 'verifikasi_totp_gagal',
+                action: 'login_berhasil',
                 objectType: 'staff_account',
                 objectId: $user->id,
-                detail: ['username' => $user->username]
+                detail: ['username' => $user->username, 'via_totp' => true]
             );
 
-            $this->code = '';
-            $this->errorMessage = 'Kode autentikator tidak sesuai atau sudah kedaluwarsa. Periksa kembali aplikasi autentikator Anda.';
+            if ($user->needsActivation()) {
+                $this->redirectRoute('auth.activate');
 
-            return;
+                return;
+            }
+
+            $this->redirectRoute('admin.operators');
+        } catch (Throwable $e) {
+            $this->errorMessage = 'Terjadi kendala saat memverifikasi kode TOTP. Silakan coba kembali.';
+            $this->reportSafeError($e, $this->errorMessage);
         }
-
-        RateLimiter::clear($throttleKey);
-        session(['staff_2fa_verified' => true]);
-        session()->regenerate();
-
-        $audit->log(
-            actorType: 'admin',
-            actorId: $user->id,
-            action: 'login_berhasil',
-            objectType: 'staff_account',
-            objectId: $user->id,
-            detail: ['username' => $user->username, 'via_totp' => true]
-        );
-
-        if ($user->needsActivation()) {
-            $this->redirectRoute('auth.activate');
-
-            return;
-        }
-
-        $this->redirectRoute('admin.operators');
     }
 
     public function render()

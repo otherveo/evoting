@@ -1,3 +1,4 @@
+{{-- UI-006, FR-026, FR-027, BR-020, NFR-008: Halaman Peninjauan Log Audit (Admin Baca-Saja) --}}
 <div class="container page view-enter">
   <div class="page-heading">
     <div>
@@ -19,7 +20,8 @@
           <svg class="icon"><use href="#i-shield"></use></svg>
           <span>Jejak Aktivitas (Baca Saja)</span>
         </h2>
-        <p class="panel-sub">Dilindungi oleh trigger basis data PostgreSQL (NFR-008).</p>
+        {{-- NFR-008: Kekekalan audit_logs dijaga oleh trigger PostgreSQL --}}
+        <p class="panel-sub">Dilindungi secara permanen oleh basis data.</p>
       </div>
 
       <div class="voter-tools">
@@ -124,11 +126,15 @@
         @if($logs->onFirstPage())
           <button type="button" class="btn btn-xs btn-secondary" disabled>Sebelumnya</button>
         @else
-          <button type="button" class="btn btn-xs btn-secondary" wire:click="previousPage">Sebelumnya</button>
+          <x-action-button variant="secondary" size="xs" wire:click="previousPage" loadingText="Memuat...">
+            Sebelumnya
+          </x-action-button>
         @endif
         <span>Halaman <strong>{{ $logs->currentPage() }}</strong> / {{ max(1, $logs->lastPage()) }}</span>
         @if($logs->hasMorePages())
-          <button type="button" class="btn btn-xs btn-secondary" wire:click="nextPage">Berikutnya</button>
+          <x-action-button variant="secondary" size="xs" wire:click="nextPage" loadingText="Memuat...">
+            Berikutnya
+          </x-action-button>
         @else
           <button type="button" class="btn btn-xs btn-secondary" disabled>Berikutnya</button>
         @endif

@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Auth;
 
+use App\Livewire\Concerns\HandlesSafeErrors;
 use App\Models\StaffAccount;
 use App\Services\AuditService;
 use App\Services\TotpService;
@@ -10,11 +11,14 @@ use Illuminate\Support\Facades\Hash;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Throwable;
 
 #[Layout('layouts.app')]
 #[Title('Aktivasi Akun Staf')]
 class ActivateAccountPage extends Component
 {
+    use HandlesSafeErrors;
+
     public string $currentPassword = '';
 
     public string $newPassword = '';
@@ -79,47 +83,54 @@ class ActivateAccountPage extends Component
             'newPasswordConfirmation.required' => 'Konfirmasi kata sandi baru wajib diisi.',
         ]);
 
-        if (! Hash::check($this->currentPassword, $user->password_hash)) {
-            $this->errorMessage = 'Kata sandi sementara saat ini tidak sesuai.';
+        try {
+            if (! Hash::check($this->currentPassword, $user->password_hash)) {
+                $this->errorMessage = 'Kata sandi sementara saat ini tidak sesuai.';
+                $this->dispatch('toast', message: $this->errorMessage, type: 'error');
 
-            return;
+                return;
+            }
+
+            if (Hash::check($this->newPassword, $user->password_hash)) {
+                $this->errorMessage = 'Kata sandi baru harus berbeda dari kata sandi sementara.';
+                $this->dispatch('toast', message: $this->errorMessage, type: 'error');
+
+                return;
+            }
+
+            $user->update([
+                'password_hash' => Hash::make($this->newPassword),
+                'must_change_password' => false,
+            ]);
+
+            $audit->log(
+                actorType: $user->role,
+                actorId: $user->id,
+                action: 'ganti_sandi_aktivasi',
+                objectType: 'staff_account',
+                objectId: $user->id,
+                detail: ['username' => $user->username]
+            );
+
+            $this->currentPassword = '';
+            $this->newPassword = '';
+            $this->newPasswordConfirmation = '';
+
+            $user->refresh();
+            Auth::guard('staff')->setUser($user);
+
+            if (! $user->needsActivation()) {
+                session()->flash('success', 'Aktivasi akun berhasil. Selamat bertugas.');
+                $this->redirectRoute($user->isAdmin() ? 'admin.operators' : 'operator.elections');
+
+                return;
+            }
+
+            $this->dispatch('toast', message: 'Kata sandi baru tersimpan. Lanjutkan Langkah 2 untuk mengaktifkan 2FA Admin.', type: 'success');
+        } catch (Throwable $e) {
+            $this->errorMessage = 'Terjadi kendala saat menyimpan kata sandi baru. Silakan coba kembali.';
+            $this->reportSafeError($e, $this->errorMessage);
         }
-
-        if (Hash::check($this->newPassword, $user->password_hash)) {
-            $this->errorMessage = 'Kata sandi baru harus berbeda dari kata sandi sementara.';
-
-            return;
-        }
-
-        $user->update([
-            'password_hash' => Hash::make($this->newPassword),
-            'must_change_password' => false,
-        ]);
-
-        $audit->log(
-            actorType: $user->role,
-            actorId: $user->id,
-            action: 'ganti_sandi_aktivasi',
-            objectType: 'staff_account',
-            objectId: $user->id,
-            detail: ['username' => $user->username]
-        );
-
-        $this->currentPassword = '';
-        $this->newPassword = '';
-        $this->newPasswordConfirmation = '';
-
-        $user->refresh();
-        Auth::guard('staff')->setUser($user);
-
-        if (! $user->needsActivation()) {
-            session()->flash('success', 'Aktivasi akun berhasil. Selamat bertugas.');
-            $this->redirectRoute($user->isAdmin() ? 'admin.operators' : 'operator.elections');
-
-            return;
-        }
-
-        $this->dispatch('toast', message: 'Kata sandi baru tersimpan. Lanjutkan Langkah 2 untuk mengaktifkan 2FA Admin.', type: 'success');
     }
 
     public function confirmTotp(TotpService $totp, AuditService $audit): void
@@ -136,6 +147,7 @@ class ActivateAccountPage extends Component
 
         if ($user->must_change_password) {
             $this->errorMessage = 'Selesaikan penggantian kata sandi sementara pada Langkah 1 terlebih dahulu.';
+            $this->dispatch('toast', message: $this->errorMessage, type: 'warning');
 
             return;
         }
@@ -147,31 +159,37 @@ class ActivateAccountPage extends Component
             'totpCode.regex' => 'Kode konfirmasi harus berupa 6 angka dari aplikasi autentikator.',
         ]);
 
-        if ($this->pendingTotpSecret === '' || ! $totp->verifyCode($this->pendingTotpSecret, $this->totpCode, $user->id)) {
-            $this->errorMessage = 'Kode TOTP tidak sesuai. Pastikan waktu perangkat Anda sinkron dan pindai ulang kode QR.';
+        try {
+            if ($this->pendingTotpSecret === '' || ! $totp->verifyCode($this->pendingTotpSecret, $this->totpCode, $user->id)) {
+                $this->errorMessage = 'Kode TOTP tidak sesuai. Pastikan waktu perangkat Anda sinkron dan pindai ulang kode QR.';
+                $this->dispatch('toast', message: $this->errorMessage, type: 'error');
 
-            return;
+                return;
+            }
+
+            $user->update([
+                'totp_secret' => $this->pendingTotpSecret,
+                'totp_enabled' => true,
+            ]);
+
+            session()->forget('pending_totp_secret');
+            session(['staff_2fa_verified' => true]);
+
+            $audit->log(
+                actorType: 'admin',
+                actorId: $user->id,
+                action: 'aktifkan_totp_admin',
+                objectType: 'staff_account',
+                objectId: $user->id,
+                detail: ['username' => $user->username]
+            );
+
+            session()->flash('success', 'Autentikasi dua faktor (TOTP) berhasil diaktifkan.');
+            $this->redirectRoute('admin.operators');
+        } catch (Throwable $e) {
+            $this->errorMessage = 'Terjadi kendala saat mengaktifkan autentikasi dua faktor. Silakan coba kembali.';
+            $this->reportSafeError($e, $this->errorMessage);
         }
-
-        $user->update([
-            'totp_secret' => $this->pendingTotpSecret,
-            'totp_enabled' => true,
-        ]);
-
-        session()->forget('pending_totp_secret');
-        session(['staff_2fa_verified' => true]);
-
-        $audit->log(
-            actorType: 'admin',
-            actorId: $user->id,
-            action: 'aktifkan_totp_admin',
-            objectType: 'staff_account',
-            objectId: $user->id,
-            detail: ['username' => $user->username]
-        );
-
-        session()->flash('success', 'Autentikasi dua faktor (TOTP) berhasil diaktifkan.');
-        $this->redirectRoute('admin.operators');
     }
 
     public function render(TotpService $totp)

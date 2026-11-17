@@ -2,17 +2,21 @@
 
 namespace App\Livewire\Operator;
 
+use App\Livewire\Concerns\HandlesSafeErrors;
 use App\Models\Election;
 use App\Services\VotingService;
 use Illuminate\Support\Facades\View;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Throwable;
 
 #[Layout('layouts.app')]
 #[Title('Rekapitulasi & Integritas Suara')]
 class ElectionRecapPage extends Component
 {
+    use HandlesSafeErrors;
+
     public Election $election;
 
     public function mount(Election $election): void
@@ -22,7 +26,12 @@ class ElectionRecapPage extends Component
 
     public function refreshData(): void
     {
-        $this->election->refresh();
+        try {
+            $this->election->refresh();
+            $this->dispatch('toast', message: 'Data rekapitulasi dan status integritas diperbarui.', type: 'info');
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal memuat ulang data rekapitulasi.');
+        }
     }
 
     public function render(VotingService $voting)

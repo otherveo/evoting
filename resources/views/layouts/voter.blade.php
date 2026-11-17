@@ -7,7 +7,7 @@
   <meta name="description" content="Bilik Suara Elektronik — SuaraSekolah" />
   <meta name="theme-color" content="#132a63" />
   <title>{{ isset($title) ? $title . ' — SuaraSekolah' : 'Bilik Suara — SuaraSekolah' }}</title>
-  <link rel="stylesheet" href="{{ asset('css/suarasekolah.css') }}" />
+  <link rel="stylesheet" href="{{ asset('css/suarasekolah.css') }}?v=2" />
   @livewireStyles
 </head>
 <body>
@@ -19,6 +19,7 @@
     <span class="ambient-grid"></span>
   </div>
 
+  {{-- UI.md U5: Header bilik pemilih bersih tanpa tautan keluar yang mengganggu alur linear --}}
   <header class="vote-header">
     <div class="container vote-header-inner">
       <div class="brand" aria-label="SuaraSekolah">

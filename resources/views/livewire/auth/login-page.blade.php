@@ -1,3 +1,4 @@
+{{-- UI-001, FR-001, FR-003: Halaman Masuk Staf (Admin & Operator) --}}
 <div class="auth-shell view-enter">
   <div class="auth-card">
     <div class="auth-head">
@@ -9,7 +10,7 @@
         <span>PORTAL STAF PEMILIHAN</span>
       </div>
       <h1>Masuk Akun Staf</h1>
-      <p>Gunakan kredensial Admin atau Operator yang telah diberikan untuk mengelola pemilihan.</p>
+      <p>Gunakan kredensial Operator yang telah diberikan untuk mengelola pemilihan.</p>
     </div>
 
     @if($errorMessage)
@@ -61,19 +62,21 @@
       </div>
 
       <div style="margin-top: 22px;">
-        <button type="submit" class="btn btn-primary btn-lg btn-block" wire:loading.attr="disabled">
-          <span wire:loading.remove wire:target="login" style="display:inline-flex;align-items:center;gap:8px;">
-            <span>Masuk</span>
-            <svg class="icon"><use href="#i-arrow-right"></use></svg>
-          </span>
-          <span wire:loading wire:target="login" style="display:inline-flex;align-items:center;gap:8px;">
-            <span class="spinner" aria-hidden="true"></span>
-            <span>Memverifikasi kredensial...</span>
-          </span>
-        </button>
+        <x-action-button
+          type="submit"
+          variant="primary"
+          size="lg"
+          :block="true"
+          target="login"
+          iconRight="#i-arrow-right"
+          loadingText="Memverifikasi kredensial..."
+        >
+          Masuk
+        </x-action-button>
       </div>
     </form>
 
+    {{-- BR-002: Pemilih tidak memiliki akun permanen --}}
     <div class="privacy-callout" style="margin-top: 20px;">
       <svg class="icon"><use href="#i-info"></use></svg>
       <div>

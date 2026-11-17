@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Auth;
 
+use App\Livewire\Concerns\HandlesSafeErrors;
 use App\Models\StaffAccount;
 use App\Services\AuditService;
 use Illuminate\Support\Facades\Auth;
@@ -10,11 +11,14 @@ use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Throwable;
 
 #[Layout('layouts.app')]
 #[Title('Masuk Staf')]
 class LoginPage extends Component
 {
+    use HandlesSafeErrors;
+
     public string $username = '';
 
     public string $password = '';
@@ -52,97 +56,105 @@ class LoginPage extends Component
             'password.required' => 'Kata sandi wajib diisi.',
         ]);
 
-        $cleanUsername = mb_strtolower(trim($this->username));
-        $ip = (string) request()->ip();
-        $throttleKey = "staff_login:{$cleanUsername}|{$ip}";
-        $maxAttempts = (int) config('evoting.login_max_attempts', 5);
-        $decaySeconds = (int) config('evoting.login_decay_seconds', 60);
+        try {
+            $cleanUsername = mb_strtolower(trim($this->username));
+            $ip = (string) request()->ip();
+            $throttleKey = "staff_login:{$cleanUsername}|{$ip}";
+            $maxAttempts = (int) config('evoting.login_max_attempts', 5);
+            $decaySeconds = (int) config('evoting.login_decay_seconds', 60);
 
-        if (RateLimiter::tooManyAttempts($throttleKey, $maxAttempts)) {
-            $seconds = RateLimiter::availableIn($throttleKey);
-            $this->errorMessage = "Terlalu banyak percobaan masuk yang gagal. Silakan tunggu {$seconds} detik sebelum mencoba kembali.";
-
-            return;
-        }
-
-        /** @var StaffAccount|null $account */
-        $account = StaffAccount::query()
-            ->whereRaw('lower(username) = ?', [$cleanUsername])
-            ->first();
-
-        if (! $account || ! $account->is_active || ! Hash::check($this->password, $account->password_hash)) {
-            RateLimiter::hit($throttleKey, $decaySeconds);
-
-            $audit->log(
-                actorType: $account ? $account->role : 'sistem',
-                actorId: $account?->id,
-                action: 'login_gagal',
-                objectType: 'staff_account',
-                objectId: $account?->id,
-                detail: [
-                    'username_attempt' => $cleanUsername,
-                    'ip' => $ip,
-                ]
-            );
-
-            $this->password = '';
-            $this->errorMessage = 'Username atau kata sandi tidak sesuai.';
-
-            return;
-        }
-
-        RateLimiter::clear($throttleKey);
-        Auth::guard('staff')->login($account);
-        session()->regenerate();
-
-        // Amandemen PRD: Admin wajib melewati TOTP (UI-002 bila sudah aktif, atau UI-003 bila aktivasi awal)
-        if ($account->isAdmin()) {
-            session(['staff_2fa_verified' => false]);
-
-            if ($account->totp_enabled) {
-                $audit->log(
-                    actorType: 'admin',
-                    actorId: $account->id,
-                    action: 'login_tahap1_berhasil',
-                    objectType: 'staff_account',
-                    objectId: $account->id,
-                    detail: ['username' => $account->username]
-                );
-                $this->redirectRoute('auth.2fa');
+            if (RateLimiter::tooManyAttempts($throttleKey, $maxAttempts)) {
+                $seconds = RateLimiter::availableIn($throttleKey);
+                $this->errorMessage = "Terlalu banyak percobaan masuk yang gagal. Silakan tunggu {$seconds} detik sebelum mencoba kembali.";
+                $this->dispatch('toast', message: $this->errorMessage, type: 'error');
 
                 return;
             }
 
+            /** @var StaffAccount|null $account */
+            $account = StaffAccount::query()
+                ->whereRaw('lower(username) = ?', [$cleanUsername])
+                ->first();
+
+            // FR-001, AC-002: Pesan gagal tidak membedakan username salah dan kata sandi salah
+            if (! $account || ! $account->is_active || ! Hash::check($this->password, $account->password_hash)) {
+                RateLimiter::hit($throttleKey, $decaySeconds);
+
+                $audit->log(
+                    actorType: $account ? $account->role : 'sistem',
+                    actorId: $account?->id,
+                    action: 'login_gagal',
+                    objectType: 'staff_account',
+                    objectId: $account?->id,
+                    detail: [
+                        'username_attempt' => $cleanUsername,
+                        'ip' => $ip,
+                    ]
+                );
+
+                $this->password = '';
+                $this->errorMessage = 'Username atau kata sandi tidak sesuai.';
+                $this->dispatch('toast', message: $this->errorMessage, type: 'error');
+
+                return;
+            }
+
+            RateLimiter::clear($throttleKey);
+            Auth::guard('staff')->login($account);
+            session()->regenerate();
+
+            // Amandemen PRD: Admin wajib melewati TOTP (UI-002 bila sudah aktif, atau UI-003 bila aktivasi awal)
+            if ($account->isAdmin()) {
+                session(['staff_2fa_verified' => false]);
+
+                if ($account->totp_enabled) {
+                    $audit->log(
+                        actorType: 'admin',
+                        actorId: $account->id,
+                        action: 'login_tahap1_berhasil',
+                        objectType: 'staff_account',
+                        objectId: $account->id,
+                        detail: ['username' => $account->username]
+                    );
+                    $this->redirectRoute('auth.2fa');
+
+                    return;
+                }
+
+                $audit->log(
+                    actorType: 'admin',
+                    actorId: $account->id,
+                    action: 'login_aktivasi_awal',
+                    objectType: 'staff_account',
+                    objectId: $account->id,
+                    detail: ['username' => $account->username]
+                );
+                $this->redirectRoute('auth.activate');
+
+                return;
+            }
+
+            // Amandemen PRD §1: Operator login cukup dengan username dan kata sandi
             $audit->log(
-                actorType: 'admin',
+                actorType: 'operator',
                 actorId: $account->id,
-                action: 'login_aktivasi_awal',
+                action: 'login_berhasil',
                 objectType: 'staff_account',
                 objectId: $account->id,
                 detail: ['username' => $account->username]
             );
-            $this->redirectRoute('auth.activate');
 
-            return;
+            if ($account->needsActivation()) {
+                $this->redirectRoute('auth.activate');
+
+                return;
+            }
+
+            $this->redirectRoute('operator.elections');
+        } catch (Throwable $e) {
+            $this->errorMessage = 'Terjadi kendala saat memproses permintaan masuk. Silakan coba kembali.';
+            $this->reportSafeError($e, $this->errorMessage);
         }
-
-        // Operator login cukup username + kata sandi (Amandemen PRD §1)
-        $audit->log(
-            actorType: 'operator',
-            actorId: $account->id,
-            action: 'login_berhasil',
-            objectType: 'staff_account',
-            objectId: $account->id,
-            detail: ['username' => $account->username]
-        );
-
-        if ($account->needsActivation()) {
-            $this->redirectRoute('auth.activate');
-
-            return;
-        }
-
-        $this->redirectRoute('operator.elections');
     }
 
     public function render()

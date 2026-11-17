@@ -7,7 +7,7 @@
   <meta name="description" content="SuaraSekolah — Sistem E-Voting Sekolah Berbasis QR Token Sekali Pakai" />
   <meta name="theme-color" content="#132a63" />
   <title>{{ isset($title) ? $title . ' — SuaraSekolah' : 'SuaraSekolah — Sistem E-Voting' }}</title>
-  <link rel="stylesheet" href="{{ asset('css/suarasekolah.css') }}" />
+  <link rel="stylesheet" href="{{ asset('css/suarasekolah.css') }}?v=2" />
   @livewireStyles
 </head>
 <body>
@@ -37,6 +37,7 @@
         </span>
       </a>
 
+      {{-- FR-004, BR-021: Navigasi utama sesuai peran staf atau publik --}}
       @if($staffUser && !$staffUser->needsActivation() && (!$staffUser->isAdmin() || session('staff_2fa_verified', false)))
         <nav class="main-nav" aria-label="Navigasi Utama">
           @if($staffUser->isAdmin())
@@ -59,7 +60,7 @@
             @if(isset($activeElection) && $activeElection instanceof \App\Models\Election)
               <a href="{{ route('operator.elections.detail', $activeElection) }}" class="nav-link {{ request()->routeIs('operator.elections.detail') ? 'is-active' : '' }}">
                 <svg class="icon"><use href="#i-calendar"></use></svg>
-                <span class="nav-label-full">Konfigurasi & Paslon</span>
+                <span class="nav-label-full">Konfigurasi &amp; Paslon</span>
                 <span class="nav-label-short">Detail</span>
               </a>
               <a href="{{ route('operator.elections.monitor', $activeElection) }}" class="nav-link {{ request()->routeIs('operator.elections.monitor') ? 'is-active' : '' }}">
@@ -152,6 +153,16 @@
         setTimeout(() => toast.remove(), 240);
       }, 4200);
     };
+
+    // Saat scroll di luar modal (.modal-backdrop), geser area halaman di belakangnya;
+    // saat scroll di dalam .modal, biarkan hanya konten modal (.modal-body) yang bergeser.
+    document.addEventListener('wheel', function (e) {
+      const backdrop = e.target.closest('.modal-backdrop');
+      const modal = e.target.closest('.modal');
+      if (backdrop && !modal) {
+        window.scrollBy({ top: e.deltaY, left: e.deltaX, behavior: 'auto' });
+      }
+    }, { passive: true });
 
     document.addEventListener('livewire:initialized', () => {
       Livewire.on('toast', (payload) => {

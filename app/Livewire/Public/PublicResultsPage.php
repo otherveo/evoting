@@ -2,17 +2,21 @@
 
 namespace App\Livewire\Public;
 
+use App\Livewire\Concerns\HandlesSafeErrors;
 use App\Models\Election;
 use App\Services\VotingService;
 use Illuminate\Support\Facades\View;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Throwable;
 
 #[Layout('layouts.app')]
 #[Title('Hasil Pemilihan Publik')]
 class PublicResultsPage extends Component
 {
+    use HandlesSafeErrors;
+
     public Election $election;
 
     public string $loadedAtLabel = '';
@@ -25,8 +29,13 @@ class PublicResultsPage extends Component
 
     public function refreshSnapshot(): void
     {
-        $this->election->refresh();
-        $this->updateTimestamp();
+        try {
+            $this->election->refresh();
+            $this->updateTimestamp();
+            $this->dispatch('toast', message: 'Data halaman hasil telah diperbarui.', type: 'info');
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal memuat ulang halaman hasil.');
+        }
     }
 
     private function updateTimestamp(): void

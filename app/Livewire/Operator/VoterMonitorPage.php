@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Operator;
 
+use App\Livewire\Concerns\HandlesSafeErrors;
 use App\Models\Election;
 use App\Models\StaffAccount;
 use App\Models\VoterRight;
@@ -14,11 +15,14 @@ use Illuminate\Support\Facades\View;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Throwable;
 
 #[Layout('layouts.app')]
 #[Title('Pantau Pemilih & Registrasi QR')]
 class VoterMonitorPage extends Component
 {
+    use HandlesSafeErrors;
+
     public Election $election;
 
     public string $search = '';
@@ -128,58 +132,64 @@ class VoterMonitorPage extends Component
             'voterName.min' => 'Nama lengkap pemilih minimal 2 karakter.',
         ]);
 
-        $normalized = VoterRight::normalizeName($this->voterName);
-        $currentDuplicatesCount = VoterRight::query()
-            ->where('election_id', $this->election->id)
-            ->where('name_normalized', $normalized)
-            ->count();
+        try {
+            $normalized = VoterRight::normalizeName($this->voterName);
+            $currentDuplicatesCount = VoterRight::query()
+                ->where('election_id', $this->election->id)
+                ->where('name_normalized', $normalized)
+                ->count();
 
-        if ($currentDuplicatesCount > 0) {
-            // Segarkan daftar nama kembar dan pastikan Operator telah mencentang konfirmasi pada jumlah saat ini (AC-015)
-            if (! $this->confirmDifferentPerson || $currentDuplicatesCount !== $this->expectedDuplicateCount) {
-                $this->checkDuplicates();
-                $this->confirmDifferentPerson = false;
-                $this->addError('voterName', 'Nama ini sudah terdaftar. Pastikan keduanya adalah orang yang berbeda lalu centang pernyataan konfirmasi di bawah.');
+            // FR-013, BR-003, BR-004, AC-015: Deteksi Nama Kembar & konfirmasi orang berbeda
+            if ($currentDuplicatesCount > 0) {
+                if (! $this->confirmDifferentPerson || $currentDuplicatesCount !== $this->expectedDuplicateCount) {
+                    $this->checkDuplicates();
+                    $this->confirmDifferentPerson = false;
+                    $msg = 'Nama ini sudah terdaftar. Pastikan keduanya adalah orang yang berbeda lalu centang pernyataan konfirmasi di bawah.';
+                    $this->addError('voterName', $msg);
+                    $this->dispatch('toast', message: $msg, type: 'warning');
+
+                    return;
+                }
+            }
+
+            /** @var StaffAccount $operator */
+            $operator = Auth::guard('staff')->user();
+
+            $result = $voting->createVoterRight(
+                electionId: $this->election->id,
+                name: $this->voterName,
+                operatorId: $operator->id
+            );
+
+            if (! $result['ok'] || ! $result['raw_token']) {
+                $this->addError('voterName', $result['message']);
+                $this->dispatch('toast', message: $result['message'], type: 'error');
 
                 return;
             }
+
+            $cleanName = preg_replace('/\s+/u', ' ', trim($this->voterName)) ?? trim($this->voterName);
+            $url = $tokens->votingUrl($result['raw_token']);
+            $qrSvg = $tokens->renderQrSvg($url, 240);
+
+            $this->closeRegisterModal();
+
+            $this->issuedVoterName = $cleanName;
+            $this->issuedVoterId = (string) $result['voter_right_id'];
+            $this->issuedVotingUrl = $url;
+            $this->issuedQrSvg = $qrSvg;
+            $this->issuedIsReissue = false;
+            $this->showQrModal = true;
+
+            $this->dispatch('toast', message: "Hak pilih untuk {$cleanName} berhasil diterbitkan.", type: 'success');
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal menerbitkan hak pilih pemilih. Silakan coba kembali.', 'voterName');
         }
-
-        /** @var StaffAccount $operator */
-        $operator = Auth::guard('staff')->user();
-
-        $result = $voting->createVoterRight(
-            electionId: $this->election->id,
-            name: $this->voterName,
-            operatorId: $operator->id
-        );
-
-        if (! $result['ok'] || ! $result['raw_token']) {
-            $this->addError('voterName', $result['message']);
-            $this->dispatch('toast', message: $result['message'], type: 'error');
-
-            return;
-        }
-
-        $cleanName = preg_replace('/\s+/u', ' ', trim($this->voterName)) ?? trim($this->voterName);
-        $url = $tokens->votingUrl($result['raw_token']);
-        $qrSvg = $tokens->renderQrSvg($url, 240);
-
-        $this->closeRegisterModal();
-
-        $this->issuedVoterName = $cleanName;
-        $this->issuedVoterId = (string) $result['voter_right_id'];
-        $this->issuedVotingUrl = $url;
-        $this->issuedQrSvg = $qrSvg;
-        $this->issuedIsReissue = false;
-        $this->showQrModal = true;
-
-        $this->dispatch('toast', message: "Hak pilih untuk {$cleanName} berhasil diterbitkan.", type: 'success');
     }
 
     public function closeQrModal(): void
     {
-        // FR-014 & AC-016: Hapus token dan SVG QR dari memori komponen sehingga tidak dapat ditampilkan lagi
+        // FR-014, AC-016: Hapus token dan SVG QR dari memori sehingga tidak dapat ditampilkan lagi
         $this->showQrModal = false;
         $this->issuedVoterName = '';
         $this->issuedVoterId = '';
@@ -211,31 +221,36 @@ class VoterMonitorPage extends Component
             return;
         }
 
+        // FR-030, BR-014, AC-033: Alasan reset sesi wajib diisi
         $this->validate([
             'resetReason' => ['required', 'string', 'min:3', 'max:300'],
         ], [
-            'resetReason.required' => 'Alasan reset sesi wajib diisi.', // (FR-030)
+            'resetReason.required' => 'Alasan reset sesi wajib diisi.',
             'resetReason.min' => 'Alasan reset sesi minimal 3 karakter.',
         ]);
 
-        /** @var StaffAccount $operator */
-        $operator = Auth::guard('staff')->user();
+        try {
+            /** @var StaffAccount $operator */
+            $operator = Auth::guard('staff')->user();
 
-        $result = $voting->resetSession(
-            voterRightId: $this->selectedVoterRightId,
-            operatorId: $operator->id,
-            reason: $this->resetReason
-        );
+            $result = $voting->resetSession(
+                voterRightId: $this->selectedVoterRightId,
+                operatorId: $operator->id,
+                reason: $this->resetReason
+            );
 
-        if (! $result['ok']) {
-            $this->addError('resetReason', $result['message']);
-            $this->dispatch('toast', message: $result['message'], type: 'error');
+            if (! $result['ok']) {
+                $this->addError('resetReason', $result['message']);
+                $this->dispatch('toast', message: $result['message'], type: 'error');
 
-            return;
+                return;
+            }
+
+            $this->resetReason = '';
+            $this->dispatch('toast', message: $result['message'], type: 'success');
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal mereset sesi memilih. Silakan coba kembali.', 'resetReason');
         }
-
-        $this->resetReason = '';
-        $this->dispatch('toast', message: $result['message'], type: 'success');
     }
 
     public function reissueVoterQr(VotingService $voting, TokenService $tokens): void
@@ -244,48 +259,53 @@ class VoterMonitorPage extends Component
             return;
         }
 
+        // FR-029, BR-027, AC-032: Alasan penerbitan ulang QR wajib diisi
         $this->validate([
             'reissueReason' => ['required', 'string', 'min:3', 'max:300'],
         ], [
-            'reissueReason.required' => 'Alasan penerbitan ulang QR wajib diisi.', // (FR-029)
+            'reissueReason.required' => 'Alasan penerbitan ulang QR wajib diisi.',
             'reissueReason.min' => 'Alasan penerbitan ulang minimal 3 karakter.',
         ]);
 
-        /** @var VoterRight $vr */
-        $vr = VoterRight::query()
-            ->select(VoterRight::SAFE_COLUMNS)
-            ->where('election_id', $this->election->id)
-            ->findOrFail($this->selectedVoterRightId);
+        try {
+            /** @var VoterRight $vr */
+            $vr = VoterRight::query()
+                ->select(VoterRight::SAFE_COLUMNS)
+                ->where('election_id', $this->election->id)
+                ->findOrFail($this->selectedVoterRightId);
 
-        /** @var StaffAccount $operator */
-        $operator = Auth::guard('staff')->user();
+            /** @var StaffAccount $operator */
+            $operator = Auth::guard('staff')->user();
 
-        $result = $voting->reissueToken(
-            voterRightId: $vr->id,
-            operatorId: $operator->id,
-            reason: $this->reissueReason
-        );
+            $result = $voting->reissueToken(
+                voterRightId: $vr->id,
+                operatorId: $operator->id,
+                reason: $this->reissueReason
+            );
 
-        if (! $result['ok'] || ! $result['raw_token']) {
-            $this->addError('reissueReason', $result['message']);
-            $this->dispatch('toast', message: $result['message'], type: 'error');
+            if (! $result['ok'] || ! $result['raw_token']) {
+                $this->addError('reissueReason', $result['message']);
+                $this->dispatch('toast', message: $result['message'], type: 'error');
 
-            return;
+                return;
+            }
+
+            $url = $tokens->votingUrl($result['raw_token']);
+            $qrSvg = $tokens->renderQrSvg($url, 240);
+
+            $this->closeDetailModal();
+
+            $this->issuedVoterName = $vr->name;
+            $this->issuedVoterId = $vr->id;
+            $this->issuedVotingUrl = $url;
+            $this->issuedQrSvg = $qrSvg;
+            $this->issuedIsReissue = true;
+            $this->showQrModal = true;
+
+            $this->dispatch('toast', message: 'QR lama dicabut dan QR baru berhasil diterbitkan.', type: 'success');
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal menerbitkan ulang kode QR. Silakan coba kembali.', 'reissueReason');
         }
-
-        $url = $tokens->votingUrl($result['raw_token']);
-        $qrSvg = $tokens->renderQrSvg($url, 240);
-
-        $this->closeDetailModal();
-
-        $this->issuedVoterName = $vr->name;
-        $this->issuedVoterId = $vr->id;
-        $this->issuedVotingUrl = $url;
-        $this->issuedQrSvg = $qrSvg;
-        $this->issuedIsReissue = true;
-        $this->showQrModal = true;
-
-        $this->dispatch('toast', message: 'QR lama dicabut dan QR baru berhasil diterbitkan.', type: 'success');
     }
 
     public function render(VotingService $voting)
@@ -296,7 +316,6 @@ class VoterMonitorPage extends Component
         $phase = $this->election->currentPhase();
         $tz = (string) config('evoting.display_timezone', 'Asia/Makassar');
 
-        // Ambil seluruh baris v_voter_right_monitor untuk pemilihan ini beserta log perangkat terakhir
         $allMonitorRows = DB::select('
             select
                 m.*,
@@ -357,7 +376,6 @@ class VoterMonitorPage extends Component
 
         $integrity = $voting->integrityReport($this->election->id);
 
-        // Bila modal detail sedang dibuka, muat data detail & riwayat perangkat terbaru
         $detailData = null;
         if ($this->showDetailModal && $this->selectedVoterRightId) {
             $monitorItem = $allCollection->firstWhere('id', $this->selectedVoterRightId);

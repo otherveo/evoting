@@ -1,3 +1,4 @@
+{{-- UI-018, FR-021, BR-031, KP-003, KP-008, AC-024: Halaman Publik Jumlah Pemilih --}}
 <div class="container page public-page">
   <section class="total-hero" aria-labelledby="turnout-heading">
     <div class="total-hero-copy">
@@ -8,7 +9,7 @@
 
       <div class="eyebrow">
         <svg class="icon"><use href="#i-users"></use></svg>
-        <span>TRANSPARANSI PARTISIPASI PUBLIK (UI-018)</span>
+        <span>TRANSPARANSI PARTISIPASI PUBLIK</span>
       </div>
 
       <h1 id="turnout-heading">{{ $election->name }}</h1>
@@ -38,22 +39,28 @@
     </div>
   </section>
 
+  {{-- FR-021, BR-031, KP-003: Hanya menampilkan satu angka total tanpa nama & tanpa rincian paslon; refresh manual --}}
   <section class="total-privacy-card" aria-label="Informasi Privasi & Pembaruan">
     <div class="total-privacy-copy">
       <span class="total-privacy-icon"><svg class="icon"><use href="#i-lock"></use></svg></span>
       <div>
         <h2>Jaminan Kerahasiaan &amp; Pembaruan Snapshot</h2>
         <p>
-          Sesuai aturan <strong>FR-021, BR-031, dan KP-003</strong>, halaman ini hanya menampilkan satu angka total pemilih yang sudah memilih tanpa menampilkan nama pemilih maupun rincian perolehan per pasangan calon. Tekan tombol di samping untuk memuat ulang angka terbaru.
+          Halaman ini hanya menampilkan satu angka total pemilih yang sudah memilih tanpa menampilkan nama pemilih maupun rincian perolehan per pasangan calon. Tekan tombol di samping untuk memuat ulang angka terbaru.
         </p>
       </div>
     </div>
 
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <button type="button" class="btn btn-primary" wire:click="refreshSnapshot" wire:loading.attr="disabled">
-        <svg class="icon"><use href="#i-refresh"></use></svg>
-        <span>Perbarui Sekarang</span>
-      </button>
+      <x-action-button
+        variant="primary"
+        icon="#i-refresh"
+        wire:click="refreshSnapshot"
+        loadingText="Memperbarui..."
+      >
+        Perbarui Sekarang
+      </x-action-button>
+
       <a href="{{ route('public.results', $election) }}" class="btn btn-secondary">
         <svg class="icon"><use href="#i-trophy"></use></svg>
         <span>Halaman Hasil</span>

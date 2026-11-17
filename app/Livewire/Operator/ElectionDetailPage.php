@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Operator;
 
+use App\Livewire\Concerns\HandlesSafeErrors;
 use App\Models\Candidate;
 use App\Models\Election;
 use App\Models\StaffAccount;
@@ -16,28 +17,31 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 use Livewire\WithFileUploads;
+use RuntimeException;
+use Throwable;
 
 #[Layout('layouts.app')]
 #[Title('Detail & Konfigurasi Pemilihan')]
 class ElectionDetailPage extends Component
 {
+    use HandlesSafeErrors;
     use WithFileUploads;
 
     public Election $election;
 
-    // Form Identitas & Batas Hak Pilih (FR-008, FR-028)
+    // FR-008, FR-028: Identitas Pemilihan & Batas Hak Pilih
     public string $name = '';
 
     public int $maxVoterRights = 100;
 
-    // Form Jadwal (FR-009)
+    // FR-009: Jadwal Pemilihan
     public string $startsAtInput = '';
 
     public string $endsAtInput = '';
 
     public bool $showEndEarlyModal = false;
 
-    // Form Paslon (FR-011)
+    // FR-011: Pengelolaan Paslon
     public bool $showCandidateModal = false;
 
     public ?string $editingCandidateId = null;
@@ -97,28 +101,32 @@ class ElectionDetailPage extends Component
                 : 'Batas maksimum hak pilih minimal 1.',
         ]);
 
-        /** @var StaffAccount $operator */
-        $operator = Auth::guard('staff')->user();
+        try {
+            /** @var StaffAccount $operator */
+            $operator = Auth::guard('staff')->user();
 
-        $this->election->update([
-            'name' => preg_replace('/\s+/u', ' ', trim($this->name)) ?? trim($this->name),
-            'max_voter_rights' => $this->maxVoterRights,
-        ]);
+            $this->election->update([
+                'name' => preg_replace('/\s+/u', ' ', trim($this->name)) ?? trim($this->name),
+                'max_voter_rights' => $this->maxVoterRights,
+            ]);
 
-        $audit->log(
-            actorType: 'operator',
-            actorId: $operator->id,
-            action: 'ubah_pemilihan',
-            objectType: 'election',
-            objectId: $this->election->id,
-            detail: [
-                'name' => $this->election->name,
-                'max_voter_rights' => $this->election->max_voter_rights,
-            ]
-        );
+            $audit->log(
+                actorType: 'operator',
+                actorId: $operator->id,
+                action: 'ubah_pemilihan',
+                objectType: 'election',
+                objectId: $this->election->id,
+                detail: [
+                    'name' => $this->election->name,
+                    'max_voter_rights' => $this->election->max_voter_rights,
+                ]
+            );
 
-        $this->syncElectionFields();
-        $this->dispatch('toast', message: 'Pengaturan pemilihan berhasil disimpan.', type: 'success');
+            $this->syncElectionFields();
+            $this->dispatch('toast', message: 'Pengaturan pemilihan berhasil disimpan.', type: 'success');
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal menyimpan pengaturan pemilihan. Silakan coba kembali.', 'name');
+        }
     }
 
     public function saveSchedule(VotingService $voting): void
@@ -142,106 +150,119 @@ class ElectionDetailPage extends Component
             'endsAtInput.date_format' => 'Format Waktu Selesai harus tahun-bulan-tanggal jam:menit.',
         ]);
 
-        $tz = (string) config('evoting.display_timezone', 'Asia/Makassar');
+        try {
+            $tz = (string) config('evoting.display_timezone', 'Asia/Makassar');
 
-        // Saat Berlangsung, Waktu Mulai terkunci pada nilai di DB (BR-025, AC-011)
-        $startsUtc = ($phase === 'berlangsung' && $this->election->starts_at)
-            ? CarbonImmutable::instance($this->election->starts_at)->setTimezone('UTC')
-            : CarbonImmutable::createFromFormat('Y-m-d\TH:i', $this->startsAtInput, $tz)->setTimezone('UTC');
+            // BR-025, AC-011: Saat Berlangsung, Waktu Mulai terkunci pada nilai di DB
+            $startsUtc = ($phase === 'berlangsung' && $this->election->starts_at)
+                ? CarbonImmutable::instance($this->election->starts_at)->setTimezone('UTC')
+                : CarbonImmutable::createFromFormat('Y-m-d\TH:i', $this->startsAtInput, $tz)->setTimezone('UTC');
 
-        $endsUtc = CarbonImmutable::createFromFormat('Y-m-d\TH:i', $this->endsAtInput, $tz)->setTimezone('UTC');
+            $endsUtc = CarbonImmutable::createFromFormat('Y-m-d\TH:i', $this->endsAtInput, $tz)->setTimezone('UTC');
 
-        /** @var StaffAccount $operator */
-        $operator = Auth::guard('staff')->user();
+            /** @var StaffAccount $operator */
+            $operator = Auth::guard('staff')->user();
 
-        $result = $voting->setElectionSchedule(
-            electionId: $this->election->id,
-            startsAtUtc: $startsUtc,
-            endsAtUtc: $endsUtc,
-            operatorId: $operator->id
-        );
+            $result = $voting->setElectionSchedule(
+                electionId: $this->election->id,
+                startsAtUtc: $startsUtc,
+                endsAtUtc: $endsUtc,
+                operatorId: $operator->id
+            );
 
-        if (! $result['ok']) {
-            $this->addError('endsAtInput', $result['message']);
-            $this->dispatch('toast', message: $result['message'], type: 'error');
+            if (! $result['ok']) {
+                $this->addError('endsAtInput', $result['message']);
+                $this->dispatch('toast', message: $result['message'], type: 'error');
 
-            return;
+                return;
+            }
+
+            $this->syncElectionFields();
+            $this->dispatch('toast', message: 'Jadwal pemilihan berhasil disimpan.', type: 'success');
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal menyimpan jadwal pemilihan. Silakan coba kembali.', 'endsAtInput');
         }
-
-        $this->syncElectionFields();
-        $this->dispatch('toast', message: 'Jadwal pemilihan berhasil disimpan.', type: 'success');
     }
 
     public function startElectionNow(VotingService $voting): void
     {
-        $phase = $this->election->currentPhase();
-        if ($phase !== 'persiapan') {
-            $this->dispatch('toast', message: 'Pemilihan sudah dimulai atau telah ditutup.', type: 'warning');
+        try {
+            $phase = $this->election->currentPhase();
+            if ($phase !== 'persiapan') {
+                $this->dispatch('toast', message: 'Pemilihan sudah dimulai atau telah ditutup.', type: 'warning');
 
-            return;
+                return;
+            }
+
+            $tz = (string) config('evoting.display_timezone', 'Asia/Makassar');
+            $startsUtc = $voting->databaseNow();
+            $endsUtc = CarbonImmutable::createFromFormat('Y-m-d\TH:i', $this->endsAtInput, $tz)->setTimezone('UTC');
+            if ($endsUtc->lte($startsUtc)) {
+                $endsUtc = $startsUtc->addHours(4);
+            }
+
+            /** @var StaffAccount $operator */
+            $operator = Auth::guard('staff')->user();
+
+            $result = $voting->setElectionSchedule(
+                electionId: $this->election->id,
+                startsAtUtc: $startsUtc,
+                endsAtUtc: $endsUtc,
+                operatorId: $operator->id
+            );
+
+            if (! $result['ok']) {
+                $this->dispatch('toast', message: $result['message'], type: 'error');
+
+                return;
+            }
+
+            $this->syncElectionFields();
+            $this->dispatch('toast', message: 'Pemilihan resmi dimulai (Fase Berlangsung).', type: 'success');
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal memulai pemilihan sekarang. Silakan coba kembali.');
         }
-
-        $tz = (string) config('evoting.display_timezone', 'Asia/Makassar');
-        $startsUtc = $voting->databaseNow();
-        $endsUtc = CarbonImmutable::createFromFormat('Y-m-d\TH:i', $this->endsAtInput, $tz)->setTimezone('UTC');
-        if ($endsUtc->lte($startsUtc)) {
-            $endsUtc = $startsUtc->addHours(4);
-        }
-
-        /** @var StaffAccount $operator */
-        $operator = Auth::guard('staff')->user();
-
-        $result = $voting->setElectionSchedule(
-            electionId: $this->election->id,
-            startsAtUtc: $startsUtc,
-            endsAtUtc: $endsUtc,
-            operatorId: $operator->id
-        );
-
-        if (! $result['ok']) {
-            $this->dispatch('toast', message: $result['message'], type: 'error');
-
-            return;
-        }
-
-        $this->syncElectionFields();
-        $this->dispatch('toast', message: 'Pemilihan resmi dimulai (Fase Berlangsung).', type: 'success');
     }
 
     public function confirmEndEarly(VotingService $voting): void
     {
         $this->showEndEarlyModal = false;
-        $phase = $this->election->currentPhase();
-        if ($phase !== 'berlangsung' || ! $this->election->starts_at) {
-            $this->dispatch('toast', message: 'Hanya pemilihan yang sedang berlangsung yang dapat diakhiri lebih awal.', type: 'error');
 
-            return;
+        try {
+            $phase = $this->election->currentPhase();
+            if ($phase !== 'berlangsung' || ! $this->election->starts_at) {
+                $this->dispatch('toast', message: 'Hanya pemilihan yang sedang berlangsung yang dapat diakhiri lebih awal.', type: 'error');
+
+                return;
+            }
+
+            /** @var StaffAccount $operator */
+            $operator = Auth::guard('staff')->user();
+
+            $startsUtc = CarbonImmutable::instance($this->election->starts_at)->setTimezone('UTC');
+            $endsUtc = $voting->databaseNow();
+            if ($endsUtc->lte($startsUtc)) {
+                $endsUtc = $startsUtc->addMicrosecond();
+            }
+
+            $result = $voting->setElectionSchedule(
+                electionId: $this->election->id,
+                startsAtUtc: $startsUtc,
+                endsAtUtc: $endsUtc,
+                operatorId: $operator->id
+            );
+
+            if (! $result['ok']) {
+                $this->dispatch('toast', message: $result['message'], type: 'error');
+
+                return;
+            }
+
+            $this->syncElectionFields();
+            $this->dispatch('toast', message: 'Masa pemilihan telah diakhiri (Fase Ditutup). Hasil kini terbuka.', type: 'success');
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal mengakhiri pemilihan lebih awal. Silakan coba kembali.');
         }
-
-        /** @var StaffAccount $operator */
-        $operator = Auth::guard('staff')->user();
-
-        $startsUtc = CarbonImmutable::instance($this->election->starts_at)->setTimezone('UTC');
-        $endsUtc = $voting->databaseNow();
-        if ($endsUtc->lte($startsUtc)) {
-            $endsUtc = $startsUtc->addMicrosecond();
-        }
-
-        $result = $voting->setElectionSchedule(
-            electionId: $this->election->id,
-            startsAtUtc: $startsUtc,
-            endsAtUtc: $endsUtc,
-            operatorId: $operator->id
-        );
-
-        if (! $result['ok']) {
-            $this->dispatch('toast', message: $result['message'], type: 'error');
-
-            return;
-        }
-
-        $this->syncElectionFields();
-        $this->dispatch('toast', message: 'Masa pemilihan telah diakhiri (Fase Ditutup). Hasil kini terbuka.', type: 'success');
     }
 
     public function openAddCandidateModal(): void
@@ -316,7 +337,9 @@ class ElectionDetailPage extends Component
             $dupQuery->where('id', '<>', $this->editingCandidateId);
         }
         if ($dupQuery->exists()) {
-            $this->addError('candidateNumber', "Nomor urut {$this->candidateNumber} sudah digunakan pada pemilihan ini.");
+            $msg = "Nomor urut {$this->candidateNumber} sudah digunakan pada pemilihan ini.";
+            $this->addError('candidateNumber', $msg);
+            $this->dispatch('toast', message: $msg, type: 'error');
 
             return;
         }
@@ -329,37 +352,69 @@ class ElectionDetailPage extends Component
         /** @var StaffAccount $operator */
         $operator = Auth::guard('staff')->user();
 
-        if ($this->editingCandidateId) {
-            /** @var Candidate $cand */
-            $cand = $this->election->candidates()->findOrFail($this->editingCandidateId);
-            $photoPath = $cand->photo_path;
+        try {
+            if ($this->editingCandidateId) {
+                /** @var Candidate $cand */
+                $cand = $this->election->candidates()->findOrFail($this->editingCandidateId);
+                $photoPath = $cand->photo_path;
 
-            if ($this->candidatePhoto) {
-                try {
+                if ($this->candidatePhoto) {
                     $newPath = $storage->uploadCandidatePhoto($this->election->id, $cand->id, $this->candidatePhoto);
                     if ($photoPath && $photoPath !== $newPath) {
                         $storage->deleteCandidatePhoto($photoPath);
                     }
                     $photoPath = $newPath;
-                } catch (\Throwable $e) {
-                    $this->addError('candidatePhoto', $e->getMessage());
-
-                    return;
                 }
+
+                $cand->update([
+                    'number' => $this->candidateNumber,
+                    'name' => preg_replace('/\s+/u', ' ', trim($this->candidateName)) ?? trim($this->candidateName),
+                    'vision' => trim($this->candidateVision) !== '' ? trim($this->candidateVision) : null,
+                    'missions' => $missionsArray !== [] ? $missionsArray : null,
+                    'photo_path' => $photoPath,
+                ]);
+
+                $audit->log(
+                    actorType: 'operator',
+                    actorId: $operator->id,
+                    action: 'ubah_paslon',
+                    objectType: 'candidate',
+                    objectId: $cand->id,
+                    detail: [
+                        'election_id' => $this->election->id,
+                        'number' => $cand->number,
+                        'name' => $cand->name,
+                    ]
+                );
+
+                $this->closeCandidateModal();
+                $this->dispatch('toast', message: 'Data pasangan calon berhasil diperbarui.', type: 'success');
+
+                return;
             }
 
-            $cand->update([
+            $candidateId = (string) Str::uuid();
+            $photoPath = null;
+
+            if ($this->candidatePhoto) {
+                $photoPath = $storage->uploadCandidatePhoto($this->election->id, $candidateId, $this->candidatePhoto);
+            }
+
+            $cand = new Candidate([
+                'election_id' => $this->election->id,
                 'number' => $this->candidateNumber,
                 'name' => preg_replace('/\s+/u', ' ', trim($this->candidateName)) ?? trim($this->candidateName),
                 'vision' => trim($this->candidateVision) !== '' ? trim($this->candidateVision) : null,
                 'missions' => $missionsArray !== [] ? $missionsArray : null,
                 'photo_path' => $photoPath,
             ]);
+            $cand->id = $candidateId;
+            $cand->save();
 
             $audit->log(
                 actorType: 'operator',
                 actorId: $operator->id,
-                action: 'ubah_paslon',
+                action: 'tambah_paslon',
                 objectType: 'candidate',
                 objectId: $cand->id,
                 detail: [
@@ -370,50 +425,19 @@ class ElectionDetailPage extends Component
             );
 
             $this->closeCandidateModal();
-            $this->dispatch('toast', message: 'Data pasangan calon berhasil diperbarui.', type: 'success');
-
-            return;
+            $this->dispatch('toast', message: 'Pasangan calon berhasil ditambahkan.', type: 'success');
+        } catch (RuntimeException $e) {
+            // RuntimeException dari SupabaseStorageService sudah memiliki pesan ramah pengguna & sudah dicatat ke log
+            $this->addError('candidatePhoto', $e->getMessage());
+            $this->dispatch('toast', message: $e->getMessage(), type: 'error');
+        } catch (Throwable $e) {
+            $this->reportSafeError(
+                $e,
+                'Gagal menyimpan data pasangan calon. Silakan periksa kembali isian atau koneksi Anda.',
+                'candidatePhoto',
+                ['election_id' => $this->election->id]
+            );
         }
-
-        $candidateId = (string) Str::uuid();
-        $photoPath = null;
-
-        if ($this->candidatePhoto) {
-            try {
-                $photoPath = $storage->uploadCandidatePhoto($this->election->id, $candidateId, $this->candidatePhoto);
-            } catch (\Throwable $e) {
-                $this->addError('candidatePhoto', $e->getMessage());
-
-                return;
-            }
-        }
-
-        $cand = new Candidate([
-            'election_id' => $this->election->id,
-            'number' => $this->candidateNumber,
-            'name' => preg_replace('/\s+/u', ' ', trim($this->candidateName)) ?? trim($this->candidateName),
-            'vision' => trim($this->candidateVision) !== '' ? trim($this->candidateVision) : null,
-            'missions' => $missionsArray !== [] ? $missionsArray : null,
-            'photo_path' => $photoPath,
-        ]);
-        $cand->id = $candidateId;
-        $cand->save();
-
-        $audit->log(
-            actorType: 'operator',
-            actorId: $operator->id,
-            action: 'tambah_paslon',
-            objectType: 'candidate',
-            objectId: $cand->id,
-            detail: [
-                'election_id' => $this->election->id,
-                'number' => $cand->number,
-                'name' => $cand->name,
-            ]
-        );
-
-        $this->closeCandidateModal();
-        $this->dispatch('toast', message: 'Pasangan calon berhasil ditambahkan.', type: 'success');
     }
 
     public function promptDeleteCandidate(string $candidateId): void
@@ -447,41 +471,47 @@ class ElectionDetailPage extends Component
         $totalCandidates = $this->election->candidates()->count();
         $scheduleConfigured = $this->election->starts_at !== null && $this->election->ends_at !== null;
 
+        // BR-024, AC-013: Setelah jadwal diatur, paslon tidak boleh berkurang di bawah 2
         if ($scheduleConfigured && $totalCandidates <= 2) {
             $this->showDeleteCandidateModal = false;
-            $this->dispatch('toast', message: 'Tidak dapat menghapus paslon: jadwal sudah diatur sehingga jumlah paslon tidak boleh kurang dari 2 (BR-024).', type: 'error');
+            $this->dispatch('toast', message: 'Tidak dapat menghapus paslon: jadwal sudah diatur sehingga jumlah paslon tidak boleh kurang dari 2.', type: 'error');
 
             return;
         }
 
-        /** @var Candidate $cand */
-        $cand = $this->election->candidates()->findOrFail($this->deletingCandidateId);
-        $oldPhoto = $cand->photo_path;
-        $candNumber = $cand->number;
-        $candName = $cand->name;
-        $candId = $cand->id;
+        try {
+            /** @var Candidate $cand */
+            $cand = $this->election->candidates()->findOrFail($this->deletingCandidateId);
+            $oldPhoto = $cand->photo_path;
+            $candNumber = $cand->number;
+            $candName = $cand->name;
+            $candId = $cand->id;
 
-        $cand->delete();
-        $storage->deleteCandidatePhoto($oldPhoto);
+            $cand->delete();
+            $storage->deleteCandidatePhoto($oldPhoto);
 
-        /** @var StaffAccount $operator */
-        $operator = Auth::guard('staff')->user();
-        $audit->log(
-            actorType: 'operator',
-            actorId: $operator->id,
-            action: 'hapus_paslon',
-            objectType: 'candidate',
-            objectId: $candId,
-            detail: [
-                'election_id' => $this->election->id,
-                'number' => $candNumber,
-                'name' => $candName,
-            ]
-        );
+            /** @var StaffAccount $operator */
+            $operator = Auth::guard('staff')->user();
+            $audit->log(
+                actorType: 'operator',
+                actorId: $operator->id,
+                action: 'hapus_paslon',
+                objectType: 'candidate',
+                objectId: $candId,
+                detail: [
+                    'election_id' => $this->election->id,
+                    'number' => $candNumber,
+                    'name' => $candName,
+                ]
+            );
 
-        $this->showDeleteCandidateModal = false;
-        $this->deletingCandidateId = null;
-        $this->dispatch('toast', message: 'Pasangan calon berhasil dihapus.', type: 'success');
+            $this->showDeleteCandidateModal = false;
+            $this->deletingCandidateId = null;
+            $this->dispatch('toast', message: 'Pasangan calon berhasil dihapus.', type: 'success');
+        } catch (Throwable $e) {
+            $this->showDeleteCandidateModal = false;
+            $this->reportSafeError($e, 'Gagal menghapus pasangan calon. Silakan coba kembali.');
+        }
     }
 
     public function render()

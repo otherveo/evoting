@@ -6,9 +6,14 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
+use Throwable;
 
 class SupabaseStorageService
 {
+    /**
+     * Mengunggah foto paslon ke bucket publik Supabase Storage (`paslon-foto`) dari sisi server.
+     * Konvensi path: `<election_id>/<candidate_id>-<random8>.<ext>`.
+     */
     public function uploadCandidatePhoto(string $electionId, string $candidateId, UploadedFile $file): string
     {
         $baseUrl = rtrim((string) config('evoting.supabase.url'), '/');
@@ -29,27 +34,42 @@ class SupabaseStorageService
         $contents = file_get_contents($file->getRealPath());
 
         if ($contents === false) {
-            throw new RuntimeException('Gagal membaca berkas foto.');
+            throw new RuntimeException('Berkas foto tidak dapat dibaca. Silakan pilih ulang berkas gambar.');
         }
 
         $endpoint = "{$baseUrl}/storage/v1/object/{$bucket}/{$objectPath}";
 
-        $response = Http::timeout(15)
-            ->withHeaders([
-                'Authorization' => "Bearer {$secretKey}",
-                'apikey' => $secretKey,
-                'x-upsert' => 'true',
-            ])
-            ->withBody($contents, $mimeType)
-            ->post($endpoint);
+        try {
+            $response = Http::timeout(20)
+                ->withHeaders([
+                    'Authorization' => "Bearer {$secretKey}",
+                    'apikey' => $secretKey,
+                    'x-upsert' => 'true',
+                ])
+                ->withBody($contents, $mimeType)
+                ->post($endpoint);
+        } catch (Throwable $e) {
+            Log::error('Koneksi ke Supabase Storage gagal saat mengunggah foto paslon', [
+                'timestamp' => now()->toIso8601String(),
+                'election_id' => $electionId,
+                'candidate_id' => $candidateId,
+                'exception_class' => $e::class,
+                'exception_message' => $e->getMessage(),
+            ]);
+
+            throw new RuntimeException('Gagal mengunggah foto paslon ke server penyimpanan. Periksa koneksi jaringan dan coba kembali.');
+        }
 
         if (! $response->successful()) {
-            Log::warning('Gagal mengunggah foto paslon ke Supabase Storage', [
+            Log::error('Respons Supabase Storage tidak berhasil saat mengunggah foto paslon', [
+                'timestamp' => now()->toIso8601String(),
                 'status' => $response->status(),
+                'body' => $response->body(),
                 'election_id' => $electionId,
                 'candidate_id' => $candidateId,
             ]);
-            throw new RuntimeException('Gagal mengunggah foto paslon ke penyimpanan. Silakan coba lagi.');
+
+            throw new RuntimeException('Gagal mengunggah foto paslon ke penyimpanan. Silakan coba kembali.');
         }
 
         return $objectPath;
@@ -81,9 +101,11 @@ class SupabaseStorageService
                     'apikey' => $secretKey,
                 ])
                 ->delete("{$baseUrl}/storage/v1/object/{$bucket}/{$cleanPath}");
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             Log::warning('Gagal menghapus foto lama dari Supabase Storage', [
+                'timestamp' => now()->toIso8601String(),
                 'path' => $cleanPath,
+                'exception_message' => $e->getMessage(),
             ]);
         }
     }

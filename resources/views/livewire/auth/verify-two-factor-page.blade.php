@@ -1,3 +1,4 @@
+{{-- UI-002, FR-001, Amandemen PRD §2.7: Verifikasi 2FA TOTP khusus Admin --}}
 <div class="auth-shell view-enter">
   <div class="auth-card">
     <div class="auth-head">
@@ -46,16 +47,17 @@
       </div>
 
       <div style="margin-top: 22px; display: grid; gap: 10px;">
-        <button type="submit" class="btn btn-primary btn-lg btn-block" wire:loading.attr="disabled">
-          <span wire:loading.remove wire:target="verify" style="display:inline-flex;align-items:center;gap:8px;">
-            <svg class="icon"><use href="#i-check-circle"></use></svg>
-            <span>Verifikasi &amp; Masuk</span>
-          </span>
-          <span wire:loading wire:target="verify" style="display:inline-flex;align-items:center;gap:8px;">
-            <span class="spinner" aria-hidden="true"></span>
-            <span>Memeriksa kode TOTP...</span>
-          </span>
-        </button>
+        <x-action-button
+          type="submit"
+          variant="primary"
+          size="lg"
+          :block="true"
+          target="verify"
+          icon="#i-check-circle"
+          loadingText="Memeriksa kode TOTP..."
+        >
+          Verifikasi &amp; Masuk
+        </x-action-button>
       </div>
     </form>
   </div>

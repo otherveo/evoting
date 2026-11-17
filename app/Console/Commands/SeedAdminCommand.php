@@ -12,7 +12,8 @@ class SeedAdminCommand extends Command
                             {username? : Username akun Admin (contoh: admin)}
                             {full_name? : Nama lengkap Admin}';
 
-    protected $description = 'Membuat akun Admin baru dengan kata sandi sementara sekali tampil (KP-006, MOD-015)';
+    // KP-006, MOD-015: Pembuatan akun Admin lewat CLI
+    protected $description = 'Membuat akun Admin baru dengan kata sandi sementara sekali tampil';
 
     public function handle(StaffAccountService $service): int
     {

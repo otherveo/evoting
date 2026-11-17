@@ -1,3 +1,4 @@
+{{-- UI-007, FR-008: Halaman Daftar Pemilihan Operator --}}
 <div class="container page view-enter">
   <div class="page-heading">
     <div>
@@ -11,10 +12,14 @@
       </p>
     </div>
     <div class="heading-actions">
-      <button type="button" class="btn btn-primary" wire:click="openCreateModal">
-        <svg class="icon"><use href="#i-plus"></use></svg>
-        <span>Buat Pemilihan Baru</span>
-      </button>
+      <x-action-button
+        variant="primary"
+        icon="#i-plus"
+        wire:click="openCreateModal"
+        loadingText="Membuka..."
+      >
+        Buat Pemilihan Baru
+      </x-action-button>
     </div>
   </div>
 
@@ -25,10 +30,14 @@
         <h3>Belum ada pemilihan</h3>
         <p>Buat pemilihan pertama Anda, tambahkan minimal 2 pasangan calon, lalu atur jadwal pelaksanaan.</p>
         <div style="margin-top: 16px;">
-          <button type="button" class="btn btn-primary" wire:click="openCreateModal">
-            <svg class="icon"><use href="#i-plus"></use></svg>
-            <span>Buat Pemilihan Pertama</span>
-          </button>
+          <x-action-button
+            variant="primary"
+            icon="#i-plus"
+            wire:click="openCreateModal"
+            loadingText="Membuka..."
+          >
+            Buat Pemilihan Pertama
+          </x-action-button>
         </div>
       </div>
     </section>
@@ -90,70 +99,67 @@
     </div>
   @endif
 
+  {{-- FR-008, FR-028: Modal Buat Pemilihan Baru --}}
   @if($showCreateModal)
-    <div class="modal-backdrop is-visible" role="dialog" aria-modal="true" aria-labelledby="modal-create-el-title">
-      <div class="modal">
-        <div class="modal-header">
-          <div class="modal-heading">
-            <span class="modal-icon"><svg class="icon"><use href="#i-ballot"></use></svg></span>
-            <div>
-              <h2 id="modal-create-el-title">Buat Pemilihan Baru</h2>
-              <p>Pemilihan baru akan berada pada Fase Persiapan sampai jadwal Waktu Mulai tercapai.</p>
-            </div>
+    <x-modal
+      title="Buat Pemilihan Baru"
+      subtitle="Pemilihan baru akan berada pada Fase Persiapan sampai jadwal Waktu Mulai tercapai."
+      icon="#i-ballot"
+      closeAction="closeCreateModal"
+    >
+      <form wire:submit="createElection" novalidate>
+        <div class="modal-body">
+          <div class="form-field">
+            <label for="el-name" class="field-label">Nama Pemilihan <span class="req">*</span></label>
+            <input
+              id="el-name"
+              type="text"
+              wire:model="name"
+              class="field-input @error('name') is-invalid @enderror"
+              placeholder="Contoh: Pemilihan Ketua & Wakil Ketua OSIS 2026/2027"
+              autofocus
+            />
+            @error('name')
+              <div class="field-error" role="alert">
+                <svg class="icon"><use href="#i-alert"></use></svg>
+                <span>{{ $message }}</span>
+              </div>
+            @enderror
           </div>
-          <button type="button" class="icon-btn" wire:click="closeCreateModal" aria-label="Tutup dialog">
-            <svg class="icon"><use href="#i-x"></use></svg>
-          </button>
+
+          {{-- FR-028, BR-018: Batas maksimum hak pilih --}}
+          <div class="form-field">
+            <label for="el-max" class="field-label">Batas Maksimum Hak Pilih <span class="req">*</span></label>
+            <input
+              id="el-max"
+              type="number"
+              min="1"
+              wire:model="maxVoterRights"
+              class="field-input @error('maxVoterRights') is-invalid @enderror"
+            />
+            <p class="field-hint">Sistem otomatis menolak pembuatan hak pilih baru setelah kuota ini tercapai.</p>
+            @error('maxVoterRights')
+              <div class="field-error" role="alert">
+                <svg class="icon"><use href="#i-alert"></use></svg>
+                <span>{{ $message }}</span>
+              </div>
+            @enderror
+          </div>
         </div>
 
-        <form wire:submit="createElection" novalidate>
-          <div class="modal-body">
-            <div class="form-field">
-              <label for="el-name" class="field-label">Nama Pemilihan <span class="req">*</span></label>
-              <input
-                id="el-name"
-                type="text"
-                wire:model="name"
-                class="field-input @error('name') is-invalid @enderror"
-                placeholder="Contoh: Pemilihan Ketua & Wakil Ketua OSIS 2026/2027"
-                autofocus
-              />
-              @error('name')
-                <div class="field-error" role="alert">
-                  <svg class="icon"><use href="#i-alert"></use></svg>
-                  <span>{{ $message }}</span>
-                </div>
-              @enderror
-            </div>
-
-            <div class="form-field">
-              <label for="el-max" class="field-label">Batas Maksimum Hak Pilih <span class="req">*</span></label>
-              <input
-                id="el-max"
-                type="number"
-                min="1"
-                wire:model="maxVoterRights"
-                class="field-input @error('maxVoterRights') is-invalid @enderror"
-              />
-              <p class="field-hint">Sistem otomatis menolak pembuatan hak pilih baru setelah kuota ini tercapai (FR-028).</p>
-              @error('maxVoterRights')
-                <div class="field-error" role="alert">
-                  <svg class="icon"><use href="#i-alert"></use></svg>
-                  <span>{{ $message }}</span>
-                </div>
-              @enderror
-            </div>
-          </div>
-
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" wire:click="closeCreateModal">Batal</button>
-            <button type="submit" class="btn btn-primary" wire:loading.attr="disabled">
-              <span wire:loading.remove wire:target="createElection">Buat Pemilihan</span>
-              <span wire:loading wire:target="createElection">Menyimpan...</span>
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" wire:click="closeCreateModal">Batal</button>
+          <x-action-button
+            type="submit"
+            variant="primary"
+            target="createElection"
+            icon="#i-check"
+            loadingText="Menyimpan..."
+          >
+            Buat Pemilihan
+          </x-action-button>
+        </div>
+      </form>
+    </x-modal>
   @endif
 </div>
