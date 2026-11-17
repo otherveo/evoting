@@ -1,58 +1,240 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+<div align="center">
+  <img src="public/SMPN7-e-voting_logo.png" alt="Logo E-Voting SMPN 7" width="96" height="96" />
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+  # Sistem E-Voting Sekolah Berbasis QR Token Sekali Pakai
 
-## About Laravel
+  **Aplikasi pemungutan suara elektronik (E-Voting) sekolah yang dirancang dengan pemisahan identitas pemilih dan pilihan suara secara struktural di tingkat basis data.**
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+  ![PHP 8.4+](https://img.shields.io/badge/PHP-8.4%2B-777BB4?logo=php&logoColor=white)
+  ![Laravel 13](https://img.shields.io/badge/Laravel-13-FF2D20?logo=laravel&logoColor=white)
+  ![Livewire 4](https://img.shields.io/badge/Livewire-4-FB70A9?logo=livewire&logoColor=white)
+  ![PostgreSQL / Supabase](https://img.shields.io/badge/Supabase-PostgreSQL%20%26%20Storage-3ECF8E?logo=supabase&logoColor=white)
+</div>
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+---
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Daftar Isi
 
-## Learning Laravel
+1. [Gambaran Umum](#-gambaran-umum)
+2. [Prinsip Keamanan & Kerahasiaan Suara](#-prinsip-keamanan--kerahasiaan-suara)
+3. [Fitur Utama per Peran](#-fitur-utama-per-peran)
+4. [Arsitektur Teknis & Stack](#-arsitektur-teknis--stack)
+5. [Struktur Direktori](#-struktur-direktori)
+6. [Instalasi & Menjalankan di Lokal](#-instalasi--menjalankan-di-lokal)
+7. [Provisi Akun Staf (CLI)](#-provisi-akun-staf-cli)
+8. [Pengujian & Kualitas Kode](#-pengujian--kualitas-kode)
+9. [Penyebaran Produksi (Deployment)](#-penyebaran-produksi-deployment)
+10. [Referensi Dokumen Spesifikasi](#-referensi-dokumen-spesifikasi)
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+---
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## 🎯 Gambaran Umum
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+Proyek ini adalah sistem **E-Voting berbasis web** untuk penyelenggaraan pemilihan di lingkungan sekolah (seperti Pemilihan Ketua & Wakil Ketua OSIS). Pemilih tidak perlu membuat akun atau mengingat kata sandi:
 
-## Agentic Development
+1. **Verifikasi Langsung di Meja Operator:** Petugas Operator memeriksa identitas fisik pemilih (mis. kartu pelajar/daftar hadir) lalu mendaftarkan nama pemilih ke sistem.
+2. **Penerbitan QR Sekali Tampil:** Sistem menerbitkan token kriptografis 256-bit dalam bentuk **Kode QR** (dan tautan akses) yang hanya ditampilkan **satu kali** di layar Operator.
+3. **Bilik Suara 4 Tahap Tanpa Identitas:** Pemilih memindai QR menggunakan perangkat masing-masing (atau perangkat bilik bersama) dan melewati 4 tahap linear: **Verifikasi → Memilih → Konfirmasi → Selesai**.
+4. **Rekapitulasi Terkunci Otomatis:** Hasil perolehan suara per pasangan calon dikunci di tingkat fungsi PostgreSQL selama masa pemilihan berlangsung dan baru dapat diakses setelah **Waktu Selesai** tercapai.
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+---
 
-```bash
-composer require laravel/boost --dev
+## 🔒 Prinsip Keamanan & Kerahasiaan Suara
 
-php artisan boost:install
+Sistem ini menerapkan pengamanan berlapis dari tingkat antarmuka hingga skema PostgreSQL (`evoting`):
+
+- **Anonimitas Struktural (Tanpa Relasi Pemilih ke Suara):**
+  Tabel `evoting.votes` **tidak memiliki** kolom `voter_right_id`, nama pemilih, maupun pengenal perangkat. Perubahan status hak pilih menjadi `sudah_memilih` dan penyisipan suara ke `evoting.votes` dilakukan dalam satu transaksi atomik melalui fungsi `SECURITY DEFINER` (`evoting.fn_confirm_vote`).
+- **Penyimpanan Hash Token Satu Arah (SHA-256):**
+  Token mentah 256-bit hanya ditampilkan satu kali saat QR diterbitkan. Basis data hanya menyimpan `token_hash` (SHA-256 hex 64 karakter).
+- **Hak Akses Basis Data Minimum (*Least Privilege*):**
+  Role aplikasi (`evoting_app`) **tidak memiliki hak `SELECT` langsung** ke tabel `evoting.votes` dan tidak memiliki hak `UPDATE`/`DELETE` pada `evoting.audit_logs`. Pembacaan hasil suara hanya dapat dilakukan melalui `evoting.fn_election_results()` yang otomatis menolak permintaan apabila `now() < ends_at`.
+- **Sesi Memilih Berbatas 10 Menit & Pengikatan Browser:**
+  Sejak pemilih menekan **Mulai memilih**, sesi dikunci pada pengenal browser (`HttpOnly` cookie) yang sama dengan batas waktu **10 menit**. Jika perangkat mati atau waktu habis sebelum konfirmasi, Operator dapat melakukan **Reset Sesi** disertai alasan yang tercatat di Log Audit.
+- **Pemisahan Wewenang Staf (*Role Separation*):**
+  - **Admin** wajib menggunakan autentikasi dua faktor (**TOTP 2FA**), hanya berwenang mengelola akun Operator, mengatur mode QR (Kustom vs Standar), dan meninjau Log Audit — **tanpa akses** ke konfigurasi pemilihan, daftar pemilih, maupun hasil suara.
+  - **Operator** masuk menggunakan *username* dan kata sandi kuat (minimum 10 karakter dengan kombinasi huruf besar, huruf kecil, dan angka/simbol) untuk mengelola pemilihan, pasangan calon, dan pemantauan hak pilih.
+
+---
+
+## 👥 Fitur Utama per Peran
+
+### 1. Administrator (`/admin/*`)
+- **Kelola Akun Operator:** Membuat akun Operator baru (dengan kata sandi sementara sekali tampil), mengaktifkan/menonaktifkan akun (sekaligus memutus sesi aktif), dan mereset kata sandi Operator.
+- **Konfigurasi Mode Kode QR Pemilih:** Beralih secara langsung antara **Mode QR Kustom** (dengan logo sekolah di tengah dan *Error Correction Level H*) dan **Mode QR Standar** (tanpa logo tengah sebagai *fallback* apabila kamera pemindai di lapangan mengalami kendala).
+- **Log Audit Sistem:** Meninjau jejak audit kronologis seluruh aksi penting di sistem dengan filter jenis aktor dan kata kunci.
+
+### 2. Operator (`/operator/*`)
+- **Manajemen Pemilihan & Fase Otomatis:** Membuat pemilihan, mengatur batas kuota hak pilih, serta mengatur jadwal `Waktu Mulai` dan `Waktu Selesai` (presisi menit) yang menentukan fase `Persiapan`, `Berlangsung`, dan `Ditutup`.
+- **Pengelolaan Pasangan Calon:** Menambah, mengubah, dan menghapus pasangan calon pada fase `Persiapan`, lengkap dengan unggahan foto ke **Supabase Storage** (bucket publik-baca `paslon-foto`).
+- **Dashboard Pantau Pemilih & Registrasi QR:**
+  - Mendaftarkan pemilih terverifikasi dengan **deteksi nama kembar instan** dan konfirmasi eksplisit orang berbeda.
+  - Menampilkan **Panel QR Sekali Tampil** (mendukung cetak langsung dan salin tautan).
+  - Menangani kendala di lapangan: **Reset Sesi** (untuk sesi terputus/lewat 10 menit) dan **Terbitkan Ulang QR** (mencabut token lama secara permanen).
+  - Memantau indikator **Peringatan Perangkat Bersama** dan **Pemeriksaan Integritas Suara** (`Total Suara == Sudah Memilih <= Hak Pilih`).
+- **Rekapitulasi Akhir:** Melihat laporan integritas dan rincian perolehan suara per pasangan calon setelah masa pemilihan berakhir.
+
+### 3. Pemilih (`/v/{token}`)
+- **4 Tahap Linear Tanpa Identitas:**
+  1. **Verifikasi:** Menampilkan nama pemilihan dan tiket suara anonim tanpa menampilkan nama pemilih.
+  2. **Memilih:** Memilih satu kartu pasangan calon lengkap dengan foto, nomor urut, visi, dan misi.
+  3. **Konfirmasi:** Memeriksa kembali pasangan calon yang dipilih sebelum disimpan permanen.
+  4. **Selesai:** Konfirmasi suara tersimpan secara anonim tanpa menampilkan kembali pilihan paslon (mencegah paksaan/intimidasi pasca-memilih).
+
+### 4. Publik (`/p/{election}/*`)
+- **Partisipasi Pemilih (`/p/{election}/partisipasi`):** Menampilkan jumlah pemilih yang sudah memilih secara *snapshot* tanpa membocorkan nama pemilih maupun rincian suara per paslon.
+- **Hasil Pemilihan (`/p/{election}/hasil`):** Terkunci selama pemilihan berlangsung dan menampilkan pemenang serta rincian perolehan suara setelah `Waktu Selesai` tercapai.
+
+---
+
+## 🛠 Arsitektur Teknis & Stack
+
+| Lapisan | Teknologi |
+| :--- | :--- |
+| **Backend Framework** | Laravel 13 (PHP 8.4+) |
+| ** Komponen Reaktif** | Livewire 4 + Alpine.js (navigasi SPA `wire:navigate`, *skeleton loading*, dan filter/interaksi instan di *client*) |
+| **Basis Data** | Supabase PostgreSQL (Skema terisolasi `evoting`, koneksi persisten `PDO::ATTR_PERSISTENT` via Supavisor Session Pooler port `5432`) |
+| **Penyimpanan Objek** | Supabase Storage (Bucket `paslon-foto`, unggahan *server-side* dengan `SUPABASE_SECRET_KEY`) |
+| **Generator QR & 2FA** | `bacon/bacon-qr-code` (SVG QR *Level H* dengan *overlay* logo tengah) & RFC 6238 TOTP (`TotpService`) |
+| **Styling & Motion** | Custom Design System CSS (`public/css/suarasekolah.css`) responsif *desktop* & *mobile* |
+
+---
+
+## 📁 Struktur Direktori
+
+```text
+├── app/
+│   ├── Console/Commands/        # Perintah CLI seed:admin & seed:operator
+│   ├── Http/Middleware/         # Middleware autentikasi staf, peran, & security headers
+│   ├── Livewire/
+│   │   ├── Admin/               # Halaman Kelola Operator, Mode QR, & Log Audit
+│   │   ├── Auth/                # Login Staf, Aktivasi Sandi/2FA Pertama, & Verifikasi TOTP
+│   │   ├── Concerns/            # Trait HandlesSafeErrors (logging galat aman ber-timestamp)
+│   │   ├── Operator/            # Daftar Pemilihan, Detail & Paslon, Pantau Pemilih, Rekapitulasi
+│   │   ├── Public/              # Halaman Partisipasi & Hasil Pemilihan Publik
+│   │   └── Voter/               # Alur Bilik Suara 4 Tahap (BallotPage)
+│   ├── Models/                  # Eloquent Models (StaffAccount, Election, Candidate, VoterRight, dll.)
+│   └── Services/                # VotingService, TokenService, TotpService, SupabaseStorageService, dll.
+├── config/
+│   ├── app.php                  # Konfigurasi nama aplikasi (APP_NAME dengan fallback "E-Voting")
+│   ├── database.php             # Konfigurasi PostgreSQL skema evoting & persistent PDO
+│   └── evoting.php              # Konfigurasi Supabase Storage, cookie browser, & zona waktu
+├── public/
+│   ├── css/suarasekolah.css     # Stylesheet utama, skeleton loader, & step-line responsif
+│   └── SMPN7-e-voting_logo.png  # Logo identitas sekolah pada header & bagian tengah QR
+├── resources/views/
+│   ├── components/              # Komponen Blade bersama (action-button, modal, stat-card, dll.)
+│   ├── layouts/                 # Layout utama staf/publik (app.blade.php) & bilik suara (voter.blade.php)
+│   └── livewire/                # Template Blade modular per halaman & partial
+├── tests/Feature/
+│   └── EvotingSystemTest.php    # Pengujian integrasi menyeluruh siklus pemilihan & keamanan
+├── DEPLOY.md                    # Daftar periksa penyebaran produksi (AWS Ubuntu & Supabase)
+└── schema.sql                   # Skema lengkap PostgreSQL (tabel, view, trigger, & fungsi SECURITY DEFINER)
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+---
 
-## Contributing
+## 🚀 Instalasi & Menjalankan di Lokal
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### 1. Prasyarat
+- **PHP 8.4+** dengan ekstensi `pdo_pgsql`, `pgsql`, `curl`, `openssl`, `mbstring`, `gd` / `fileinfo`.
+- **Composer 2.x**.
+- Proyek **Supabase** (PostgreSQL + Storage).
 
-## Code of Conduct
+> **Catatan Penting untuk Pengguna Windows (Sertifikat SSL cURL):**
+> PHP di Windows secara bawaan tidak menyertakan bundel sertifikat CA sehingga permintaan HTTPS ke Supabase Storage dapat menghasilkan `cURL error 60: unable to get local issuer certificate`.
+> Unduh berkas [`cacert.pem`](https://curl.se/ca/cacert.pem) lalu atur pada `php.ini` Anda:
+> ```ini
+> curl.cainfo = "C:\path\to\cacert.pem"
+> openssl.cafile = "C:\path\to\cacert.pem"
+> ```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### 2. Pasang Dependensi & Konfigurasi `.env`
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+```
 
-## Security Vulnerabilities
+Sesuaikan variabel berikut di berkas `.env`:
+```dotenv
+APP_NAME="E-Voting"
+APP_ENV=local
+APP_DEBUG=true
+APP_URL=http://localhost:8000
+APP_TIMEZONE=Asia/Makassar
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+DB_CONNECTION=pgsql
+DB_HOST=db.<project-ref>.supabase.co
+DB_PORT=5432
+DB_DATABASE=postgres
+DB_USERNAME=evoting_app
+DB_PASSWORD=<password_evoting_app>
+DB_SEARCH_PATH=evoting
+DB_SSLMODE=require
+DB_PERSISTENT=true
 
-## License
+SESSION_DRIVER=file
+CACHE_STORE=file
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_PUBLISHABLE_KEY=<anon_or_publishable_key>
+SUPABASE_SECRET_KEY=<service_role_or_secret_key>
+SUPABASE_STORAGE_BUCKET=paslon-foto
+```
+
+### 3. Inisialisasi Skema Database
+Jalankan isi berkas [`schema.sql`](schema.sql) **satu kali** melalui **Supabase SQL Editor** (jangan gunakan `php artisan migrate`, karena seluruh tabel, *view*, *trigger*, dan fungsi `SECURITY DEFINER` dikelola secara eksplisit di dalam skema `evoting`).
+
+### 4. Jalankan Server Pengembangan
+```bash
+php artisan serve --host=127.0.0.1 --port=8000
+```
+
+---
+
+## 🔑 Provisi Akun Staf (CLI)
+
+Gunakan perintah Artisan berikut untuk membuat akun **Admin** atau **Operator** awal. Perintah ini akan menghasilkan **kata sandi sementara** yang hanya ditampilkan satu kali di terminal:
+
+```bash
+# Membuat akun Administrator baru (wajib ganti sandi & aktivasi TOTP 2FA saat login pertama)
+php artisan seed:admin admin "Administrator Sistem"
+
+# Membuat akun Operator baru (wajib ganti sandi saat login pertama)
+php artisan seed:operator operator1 "Petugas Operator Bilik 1"
+```
+
+---
+
+## 🧪 Pengujian & Kualitas Kode
+
+Jalankan pemeriksaan format kode (**Laravel Pint**) dan rangkaian pengujian otomatis (**PHPUnit**):
+
+```bash
+# Memeriksa kerapian standar kode PHP
+php vendor/bin/pint --test
+
+# Menjalankan seluruh pengujian fitur & integritas siklus pemilihan
+php artisan test
+```
+
+---
+
+## 🌐 Penyebaran Produksi (Deployment)
+
+Untuk panduan lengkap penyebaran ke server produksi (**AWS Ubuntu + PHP 8.4 + Nginx/PHP-FPM + Supabase**), silakan baca dokumen [**DEPLOY.md**](DEPLOY.md) yang mencakup:
+- Verifikasi paket `ca-certificates` untuk koneksi TLS Supabase Storage.
+- Konfigurasi koneksi Supavisor *Session Mode* (port `5432`) dengan role `evoting_app`.
+- Pemeriksaan hak akses tabel (`least privilege`).
+- Pengujian unggah foto paslon pasca-deploy.
+
+---
+
+## 📄 Referensi Dokumen Spesifikasi
+
+- [`PRD.md`](PRD.md) & [`AMANDEMEN-PRD.md`](AMANDEMEN-PRD.md) — Dokumen Kebutuhan Produk & Amandemen Spesifikasi.
+- [`bp_a.md`](bp_a.md) — Blueprint Teknis Arsitektur & Kontrak Antarmuka.
+- [`schema.sql`](schema.sql) — Definisi Skema PostgreSQL, View, Trigger, & Stored Functions.
+- [`docs/UI.md`](docs/UI.md) & [`docs/MOTION.md`](docs/MOTION.md) — Panduan Sistem Desain Antarmuka & Transisi.
+- [`DEPLOY.md`](DEPLOY.md) — Daftar Periksa Penyebaran Produksi.

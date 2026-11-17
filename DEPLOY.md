@@ -1,6 +1,6 @@
-# Panduan & Checklist Penyebaran Produksi (Deploy Checklist) — SuaraSekolah
+# Panduan & Checklist Penyebaran Produksi (Deploy Checklist) — E-Voting
 
-Dokumen ini memuat daftar periksa wajib sebelum dan sesudah penyebaran aplikasi **SuaraSekolah** ke lingkungan produksi (AWS Ubuntu + PHP 8.4 + Nginx/PHP-FPM + Supabase PostgreSQL & Storage).
+Dokumen ini memuat daftar periksa wajib sebelum dan sesudah penyebaran aplikasi **E-Voting** ke lingkungan produksi (AWS Ubuntu + PHP 8.4 + Nginx/PHP-FPM + Supabase PostgreSQL & Storage).
 
 ---
 
