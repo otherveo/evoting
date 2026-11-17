@@ -11,7 +11,7 @@
   <meta name="theme-color" content="#132a63" />
   <link rel="icon" type="image/png" href="{{ asset('SMPN7-e-voting_logo.png') }}" />
   <title>{{ isset($title) ? $title . ' — ' . $appName : $appName . ' — Sistem E-Voting' }}</title>
-  <link rel="stylesheet" href="{{ asset('css/suarasekolah.css') }}?v=4" />
+  <link rel="stylesheet" href="{{ asset('css/suarasekolah.css') }}?v=5" />
   @livewireStyles
 </head>
 <body>
@@ -31,7 +31,7 @@
 
   <header class="site-header {{ $isPublicRoute ? 'public-site-header' : '' }}">
     <div class="container header-inner">
-      <a href="{{ $staffUser ? ($staffUser->isAdmin() ? route('admin.operators') : route('operator.elections')) : route('login') }}" wire:navigate class="brand">
+      <a href="{{ $staffUser ? ($staffUser->isAdmin() ? route('admin.operators') : route('operator.elections')) : route('home') }}" wire:navigate class="brand">
         <img src="{{ asset('SMPN7-e-voting_logo.png') }}" alt="{{ $appName }}" class="brand-logo" />
         <span class="brand-text">
           <strong>{{ $appName }}</strong>

@@ -13,19 +13,11 @@ use App\Livewire\Operator\VoterMonitorPage;
 use App\Livewire\Public\PublicResultsPage;
 use App\Livewire\Public\PublicTurnoutPage;
 use App\Livewire\Voter\BallotPage;
-use App\Models\StaffAccount;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    /** @var StaffAccount|null $user */
-    $user = Auth::guard('staff')->user();
-    if (! $user) {
-        return redirect()->route('login');
-    }
-
-    return redirect()->route($user->isAdmin() ? 'admin.operators' : 'operator.elections');
-});
+    return view('landing');
+})->name('home');
 
 // UI-001: Masuk Staf
 Route::get('/login', LoginPage::class)->name('login');

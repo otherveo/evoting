@@ -438,8 +438,14 @@ class EvotingSystemTest extends TestCase
         $this->assertSame(TokenService::QR_MODE_CUSTOM, $tokens->getQrMode());
         $this->assertStringContainsString('<image ', $tokens->renderQrSvg('https://example.test/v/sample-token', 240));
 
-        // Header uses SMPN7-e-voting_logo.png and APP_NAME with fallback "E-Voting"
+        // Header & root landing page use SMPN7-e-voting_logo.png and APP_NAME with fallback "E-Voting"
         config(['app.name' => '']);
+        $this->get(route('home'))
+            ->assertStatus(200)
+            ->assertSee('SMPN7-e-voting_logo.png')
+            ->assertSee('Pemilihan Sekolah Berbasis QR Token Sekali Pakai')
+            ->assertDontSee('SuaraSekolah');
+
         $this->get(route('admin.operators'))
             ->assertStatus(200)
             ->assertSee('SMPN7-e-voting_logo.png')
