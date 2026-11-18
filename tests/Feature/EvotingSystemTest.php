@@ -573,7 +573,9 @@ class EvotingSystemTest extends TestCase
         // UPDATE V2: Operator A (issuer) sees the pending approval popup on monitor page
         Livewire::actingAs($operator, 'staff')
             ->test(VoterMonitorPage::class, ['election' => $election->fresh()])
-            ->assertSee('Permintaan Persetujuan Perangkat Bersama');
+            ->assertSee('Permintaan Persetujuan Perangkat Bersama')
+            ->assertSee('Lihat 1 orang lainnya')
+            ->assertDontSee('Perangkat ini juga dipakai oleh:');
 
         // UPDATE V2: Operator B (non-issuer) does NOT see the pending approval popup
         Livewire::actingAs($operatorB, 'staff')

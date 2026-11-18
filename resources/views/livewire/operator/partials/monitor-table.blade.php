@@ -5,6 +5,13 @@
   x-data="{
     clientSearch: $wire.entangle('search'),
     clientStatus: $wire.entangle('statusFilter'),
+    expandedPeers: {},
+    togglePeers(id) {
+      this.expandedPeers[id] = !this.expandedPeers[id];
+    },
+    isPeersExpanded(id) {
+      return !!this.expandedPeers[id];
+    },
     matchesRow(name, status, attention) {
       if (this.clientStatus === 'belum_memilih' && status !== 'belum_memilih') return false;
       if (this.clientStatus === 'sedang_memilih' && status !== 'sedang_memilih') return false;
@@ -133,30 +140,48 @@
           </div>
 
           <div class="cell device-cell">
-            <span class="cell-label">Perangkat</span>
-            @if($row->last_browser_id)
-              <div class="device-name">
-                <svg class="icon"><use href="#i-monitor"></use></svg>
-                <span>{{ \App\Services\TokenService::shortBrowserLabel($row->last_browser_id, $row->last_user_agent) }}</span>
-              </div>
-            @else
-              <div class="device-name">
-                <span class="muted">Belum memindai QR</span>
-              </div>
-            @endif
+            <div class="device-cell-main">
+              <span class="cell-label">Perangkat</span>
+              @if($row->last_browser_id)
+                <div class="device-name">
+                  <svg class="icon"><use href="#i-monitor"></use></svg>
+                  <span>{{ \App\Services\TokenService::shortBrowserLabel($row->last_browser_id, $row->last_user_agent) }}</span>
+                </div>
+              @else
+                <div class="device-name">
+                  <span class="muted">Belum memindai QR</span>
+                </div>
+              @endif
+            </div>
 
             @if($row->device_warning)
               <div class="shared-device-box">
-                <div class="shared-flag">
-                  <svg class="icon"><use href="#i-alert"></use></svg>
-                  <span>Peringatan Perangkat Bersama</span>
+                <div class="shared-device-head">
+                  <div class="shared-flag">
+                    <svg class="icon"><use href="#i-alert"></use></svg>
+                    <span>Peringatan Perangkat Bersama</span>
+                  </div>
                   @if($row->shared_group_tag)
                     <span class="shared-group-pill">Grup {{ $row->shared_group_tag }}</span>
                   @endif
                 </div>
                 @if(!empty($row->shared_peers))
-                  <div class="shared-peers-text">
-                    Perangkat ini juga dipakai oleh:
+                  <button
+                    type="button"
+                    class="shared-peers-toggle"
+                    x-on:click="togglePeers(@js((string) $row->id))"
+                    :aria-expanded="isPeersExpanded(@js((string) $row->id)) ? 'true' : 'false'"
+                  >
+                    <span>Lihat {{ count($row->shared_peers) }} orang lainnya</span>
+                    <svg class="icon shared-peers-chevron" :class="{ 'is-open': isPeersExpanded(@js((string) $row->id)) }">
+                      <use href="#i-chevron-right"></use>
+                    </svg>
+                  </button>
+                  <div
+                    class="shared-peers-text"
+                    x-show="isPeersExpanded(@js((string) $row->id))"
+                    x-cloak
+                  >
                     @foreach($row->shared_peers as $pIdx => $peer)
                       <strong>{{ $peer['name'] }} (#{{ $peer['short_id'] }})</strong>{{ $pIdx < count($row->shared_peers) - 1 ? ', ' : '' }}
                     @endforeach
@@ -166,17 +191,17 @@
             @endif
 
             @if(($row->device_approval_status ?? 'tidak_perlu') === 'menunggu' && $row->status === 'sedang_memilih')
-              <div class="shared-flag" style="color: var(--amber); font-weight: 800; margin-top: 4px;">
+              <div class="shared-flag shared-status-flag" style="color: var(--amber); font-weight: 800;">
                 <svg class="icon"><use href="#i-clock"></use></svg>
                 <span>Menunggu Persetujuan Operator</span>
               </div>
             @elseif(($row->device_approval_status ?? 'tidak_perlu') === 'disetujui')
-              <div class="shared-flag" style="color: var(--green); margin-top: 4px;">
+              <div class="shared-flag shared-status-flag" style="color: var(--green);">
                 <svg class="icon"><use href="#i-check-circle"></use></svg>
                 <span>Perangkat Bersama Diizinkan</span>
               </div>
             @elseif(($row->device_approval_status ?? 'tidak_perlu') === 'ditolak')
-              <div class="shared-flag" style="color: var(--red); margin-top: 4px;">
+              <div class="shared-flag shared-status-flag" style="color: var(--red);">
                 <svg class="icon"><use href="#i-x"></use></svg>
                 <span>Perangkat Bersama Ditolak (QR Dicabut)</span>
               </div>
