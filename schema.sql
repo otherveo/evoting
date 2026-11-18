@@ -88,12 +88,29 @@ create table if not exists evoting.elections (
   ends_at timestamptz null,
   access_key_hash text null check (access_key_hash is null or char_length(access_key_hash) = 64),
   access_key_created_at timestamptz null,
+  -- Update v5 — Rekap operator: kunci halaman + mode + konfigurasi/progres reveal.
+  recap_open boolean not null default false,
+  recap_mode text not null default 'biasa' check (recap_mode in ('biasa', 'animasi')),
+  reveal_order jsonb not null default '[]'::jsonb,
+  reveal_mode text not null default 'satu' check (reveal_mode in ('satu', 'semua')),
+  reveal_delay_ms integer not null default 1000 check (reveal_delay_ms between 20 and 10000),
+  reveal_locked boolean not null default false,
+  revealed_ids jsonb not null default '[]'::jsonb,
+  reveal_locked_by uuid null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check (ends_at is null or starts_at is null or ends_at > starts_at)
 );
 alter table evoting.elections add column if not exists access_key_hash text null check (access_key_hash is null or char_length(access_key_hash) = 64);
 alter table evoting.elections add column if not exists access_key_created_at timestamptz null;
+alter table evoting.elections add column if not exists recap_open boolean not null default false;
+alter table evoting.elections add column if not exists recap_mode text not null default 'biasa' check (recap_mode in ('biasa', 'animasi'));
+alter table evoting.elections add column if not exists reveal_order jsonb not null default '[]'::jsonb;
+alter table evoting.elections add column if not exists reveal_mode text not null default 'satu' check (reveal_mode in ('satu', 'semua'));
+alter table evoting.elections add column if not exists reveal_delay_ms integer not null default 1000 check (reveal_delay_ms between 20 and 10000);
+alter table evoting.elections add column if not exists reveal_locked boolean not null default false;
+alter table evoting.elections add column if not exists revealed_ids jsonb not null default '[]'::jsonb;
+alter table evoting.elections add column if not exists reveal_locked_by uuid null;
 
 -- DB-003 — Paslon. photo_path = path objek di bucket `paslon-foto`
 -- (mis. "<election_id>/<candidate_id>.jpg"); NULL bila tanpa foto.
@@ -851,6 +868,31 @@ begin
 end;
 $$;
 
+-- Update v5 — Hasil untuk operator (dipakai halaman rekap saat dibuka).
+-- Sama seperti fn_election_results, TAPI tanpa gate fase Ditutup: operator yang
+-- sudah membuka halaman rekap (kunci operator, bukan fase) boleh melihat hasil
+-- live selama Berlangsung. HANYA dipanggil dari halaman rekap operator yang
+-- sudah terautentikasi dan terbuka; JANGAN dipakai di halaman publik/live-recap.
+create or replace function evoting.fn_operator_election_results(p_election_id uuid)
+returns table(o_result_code text, candidate_id uuid, candidate_number integer, candidate_name text, vote_count bigint)
+language plpgsql security definer set search_path = evoting as $$
+begin
+  if not exists (select 1 from evoting.elections where id = p_election_id) then
+    return query select 'not_found', null::uuid, null::integer, null::text, null::bigint;
+    return;
+  end if;
+  return query
+    select 'ok', c.id, c.number, c.name, count(v.id)
+    from evoting.candidates c
+    left join evoting.votes v on v.candidate_id = c.id
+    where c.election_id = p_election_id
+    group by c.id, c.number, c.name
+    order by c.number;
+end;
+$$;
+
+grant execute on function evoting.fn_operator_election_results(uuid) to evoting_app;
+
 -- DB-029 — Keputusan Operator untuk Persetujuan Perangkat Bersama (Setujui / Tolak).
 create or replace function evoting.fn_decide_device_approval(
   p_voter_right_id uuid,
@@ -1150,7 +1192,7 @@ revoke all on all functions in schema evoting from public;
 
 grant select, insert, update on evoting.staff_accounts to evoting_app;
 grant select, insert on evoting.elections to evoting_app;
-grant update (name, max_voter_rights, updated_at) on evoting.elections to evoting_app;
+grant update (name, max_voter_rights, recap_open, recap_mode, reveal_order, reveal_mode, reveal_delay_ms, reveal_locked, revealed_ids, reveal_locked_by, updated_at) on evoting.elections to evoting_app;
 grant select, insert, update, delete on evoting.candidates to evoting_app;
 grant select (id, election_id, name, name_normalized, status, session_started_at, session_browser_id, device_approval_status, device_approval_requested_at, issued_by, created_at, updated_at)
   on evoting.voter_rights to evoting_app;

@@ -34,6 +34,14 @@ class BallotPage extends Component
 
     public ?string $selectedCandidateId = null;
 
+    /**
+     * Update v5 — Bagian A: ID paslon yang tombol "Lihat Visi & Misi"-nya
+     * sudah ditekan (dibaca). Disimpan di server; gate konfirmasi memakai
+     * daftar ini, bukan state klien. Hidup selama komponen ini (reload
+     * halaman mengulang pembacaan).
+     */
+    public array $readCandidateIds = [];
+
     public bool $isResumedSession = false;
 
     public ?string $sessionExpiresAtIso = null;
@@ -285,6 +293,27 @@ class BallotPage extends Component
         }
     }
 
+    /**
+     * Update v5 — Bagian A: menandai satu paslon sudah dibaca (tombol
+     * "Lihat Visi & Misi" ditekan, popup dibuka). Dipanggil saat popup
+     * dibuka; gate konfirmasi membaca daftar ini di server.
+     */
+    public function markVisionRead(string $candidateId): void
+    {
+        if ($this->stage !== 'memilih' || $this->waitingForDeviceApproval || ! $this->electionId) {
+            return;
+        }
+
+        $exists = Candidate::query()
+            ->where('election_id', $this->electionId)
+            ->where('id', $candidateId)
+            ->exists();
+
+        if ($exists && ! in_array($candidateId, $this->readCandidateIds, true)) {
+            $this->readCandidateIds[] = $candidateId;
+        }
+    }
+
     public function proceedToConfirm(): void
     {
         if ($this->stage !== 'memilih') {
@@ -293,6 +322,28 @@ class BallotPage extends Component
 
         if (! $this->selectedCandidateId) {
             $this->dispatch('toast', message: 'Pilih satu pasangan calon terlebih dahulu.', type: 'warning');
+
+            return;
+        }
+
+        // Update v5 — Bagian A: gate baca visi/misi. Semua paslon harus sudah
+        // dibaca (tombol "Lihat Visi & Misi" ditekan) sebelum lanjut ke
+        // konfirmasi. Penolakan tampil lewat modal (bukan toast — toast
+        // memendekkan pesan panjang), lengkap dengan nama paslon yang belum
+        // dibaca; pemilih tetap di halaman memilih.
+        $unread = [];
+        if ($this->electionId) {
+            $unread = Candidate::query()
+                ->where('election_id', $this->electionId)
+                ->whereNotIn('id', $this->readCandidateIds)
+                ->orderBy('number')
+                ->get(['number', 'name'])
+                ->map(fn ($c) => 'Paslon '.$c->formattedNumber().' — '.$c->name)
+                ->all();
+        }
+
+        if ($unread !== []) {
+            $this->dispatch('gate-rejected', unread: $unread);
 
             return;
         }

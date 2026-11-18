@@ -1,0 +1,497 @@
+/* Update v5 — Bagian B: kunci rekap + reveal (mode animasi).
+   File mandiri (Bagian C) — dimuat SETELAH suarasekolah.css lewat @push('styles')
+   di election-recap-page.blade.php. Jangan pindah aturan ini ke suarasekolah.css. */
+
+/* ---- Toolbar mode tampilan ---- */
+.recap-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  margin-bottom: 20px;
+  padding: 14px 18px;
+}
+
+.recap-mode-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.recap-mode-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.recap-lock-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--amber);
+  font-size: 0.85rem;
+}
+
+.recap-lock-note .icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+/* ---- Konfigurasi reveal ---- */
+.reveal-config-body {
+  padding: 6px 23px 20px;
+}
+
+.reveal-config-block {
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+
+.reveal-config-block:first-child {
+  border-top: 0;
+  padding-top: 8px;
+}
+
+.reveal-config-block h3 {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+}
+
+.reveal-order-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.reveal-order-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.reveal-order-chip:hover {
+  border-color: #b8c5db;
+  box-shadow: var(--shadow-sm);
+}
+
+.reveal-order-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.reveal-order-chip.is-ordered {
+  background: var(--brand-soft);
+  border-color: var(--brand-bright);
+  color: var(--brand);
+  font-weight: 700;
+}
+
+.reveal-order-pos {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--line);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.reveal-order-chip.is-ordered .reveal-order-pos {
+  background: var(--brand-bright);
+  color: #fff;
+}
+
+.reveal-config-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.reveal-order-status {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.reveal-mode-choice {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.reveal-delay-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.reveal-delay-input {
+  width: 120px;
+  padding: 9px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.95rem;
+}
+
+.reveal-delay-input:focus-visible {
+  outline: 3px solid rgba(36, 87, 197, 0.32);
+  outline-offset: 1px;
+  border-color: var(--brand-bright);
+}
+
+.reveal-delay-unit {
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.reveal-delay-error {
+  margin: 8px 0 0;
+  color: var(--red);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.reveal-config-start {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+/* ---- Panggung reveal ---- */
+.reveal-show {
+  margin-bottom: 20px;
+}
+
+.reveal-show-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.reveal-show-head .panel-title {
+  margin: 0;
+}
+
+.reveal-show-head .panel-sub {
+  margin: 4px 0 0;
+}
+
+.reveal-show-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.reveal-speed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.speed-btn {
+  min-width: 40px;
+  padding: 6px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.speed-btn:hover {
+  border-color: #b8c5db;
+}
+
+.speed-btn.is-active {
+  background: var(--brand-bright);
+  border-color: var(--brand-bright);
+  color: #fff;
+}
+
+.speed-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.reveal-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .reveal-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reveal-stage {
+    order: -1;
+  }
+}
+
+/* ---- Daftar peringkat (kiri) ---- */
+.reveal-board {
+  padding: 16px 18px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--shadow-xs);
+}
+
+.reveal-board h3 {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+}
+
+.reveal-board-empty {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.reveal-rank-row {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.reveal-rank-row:first-of-type {
+  border-top: 0;
+  padding-top: 2px;
+}
+
+.reveal-rank-row:first-child {
+  border: 1px solid var(--brand-bright);
+  border-radius: 14px;
+  padding: 12px;
+  background: var(--brand-softer);
+}
+
+.reveal-row-enter {
+  transition: opacity 300ms ease, transform 300ms ease;
+}
+
+.reveal-row-enter-start {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.reveal-row-enter-end {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.reveal-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  margin-bottom: 8px;
+  border-radius: 999px;
+  background: var(--line);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.reveal-rank-row:first-child .reveal-rank {
+  background: var(--brand-bright);
+  color: #fff;
+}
+
+.reveal-rank-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.reveal-rank-name span {
+  display: block;
+  color: var(--brand-bright);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.reveal-rank-name strong {
+  font-size: 1rem;
+}
+
+.reveal-rank-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--amber-soft);
+  color: var(--amber);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  vertical-align: middle;
+}
+
+.reveal-rank-count {
+  text-align: right;
+}
+
+.reveal-rank-count strong {
+  display: block;
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.reveal-rank-count span {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.reveal-rank-bar {
+  height: 8px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.reveal-rank-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--brand-bright);
+  transition: width 400ms ease;
+}
+
+.reveal-rank-row:first-child .reveal-rank-bar span {
+  background: var(--amber);
+}
+
+/* ---- Panggung (kanan) ---- */
+.reveal-stage-card {
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--shadow-md);
+  text-align: center;
+  transition: transform 450ms ease, opacity 450ms ease;
+}
+
+.reveal-stage-card.is-flying {
+  transform: translateX(-48px) translateY(28px) scale(0.9);
+  opacity: 0.15;
+}
+
+.reveal-stage-card.is-small {
+  padding: 16px;
+}
+
+.reveal-stage-all {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.reveal-stage-photo {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 999px;
+  border: 3px solid var(--brand-soft);
+}
+
+.reveal-stage-info {
+  margin-top: 12px;
+}
+
+.reveal-stage-info span {
+  display: block;
+  color: var(--brand-bright);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.reveal-stage-info h3 {
+  margin: 4px 0 0;
+  font-size: 1.1rem;
+}
+
+.reveal-stage-count {
+  margin-top: 10px;
+  font-size: 3rem;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.reveal-stage-card.is-small .reveal-stage-count {
+  font-size: 2.2rem;
+}
+
+.reveal-stage-sub {
+  margin-top: 4px;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.reveal-stage-progress {
+  margin: 14px 0 0;
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.reveal-stage-wait,
+.reveal-stage-done {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.reveal-stopped,
+.reveal-finished-note {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--amber-soft);
+  border: 1px solid #f4dfbd;
+  font-size: 0.9rem;
+}

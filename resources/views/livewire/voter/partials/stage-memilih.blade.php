@@ -17,7 +17,7 @@
       </div>
       <h1>Pilih Satu Pasangan Calon</h1>
       <p class="lede">
-        Ketuk kartu pasangan calon pilihan Anda, lalu tekan tombol <strong>Lanjut ke Konfirmasi</strong> di bagian bawah layar.
+        Ketuk kartu pasangan calon pilihan Anda, baca visi &amp; misi <strong>seluruh paslon</strong> lewat tombol <strong>Lihat Visi &amp; Misi</strong> di tiap kartu, lalu tekan tombol <strong>Lanjut ke Konfirmasi</strong> di bagian bawah layar.
       </p>
     </div>
 
@@ -38,15 +38,18 @@
     @foreach($candidates as $cand)
       @php
         $isSelected = $selectedCandidateId === $cand->id;
-        $missions = $cand->missionItems();
       @endphp
-      <button
-        type="button"
+      {{-- Update v5 — Bagian A: kartu BUKAN lagi <button> (tombol di dalamnya harus valid);
+           <div role="radio"> dengan keyboard/ARIA setara (tabindex, Enter/Space, aria-checked). --}}
+      <div
         role="radio"
+        tabindex="0"
         :aria-checked="clientSelectedId === '{{ $cand->id }}' ? 'true' : 'false'"
         class="candidate-card {{ $isSelected ? 'is-selected' : '' }}"
         :class="{ 'is-selected': clientSelectedId === '{{ $cand->id }}' }"
         x-on:click="chooseCandidate('{{ $cand->id }}')"
+        x-on:keydown.enter.prevent="chooseCandidate('{{ $cand->id }}')"
+        x-on:keydown.space.prevent="chooseCandidate('{{ $cand->id }}')"
         wire:key="ballot-cand-{{ $cand->id }}"
       >
         <div class="candidate-media">
@@ -61,29 +64,42 @@
           <span class="candidate-kicker">PASANGAN CALON {{ $cand->formattedNumber() }}</span>
           <h2 class="candidate-names">{{ $cand->name }}</h2>
 
-          @if($cand->vision)
-            <div class="candidate-vision">
-              <span>VISI</span>
-              <p>{{ $cand->vision }}</p>
-            </div>
-          @endif
-
-          @if(!empty($missions))
-            <ul class="mission-list">
-              @foreach($missions as $m)
-                <li>{{ $m }}</li>
-              @endforeach
-            </ul>
-          @endif
+          {{-- Update v5 — Bagian A: visi & misi TIDAK lagi tampil di kartu; lewat popup. --}}
+          <div class="candidate-actions">
+            <button
+              type="button"
+              class="btn btn-primary candidate-select-btn"
+              x-on:click.stop="chooseCandidate('{{ $cand->id }}')"
+            >
+              <svg class="icon"><use href="#i-check"></use></svg>
+              <span x-text="clientSelectedId === '{{ $cand->id }}' ? 'Dipilih' : 'Pilih Paslon Ini'"></span>
+            </button>
+            <button
+              type="button"
+              class="btn btn-secondary candidate-vision-btn"
+              :class="{ 'is-read': readIds.includes('{{ $cand->id }}') }"
+              x-on:click.stop="openVision('{{ $cand->id }}')"
+            >
+              <svg class="icon"><use href="#i-eye"></use></svg>
+              <span>Lihat Visi &amp; Misi</span>
+              <svg class="icon vision-read-check" x-show="readIds.includes('{{ $cand->id }}')" x-cloak><use href="#i-check"></use></svg>
+            </button>
+          </div>
 
           <div class="candidate-select-hint">
             <svg class="icon"><use href="#i-check-circle"></use></svg>
             <span>Dipilih untuk dikonfirmasi</span>
           </div>
         </div>
-      </button>
+      </div>
     @endforeach
   </div>
+
+  {{-- Update v5 — Bagian A: progres baca visi & misi (cerminan klien; gate ditegakkan di server). --}}
+  <p class="read-progress" role="status">
+    <svg class="icon"><use href="#i-eye"></use></svg>
+    <span x-text="readProgressLabel"></span>
+  </p>
 
   <div class="ballot-bar">
     <div class="ballot-bar-info">
@@ -102,11 +118,15 @@
       type="button"
       class="btn btn-primary btn-lg"
       x-on:click="goToConfirm()"
-      x-bind:disabled="!selectedCand"
+      x-bind:disabled="!selectedCand || confirming"
     >
-      <span class="btn-label-idle">
+      <span class="btn-label-idle" x-show="!confirming">
         <span>Lanjut ke Konfirmasi</span>
         <svg class="icon"><use href="#i-arrow-right"></use></svg>
+      </span>
+      <span class="btn-label-loading" x-show="confirming" x-cloak style="display: inline-flex;">
+        <span class="spinner" aria-hidden="true"></span>
+        <span>Memeriksa...</span>
       </span>
     </button>
   </div>

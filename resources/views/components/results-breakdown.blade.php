@@ -10,14 +10,18 @@
     'totalSubtext' => 'Akumulasi seluruh suara anonim yang masuk',
     'winnerNote' => 'Dihitung otomatis dari data suara anonim setelah masa pemilihan selesai.',
     'refreshAction' => null,
+    // Update v5 — Bagian B: label/kelas status hero (bila hasil dibuka live
+    // sebelum Ditutup, statusnya bukan "Masa Pemilihan Selesai").
+    'statusLabel' => 'Masa Pemilihan Selesai · Hasil Terbuka',
+    'statusClass' => 'is-closed',
 ])
 
 {{-- FR-020, FR-022, AC-023, AC-025: Rekapitulasi perolehan suara per paslon setelah masa pemilihan Ditutup --}}
 <section class="results-hero" aria-labelledby="results-hero-title">
   <div class="results-hero-copy">
-    <span class="public-status is-closed">
+    <span class="public-status {{ $statusClass }}">
       <span class="public-status-dot"></span>
-      <span>Masa Pemilihan Selesai · Hasil Terbuka</span>
+      <span>{{ $statusLabel }}</span>
     </span>
 
     <div class="eyebrow">

@@ -12,6 +12,7 @@
   <link rel="icon" type="image/png" href="{{ asset('SMPN7-e-voting_logo.png') }}" />
   <title>{{ isset($title) ? $title . ' — ' . $appName : 'Bilik Suara — ' . $appName }}</title>
   <link rel="stylesheet" href="{{ asset('css/suarasekolah.css') }}?v=11" />
+  @stack('styles')
   @livewireStyles
 </head>
 <body>

@@ -2,9 +2,16 @@
     'eyebrow' => 'HASIL PEMILIHAN TERKUNCI',
     'heading' => 'Hasil Pemilihan Belum Tersedia',
     'description' => '',
+    'scheduleCaption' => 'DIBUKA SETELAH WAKTU SELESAI',
     'scheduleLabel' => 'Belum diatur',
     'footnote' => '',
     'refreshAction' => 'refreshSnapshot',
+    // Update v5 — Bagian B.1: bila diisi, tombol utama memakai aksi ini
+    // (mis. "Buka Rekapitulasi") menggantikan tombol "Periksa & Muat Ulang".
+    'primaryLabel' => null,
+    'primaryAction' => null,
+    'primaryIcon' => '#i-eye',
+    'primaryLoadingText' => 'Memproses...',
     'secondaryUrl' => null,
     'secondaryLabel' => 'Kembali',
 ])
@@ -27,20 +34,31 @@
   <div class="locked-schedule">
     <span>
       <svg class="icon"><use href="#i-calendar"></use></svg>
-      DIBUKA SETELAH WAKTU SELESAI
+      {{ $scheduleCaption }}
     </span>
     <strong>{{ $scheduleLabel }}</strong>
   </div>
 
   <div class="locked-actions">
-    <x-action-button
-      variant="primary"
-      icon="#i-refresh"
-      wire:click="{{ $refreshAction }}"
-      loadingText="Memeriksa jadwal..."
-    >
-      Periksa &amp; Muat Ulang
-    </x-action-button>
+    @if($primaryLabel !== null && $primaryAction !== null)
+      <x-action-button
+        variant="primary"
+        icon="{{ $primaryIcon }}"
+        wire:click="{{ $primaryAction }}"
+        loadingText="{{ $primaryLoadingText }}"
+      >
+        {{ $primaryLabel }}
+      </x-action-button>
+    @else
+      <x-action-button
+        variant="primary"
+        icon="#i-refresh"
+        wire:click="{{ $refreshAction }}"
+        loadingText="Memeriksa jadwal..."
+      >
+        Periksa &amp; Muat Ulang
+      </x-action-button>
+    @endif
 
     @if($secondaryUrl)
       <a href="{{ $secondaryUrl }}" class="btn btn-secondary">

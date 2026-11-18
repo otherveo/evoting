@@ -25,6 +25,15 @@ class Election extends Model
         'max_voter_rights',
         'starts_at',
         'ends_at',
+        // Update v5 — Bagian B: state kunci rekap + mode + konfigurasi/progres reveal.
+        'recap_open',
+        'recap_mode',
+        'reveal_order',
+        'reveal_mode',
+        'reveal_delay_ms',
+        'reveal_locked',
+        'revealed_ids',
+        'reveal_locked_by',
     ];
 
     protected $hidden = [
@@ -40,6 +49,12 @@ class Election extends Model
             'access_key_created_at' => 'datetime',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
+            // Update v5 — Bagian B.
+            'recap_open' => 'boolean',
+            'reveal_order' => 'array',
+            'reveal_delay_ms' => 'integer',
+            'reveal_locked' => 'boolean',
+            'revealed_ids' => 'array',
         ];
     }
 

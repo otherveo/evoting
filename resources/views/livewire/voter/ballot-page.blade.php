@@ -1,4 +1,8 @@
 {{-- UI-014 s.d. UI-017, FR-015 s.d. FR-018, BR-028: Alur Bilik Suara 4 Tahap Linear Tanpa Identitas --}}
+{{-- Update v5 — Bagian C: style kartu/popup/gate di file mandiri (bukan suarasekolah.css) --}}
+@push('styles')
+  <link rel="stylesheet" href="{{ asset('css/voter/ballot.css') . '?v=' . filemtime(public_path('css/voter/ballot.css')) }}" />
+@endpush
 @php
   $candidatesClientMap = $candidates->mapWithKeys(fn ($c) => [
       $c->id => [
@@ -6,16 +10,23 @@
           'number' => $c->formattedNumber(),
           'name' => $c->name,
           'vision' => $c->vision,
+          'missions' => $c->missionItems(),
           'photoUrl' => $c->photoUrl(),
       ],
   ])->all();
 @endphp
 <div
+  x-on:gate-rejected.window="gateUnreadNames = $event.detail.unread || []; gateRejectionOpen = true"
   x-data="{
     clientStage: $wire.entangle('stage'),
     clientSelectedId: $wire.entangle('selectedCandidateId'),
     submittingVote: false,
     candidatesMap: @js($candidatesClientMap),
+    visionModalId: null,
+    readIds: [],
+    gateRejectionOpen: false,
+    gateUnreadNames: [],
+    confirming: false,
     get activeStepIndex() {
       if (this.clientStage === 'verifikasi') return 1;
       if (this.clientStage === 'memilih') return 2;
@@ -26,16 +37,49 @@
     get selectedCand() {
       return this.clientSelectedId ? (this.candidatesMap[this.clientSelectedId] || null) : null;
     },
+    get visionCand() {
+      return this.visionModalId ? (this.candidatesMap[this.visionModalId] || null) : null;
+    },
+    get unreadCandidates() {
+      return Object.values(this.candidatesMap).filter(c => !this.readIds.includes(c.id));
+    },
+    get readCount() {
+      return this.readIds.length;
+    },
+    get totalCandidates() {
+      return Object.keys(this.candidatesMap).length;
+    },
+    get readProgressLabel() {
+      if (this.totalCandidates === 0) return '';
+      if (this.readCount >= this.totalCandidates) return 'Semua visi & misi sudah dibaca — Anda bisa lanjut ke konfirmasi.';
+      return 'Visi & misi sudah dibaca: ' + this.readCount + ' dari ' + this.totalCandidates + ' paslon.';
+    },
     chooseCandidate(id) {
       this.clientSelectedId = id;
+    },
+    openVision(id) {
+      this.visionModalId = id;
+      if (!this.readIds.includes(id)) {
+        this.readIds.push(id);
+      }
+      $wire.markVisionRead(id);
     },
     goToConfirm() {
       if (!this.clientSelectedId) {
         window.showToast('Pilih satu pasangan calon terlebih dahulu.', 'warning');
         return;
       }
-      this.clientStage = 'konfirmasi';
-      window.scrollTo({ top: 0, behavior: 'auto' });
+      if (this.confirming) return;
+      const unread = this.unreadCandidates;
+      if (unread.length > 0) {
+        this.gateUnreadNames = unread.map(c => 'Paslon ' + c.number + ' — ' + c.name);
+        this.gateRejectionOpen = true;
+        return;
+      }
+      this.confirming = true;
+      $wire.proceedToConfirm().finally(() => {
+        this.confirming = false;
+      });
     },
     goBackToBallot() {
       if (this.submittingVote) return;
@@ -188,4 +232,73 @@
       </x-modal>
     </div>
   @endif
+
+  {{-- Update v5 — Bagian A: popup visi & misi satu paslon (klien; dibuka tombol "Lihat Visi & Misi") --}}
+  <template x-if="visionModalId">
+    <x-modal
+      title="Visi &amp; Misi Paslon"
+      icon="#i-eye"
+      maxWidth="560px"
+      alpineClose="visionModalId = null"
+    >
+      <div class="modal-body vision-modal-body">
+        <template x-if="visionCand">
+          <div>
+            <h3 class="vision-modal-name" x-text="visionCand ? ('Paslon ' + visionCand.number + ' — ' + visionCand.name) : ''"></h3>
+            <template x-if="visionCand && visionCand.vision">
+              <div class="vision-modal-section">
+                <span class="vision-modal-label">VISI</span>
+                <p x-text="visionCand.vision"></p>
+              </div>
+            </template>
+            <template x-if="visionCand && visionCand.missions && visionCand.missions.length">
+              <div class="vision-modal-section">
+                <span class="vision-modal-label">MISI</span>
+                <ul class="mission-list vision-modal-missions">
+                  <template x-for="m in visionCand.missions" :key="m">
+                    <li x-text="m"></li>
+                  </template>
+                </ul>
+              </div>
+            </template>
+            <template x-if="visionCand && !visionCand.vision && !(visionCand.missions && visionCand.missions.length)">
+              <p class="vision-modal-empty">Paslon ini belum mengisi visi &amp; misi.</p>
+            </template>
+          </div>
+        </template>
+      </div>
+      <x-slot:footer>
+        <button type="button" class="btn btn-primary" x-on:click="visionModalId = null">Tutup</button>
+      </x-slot:footer>
+    </x-modal>
+  </template>
+
+  {{-- Update v5 — Bagian A: penolakan gate baca (pesan persis; dibuka instan di klien atau lewat event server 'gate-rejected') --}}
+  <template x-if="gateRejectionOpen">
+    <x-modal
+      title="Belum Bisa Lanjut"
+      subtitle="Baca visi &amp; misi seluruh paslon terlebih dahulu."
+      icon="#i-lock"
+      iconVariant="warning"
+      maxWidth="500px"
+      alpineClose="gateRejectionOpen = false"
+    >
+      <div class="modal-body">
+        <p class="gate-rejection-message">Anda belum boleh lanjut sebelum membaca seluruh visi &amp; misi setiap paslon.</p>
+        <template x-if="gateUnreadNames.length">
+          <div class="gate-rejection-unread">
+            <span>Belum dibaca:</span>
+            <ul>
+              <template x-for="name in gateUnreadNames" :key="name">
+                <li x-text="name"></li>
+              </template>
+            </ul>
+          </div>
+        </template>
+      </div>
+      <x-slot:footer>
+        <button type="button" class="btn btn-primary" x-on:click="gateRejectionOpen = false">Saya mengerti</button>
+      </x-slot:footer>
+    </x-modal>
+  </template>
 </div>

@@ -1,0 +1,113 @@
+/* Update v5 — Bagian A: kartu paslon (tombol eksplisit + popup visi/misi + gate baca).
+   File mandiri (Bagian C) — dimuat SETELAH suarasekolah.css lewat @push('styles')
+   di ballot-page.blade.php. Jangan pindah aturan ini ke suarasekolah.css. */
+
+/* Dua tombol aksi di dalam kartu: susun vertikal, lebar penuh. */
+.candidate-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.candidate-select-btn,
+.candidate-vision-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+/* Tombol "Lihat Visi & Misi" yang sudah ditekan: hijau + centang (jelas berbeda
+   dari keadaan belum dibaca yang netral/abu-abu). */
+.candidate-vision-btn.is-read {
+  background: var(--green-soft);
+  border-color: #9fd8b4;
+  color: var(--green);
+}
+
+.candidate-vision-btn.is-read:hover {
+  border-color: var(--green);
+  box-shadow: var(--shadow-sm);
+}
+
+.vision-read-check {
+  margin-left: 2px;
+}
+
+/* Baris progres baca di bawah grid paslon. */
+.read-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 2px 0;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.read-progress .icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--brand-bright);
+}
+
+/* Isi popup visi & misi. */
+.vision-modal-name {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+}
+
+.vision-modal-section + .vision-modal-section {
+  margin-top: 16px;
+}
+
+.vision-modal-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--brand-bright);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.vision-modal-section p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.vision-modal-missions {
+  margin: 0;
+}
+
+.vision-modal-empty {
+  color: var(--ink-soft);
+}
+
+/* Modal penolakan gate: pesan persis ditonjolkan. */
+.gate-rejection-message {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.6;
+}
+
+.gate-rejection-unread {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--amber-soft);
+  border: 1px solid #f4dfbd;
+  border-radius: 12px;
+  font-size: 0.9rem;
+}
+
+.gate-rejection-unread > span {
+  font-weight: 700;
+}
+
+.gate-rejection-unread ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.gate-rejection-unread li {
+  margin-top: 2px;
+}

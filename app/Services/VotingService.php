@@ -293,6 +293,55 @@ class VotingService
     }
 
     /**
+     * Update v5 — Bagian B: memanggil evoting.fn_operator_election_results.
+     * Sama seperti electionResults, TAPI tanpa gate fase Ditutup — dipakai
+     * halaman rekap operator yang sudah dibuka (kunci operator), sehingga
+     * hasil live bisa dimuat selama Berlangsung. HANYA untuk halaman rekap
+     * operator yang terautentikasi dan terbuka.
+     *
+     * @return array{ok: bool, code: string, items: list<array{candidate_id: string, number: int, name: string, vote_count: int}>}
+     */
+    public function operatorElectionResults(string $electionId): array
+    {
+        $rows = DB::select('select * from evoting.fn_operator_election_results(?::uuid)', [$electionId]);
+        if ($rows === []) {
+            return [
+                'ok' => true,
+                'code' => 'ok',
+                'items' => [],
+            ];
+        }
+
+        $firstCode = (string) ($rows[0]->o_result_code ?? 'not_found');
+        if ($firstCode !== 'ok') {
+            return [
+                'ok' => false,
+                'code' => $firstCode,
+                'items' => [],
+            ];
+        }
+
+        $items = [];
+        foreach ($rows as $r) {
+            if ($r->candidate_id === null) {
+                continue;
+            }
+            $items[] = [
+                'candidate_id' => (string) $r->candidate_id,
+                'number' => (int) $r->candidate_number,
+                'name' => (string) $r->candidate_name,
+                'vote_count' => (int) $r->vote_count,
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'code' => 'ok',
+            'items' => $items,
+        ];
+    }
+
+    /**
      * Memanggil evoting.fn_decide_device_approval untuk menyetujui atau menolak perangkat bersama.
      *
      * @return array{ok: bool, code: string, message: string, voter_right_id: ?string, election_id: ?string}
