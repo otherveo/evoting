@@ -10,6 +10,7 @@ use App\Livewire\Operator\ElectionDetailPage;
 use App\Livewire\Operator\ElectionIndexPage;
 use App\Livewire\Operator\ElectionRecapPage;
 use App\Livewire\Operator\VoterMonitorPage;
+use App\Livewire\Public\LiveRecapPage;
 use App\Livewire\Public\PublicResultsPage;
 use App\Livewire\Public\PublicTurnoutPage;
 use App\Livewire\Voter\BallotPage;
@@ -62,3 +63,8 @@ Route::prefix('p')
         Route::get('/{election}/turnout', PublicTurnoutPage::class)->whereUuid('election')->name('turnout');
         Route::get('/{election}/results', PublicResultsPage::class)->whereUuid('election')->name('results');
     });
+
+// Perubahan 7: Halaman Khusus Rekapitulasi Real-Time dengan Access Key 64 Karakter (Path Berbeda dari /p/...)
+Route::middleware(['throttle:live-recap'])->group(function () {
+    Route::get('/pantau-rekap/{election}', LiveRecapPage::class)->whereUuid('election')->name('live-recap.view');
+});

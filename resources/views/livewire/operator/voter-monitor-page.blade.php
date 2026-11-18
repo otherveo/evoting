@@ -1,5 +1,5 @@
-{{-- UI-009, FR-023, FR-025, KP-003, NFR-016: Halaman Pantau Pemilih Operator (Polling Aktif Saat Tidak Ada Modal) --}}
-<div class="container page view-enter" @if(!$showRegisterModal && !$showQrModal && !$showDetailModal) wire:poll.5s.visible @endif>
+{{-- UI-009, FR-023, FR-025, KP-003, NFR-016: Halaman Pantau Pemilih Operator (Polling Real-Time 3 Detik) --}}
+<div class="container page view-enter" @if(!$showRegisterModal && !$showQrModal && !$showDetailModal) wire:poll.3s.visible @endif>
   <div class="page-heading">
     <div>
       <div class="eyebrow">

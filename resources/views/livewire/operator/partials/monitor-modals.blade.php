@@ -234,21 +234,20 @@
         </div>
       </div>
 
-      {{-- FR-025, BR-015, BR-029, AC-028: Peringatan Perangkat Bersama --}}
+      {{-- FR-025, BR-015, BR-029, AC-028 & Perubahan 3.1: Peringatan Perangkat Bersama --}}
       @if(!empty($detailData['shared_rights']))
         <div class="alert alert-warning" style="margin-bottom: 16px;">
           <svg class="icon"><use href="#i-alert"></use></svg>
           <div>
             <strong>Peringatan Perangkat Bersama</strong>
-            <p>Pengenal Browser yang mengakses Hak Pilih ini juga tercatat pernah mengakses Hak Pilih lain pada pemilihan ini:</p>
+            <p>Perangkat ini juga dipakai oleh:</p>
             <ul class="confirm-list" style="margin: 6px 0 0;">
               @foreach($detailData['shared_rights'] as $sr)
                 <li>
-                  <strong>{{ $sr->name }}</strong> ({{ \App\Models\VoterRight::statusLabel($sr->status) }}) — Browser <code>#{{ strtoupper(substr(hash('sha256', $sr->browser_id), 0, 6)) }}</code>
+                  <strong>{{ $sr->name }} (#{{ strtoupper(substr($sr->id, 0, 7)) }})</strong> — Status: {{ \App\Models\VoterRight::statusLabel($sr->status) }} · Grup Perangkat <code>#{{ strtoupper(substr(hash('sha256', $sr->browser_id), 0, 6)) }}</code>
                 </li>
               @endforeach
             </ul>
-            <p style="margin-top:4px;font-size:0.72rem;">Catatan: Penggunaan perangkat bergantian diperbolehkan selama Operator telah memverifikasi langsung identitas pemilih.</p>
           </div>
         </div>
       @endif
@@ -385,6 +384,77 @@
 
     <x-slot:footer>
       <button type="button" class="btn btn-secondary" wire:click="closeDetailModal">Tutup</button>
+    </x-slot:footer>
+  </x-modal>
+@endif
+
+{{-- Perubahan 3.2: Popup Perizinan Perangkat Bersama Real-Time di Halaman Operator --}}
+@if(isset($pendingApprovals) && $pendingApprovals->isNotEmpty() && !$showRegisterModal && !$showQrModal && !$showDetailModal)
+  @php
+    $pending = $pendingApprovals->first();
+    $reqTime = $pending->device_approval_requested_at
+      ? \Carbon\CarbonImmutable::parse($pending->device_approval_requested_at)->setTimezone($tz)->format('H:i:s')
+      : (\Carbon\CarbonImmutable::parse($pending->session_started_at)->setTimezone($tz)->format('H:i:s'));
+  @endphp
+  <x-modal
+    title="Permintaan Persetujuan Perangkat Bersama"
+    :subtitle="$pendingApprovals->count() > 1 ? 'Terdapat ' . $pendingApprovals->count() . ' pemilih menunggu keputusan Anda.' : 'Pemilih ini menggunakan perangkat yang sudah pernah dipakai pemilih lain.'"
+    icon="#i-alert"
+    iconVariant="warning"
+    maxWidth="560px"
+  >
+    <div class="modal-body">
+      <div class="alert alert-warning" role="alert">
+        <svg class="icon"><use href="#i-shield"></use></svg>
+        <div>
+          <strong>Layar pemilih saat ini sedang dikunci</strong>
+          <p>Pastikan pemilih di bawah ini benar-benar pemilih sah yang meminjam/bergantian perangkat sebelum menekan <strong>Setujui</strong>.</p>
+        </div>
+      </div>
+
+      <dl class="detail-list" style="margin-top: 14px;">
+        <div>
+          <dt>Nama Pemilih</dt>
+          <dd><strong>{{ $pending->name }}</strong> (#{{ strtoupper(substr($pending->id, 0, 7)) }})</dd>
+        </div>
+        <div>
+          <dt>Perangkat yang Dipakai</dt>
+          <dd>{{ \App\Services\TokenService::shortBrowserLabel($pending->last_browser_id ?? $pending->session_browser_id, $pending->last_user_agent) }}</dd>
+        </div>
+        <div>
+          <dt>Waktu Permintaan</dt>
+          <dd>{{ $reqTime }} ({{ $tz }})</dd>
+        </div>
+        @if(!empty($pending->shared_peers))
+          <div>
+            <dt>Perangkat Ini Juga Dipakai Oleh</dt>
+            <dd>
+              @foreach($pending->shared_peers as $idx => $peer)
+                <strong>{{ $peer['name'] }} (#{{ $peer['short_id'] }})</strong>{{ $idx < count($pending->shared_peers) - 1 ? ', ' : '' }}
+              @endforeach
+            </dd>
+          </div>
+        @endif
+      </dl>
+    </div>
+
+    <x-slot:footer>
+      <x-action-button
+        variant="danger"
+        icon="#i-x"
+        wire:click="rejectSharedDevice('{{ $pending->id }}')"
+        loadingText="Menolak..."
+      >
+        Tolak &amp; Cabut QR
+      </x-action-button>
+      <x-action-button
+        variant="primary"
+        icon="#i-check"
+        wire:click="approveSharedDevice('{{ $pending->id }}')"
+        loadingText="Menyetujui..."
+      >
+        Setujui Akses Memilih
+      </x-action-button>
     </x-slot:footer>
   </x-modal>
 @endif

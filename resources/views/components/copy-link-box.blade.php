@@ -1,7 +1,7 @@
 @props([
     'label',
     'url',
-    'copyToast' => 'Tautan berhasil disalin ke papan klip.',
+    'copyToast' => 'Disalin',
     'showOpenLink' => true,
 ])
 
@@ -17,7 +17,7 @@
       class="icon-btn"
       title="Salin tautan"
       aria-label="Salin tautan"
-      onclick="navigator.clipboard.writeText(@js($url)); window.showToast(@js($copyToast), 'success');"
+      onclick="navigator.clipboard.writeText(@js($url)); window.showToast('Disalin', 'success');"
     >
       <svg class="icon"><use href="#i-copy"></use></svg>
     </button>

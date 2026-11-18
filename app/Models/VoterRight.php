@@ -30,6 +30,8 @@ class VoterRight extends Model
         'status',
         'session_started_at',
         'session_browser_id',
+        'device_approval_status',
+        'device_approval_requested_at',
         'created_at',
         'updated_at',
     ];
@@ -38,6 +40,7 @@ class VoterRight extends Model
     {
         return [
             'session_started_at' => 'datetime',
+            'device_approval_requested_at' => 'datetime',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];

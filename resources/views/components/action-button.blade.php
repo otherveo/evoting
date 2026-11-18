@@ -17,6 +17,8 @@
       $resolvedTarget = trim($wireClick);
   }
 
+  $isTransientOpener = is_string($wireClick) && preg_match('/^(open|close|prompt|refresh|\$set)/', trim($wireClick));
+
   $classes = collect([
       'btn',
       'btn-' . $variant,
@@ -29,6 +31,8 @@
   type="{{ $type }}"
   {{ $attributes->merge(['class' => $classes]) }}
   @if($disabled) disabled @endif
+  data-action-btn="true"
+  @if($isTransientOpener) data-transient-opener="true" @endif
   wire:loading.attr="disabled"
   wire:loading.attr="data-loading"
   @if($resolvedTarget) wire:target="{{ $resolvedTarget }}" @endif

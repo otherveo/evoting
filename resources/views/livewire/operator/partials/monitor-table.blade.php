@@ -146,9 +146,39 @@
             @endif
 
             @if($row->device_warning)
-              <div class="shared-flag" title="Browser ini juga pernah mengakses Hak Pilih lain pada pemilihan yang sama">
-                <svg class="icon"><use href="#i-alert"></use></svg>
-                <span>Peringatan Perangkat Bersama</span>
+              <div class="shared-device-box">
+                <div class="shared-flag">
+                  <svg class="icon"><use href="#i-alert"></use></svg>
+                  <span>Peringatan Perangkat Bersama</span>
+                  @if($row->shared_group_tag)
+                    <span class="shared-group-pill">Grup {{ $row->shared_group_tag }}</span>
+                  @endif
+                </div>
+                @if(!empty($row->shared_peers))
+                  <div class="shared-peers-text">
+                    Perangkat ini juga dipakai oleh:
+                    @foreach($row->shared_peers as $pIdx => $peer)
+                      <strong>{{ $peer['name'] }} (#{{ $peer['short_id'] }})</strong>{{ $pIdx < count($row->shared_peers) - 1 ? ', ' : '' }}
+                    @endforeach
+                  </div>
+                @endif
+              </div>
+            @endif
+
+            @if(($row->device_approval_status ?? 'tidak_perlu') === 'menunggu' && $row->status === 'sedang_memilih')
+              <div class="shared-flag" style="color: var(--amber); font-weight: 800; margin-top: 4px;">
+                <svg class="icon"><use href="#i-clock"></use></svg>
+                <span>Menunggu Persetujuan Operator</span>
+              </div>
+            @elseif(($row->device_approval_status ?? 'tidak_perlu') === 'disetujui')
+              <div class="shared-flag" style="color: var(--green); margin-top: 4px;">
+                <svg class="icon"><use href="#i-check-circle"></use></svg>
+                <span>Perangkat Bersama Diizinkan</span>
+              </div>
+            @elseif(($row->device_approval_status ?? 'tidak_perlu') === 'ditolak')
+              <div class="shared-flag" style="color: var(--red); margin-top: 4px;">
+                <svg class="icon"><use href="#i-x"></use></svg>
+                <span>Perangkat Bersama Ditolak (QR Dicabut)</span>
               </div>
             @endif
           </div>

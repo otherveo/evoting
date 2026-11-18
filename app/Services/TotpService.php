@@ -57,7 +57,7 @@ class TotpService
 
     public function getProvisioningUri(string $username, string $secret): string
     {
-        $appName = (string) (config('app.name') ?: 'E-Voting');
+        $appName = (string) (config('app.name') ?: 'DigiVoting');
         $issuer = rawurlencode($appName);
         $label = rawurlencode($appName.':'.$username);
 

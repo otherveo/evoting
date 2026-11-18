@@ -120,4 +120,72 @@
   @elseif($stage === 'kendala')
     @include('livewire.voter.partials.stage-kendala')
   @endif
+
+  {{-- Perubahan 3.2: Popup Kuncian "Menunggu Persetujuan Operator" (Unclosable) Saat Perangkat Bersama Terdeteksi --}}
+  @if($waitingForDeviceApproval)
+    <div wire:poll.3s="pollDeviceApproval">
+      <x-modal
+        title="Menunggu Persetujuan Operator"
+        subtitle="Perangkat ini terdeteksi sudah pernah digunakan oleh pemilih lain pada pemilihan ini."
+        icon="#i-clock"
+        iconVariant="warning"
+        maxWidth="500px"
+      >
+        <div
+          class="modal-body"
+          x-data="{
+            checking: false,
+            btnState: $wire.entangle('approvalButtonState'),
+            checkPermission() {
+              if (this.checking) return;
+              this.checking = true;
+              $wire.checkDeviceApprovalManual().finally(() => {
+                this.checking = false;
+              });
+            }
+          }"
+        >
+          <div class="alert alert-warning" role="alert">
+            <svg class="icon"><use href="#i-shield"></use></svg>
+            <div>
+              <strong>Layar bilik suara dikunci sementara</strong>
+              <p>
+                Silakan tunggu petugas Operator menyetujui penggunaan perangkat bersama ini dari layar pemantauan, atau tekan tombol <strong>Cek izin</strong> di bawah.
+              </p>
+            </div>
+          </div>
+
+          @if($sessionExpiresLabel)
+            <p class="field-hint" style="margin-top: 12px; text-align: center;">
+              Batas waktu tunggu sesi (10 menit): <strong>{{ $sessionExpiresLabel }}</strong>
+            </p>
+          @endif
+
+          <div style="margin-top: 18px;">
+            <button
+              type="button"
+              class="btn btn-lg btn-block approval-check-btn"
+              :class="{
+                'is-approved': !checking && btnState === 'approved',
+                'is-rejected': !checking && btnState === 'rejected',
+                'is-pending': !checking && (btnState === 'idle' || btnState === 'pending')
+              }"
+              x-on:click="checkPermission()"
+              x-bind:disabled="checking"
+              x-bind:data-loading="checking ? 'true' : null"
+            >
+              <span class="btn-label-idle" x-show="!checking">
+                <svg class="icon"><use href="#i-refresh"></use></svg>
+                <span x-text="btnState === 'approved' ? 'Diizinkan' : (btnState === 'pending' ? 'Belum diizinkan' : (btnState === 'rejected' ? 'Tidak diizinkan' : 'Cek izin'))">Cek izin</span>
+              </span>
+              <span class="btn-label-loading" x-show="checking" x-cloak style="display: inline-flex;">
+                <span class="spinner" aria-hidden="true"></span>
+                <span>Mengecek izin...</span>
+              </span>
+            </button>
+          </div>
+        </div>
+      </x-modal>
+    </div>
+  @endif
 </div>

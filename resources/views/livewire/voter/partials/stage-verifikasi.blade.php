@@ -97,6 +97,6 @@
 
   <p class="vote-footnote">
     <svg class="icon"><use href="#i-shield"></use></svg>
-    <span>{{ config('app.name') ?: 'E-Voting' }} — Sistem E-Voting Berbasis QR Token Sekali Pakai</span>
+    <span>{{ config('app.name') ?: 'DigiVoting' }} — Sistem Pemungutan Suara Berbasis QR Token Sekali Pakai</span>
   </p>
 </div>

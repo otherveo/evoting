@@ -1,9 +1,9 @@
 <div align="center">
-  <img src="public/SMPN7-e-voting_logo.png" alt="Logo E-Voting SMPN 7" width="96" height="96" />
+  <img src="public/SMPN7-e-voting_logo.png" alt="Logo DigiVoting SMPN 7" width="96" height="96" />
 
-  # Sistem E-Voting Sekolah Berbasis QR Token Sekali Pakai
+  # DigiVoting — Sistem Pemungutan Suara Elektronik Sekolah Berbasis QR Token Sekali Pakai
 
-  **Aplikasi pemungutan suara elektronik (E-Voting) sekolah yang dirancang dengan pemisahan identitas pemilih dan pilihan suara secara struktural di tingkat basis data.**
+  **Aplikasi pemungutan suara elektronik (DigiVoting) sekolah yang dirancang dengan pemisahan identitas pemilih dan pilihan suara secara struktural di tingkat basis data.**
 
   ![PHP 8.4+](https://img.shields.io/badge/PHP-8.4%2B-777BB4?logo=php&logoColor=white)
   ![Laravel 13](https://img.shields.io/badge/Laravel-13-FF2D20?logo=laravel&logoColor=white)

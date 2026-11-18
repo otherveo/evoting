@@ -8,9 +8,11 @@ use App\Models\Election;
 use App\Models\StaffAccount;
 use App\Services\AuditService;
 use App\Services\SupabaseStorageService;
+use App\Services\TokenService;
 use App\Services\VotingService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
@@ -63,6 +65,20 @@ class ElectionDetailPage extends Component
 
     public string $deletingCandidateName = '';
 
+    // Perubahan 6: Modal Hapus Pemilihan Permanen
+    public bool $showDeleteElectionModal = false;
+
+    public string $deleteConfirmName = '';
+
+    // Perubahan 7: Access Key Rekap Real-Time (Sekali Tampil)
+    public bool $showAccessKeyModal = false;
+
+    public string $issuedAccessKey = '';
+
+    public string $issuedLiveRecapUrl = '';
+
+    public bool $showRevokeAccessKeyModal = false;
+
     public function mount(Election $election): void
     {
         $this->election = $election;
@@ -88,44 +104,54 @@ class ElectionDetailPage extends Component
     {
         $this->resetValidation();
         $existingRightsCount = $this->election->voterRights()->count();
-        $minAllowed = max(1, $existingRightsCount);
+        $minAllowed = max(3, $existingRightsCount);
 
         $this->validate([
             'name' => ['required', 'string', 'min:3', 'max:160'],
-            'maxVoterRights' => ['required', 'integer', "min:{$minAllowed}", 'max:100000'],
+            'maxVoterRights' => ['required', 'integer', "min:{$minAllowed}", 'max:10000'],
         ], [
             'name.required' => 'Nama pemilihan wajib diisi.',
+            'name.min' => 'Nama pemilihan minimal 3 karakter.',
             'maxVoterRights.required' => 'Batas maksimum hak pilih wajib diisi.',
-            'maxVoterRights.min' => $existingRightsCount > 0
+            'maxVoterRights.integer' => 'Batas maksimum hak pilih harus berupa angka bulat.',
+            'maxVoterRights.min' => $existingRightsCount > 3
                 ? "Batas maksimum tidak boleh lebih kecil dari jumlah hak pilih yang sudah dibuat ({$existingRightsCount})."
-                : 'Batas maksimum hak pilih minimal 1.',
+                : 'Batas maksimum hak pilih minimal 3 dan maksimal 10000.',
+            'maxVoterRights.max' => 'Batas maksimum hak pilih minimal 3 dan maksimal 10000.',
         ]);
+
+        if (! $this->acquireIdempotencyLock('save_election_info:'.$this->election->id, 2)) {
+            return;
+        }
 
         try {
             /** @var StaffAccount $operator */
             $operator = Auth::guard('staff')->user();
+            $cleanName = preg_replace('/\s+/u', ' ', trim($this->name)) ?? trim($this->name);
 
-            $this->election->update([
-                'name' => preg_replace('/\s+/u', ' ', trim($this->name)) ?? trim($this->name),
-                'max_voter_rights' => $this->maxVoterRights,
-            ]);
+            DB::transaction(function () use ($cleanName, $operator, $audit) {
+                $this->election->update([
+                    'name' => $cleanName,
+                    'max_voter_rights' => $this->maxVoterRights,
+                ]);
 
-            $audit->log(
-                actorType: 'operator',
-                actorId: $operator->id,
-                action: 'ubah_pemilihan',
-                objectType: 'election',
-                objectId: $this->election->id,
-                detail: [
-                    'name' => $this->election->name,
-                    'max_voter_rights' => $this->election->max_voter_rights,
-                ]
-            );
+                $audit->log(
+                    actorType: 'operator',
+                    actorId: $operator->id,
+                    action: 'ubah_pemilihan',
+                    objectType: 'election',
+                    objectId: $this->election->id,
+                    detail: [
+                        'name' => $cleanName,
+                        'max_voter_rights' => $this->maxVoterRights,
+                    ]
+                );
+            });
 
             $this->syncElectionFields();
-            $this->dispatch('toast', message: 'Pengaturan pemilihan berhasil disimpan.', type: 'success');
+            $this->dispatch('toast', message: 'Tersimpan', type: 'success');
         } catch (Throwable $e) {
-            $this->reportSafeError($e, 'Gagal menyimpan pengaturan pemilihan. Silakan coba kembali.', 'name');
+            $this->reportSafeError($e, 'Gagal menyimpan pengaturan pemilihan.', 'name');
         }
     }
 
@@ -507,14 +533,134 @@ class ElectionDetailPage extends Component
 
             $this->showDeleteCandidateModal = false;
             $this->deletingCandidateId = null;
-            $this->dispatch('toast', message: 'Pasangan calon berhasil dihapus.', type: 'success');
+            $this->dispatch('toast', message: 'Terhapus', type: 'success');
         } catch (Throwable $e) {
             $this->showDeleteCandidateModal = false;
-            $this->reportSafeError($e, 'Gagal menghapus pasangan calon. Silakan coba kembali.');
+            $this->reportSafeError($e, 'Gagal menghapus pasangan calon.');
         }
     }
 
-    public function render()
+    public function issueAccessKey(VotingService $voting, TokenService $tokens): void
+    {
+        if (! $this->acquireIdempotencyLock('issue_access_key:'.$this->election->id, 3)) {
+            return;
+        }
+
+        try {
+            /** @var StaffAccount $operator */
+            $operator = Auth::guard('staff')->user();
+            $result = $voting->issueAccessKey($this->election->id, $operator->id);
+
+            if (! $result['ok'] || ! $result['raw_key']) {
+                $this->dispatch('toast', message: 'Gagal', type: 'error');
+
+                return;
+            }
+
+            $this->election->refresh();
+            $this->issuedAccessKey = $result['raw_key'];
+            $this->issuedLiveRecapUrl = $tokens->liveRecapUrl($this->election->id);
+            $this->showAccessKeyModal = true;
+            $this->dispatch('toast', message: 'Berhasil', type: 'success');
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal menerbitkan access key rekap real-time.');
+        }
+    }
+
+    public function closeAccessKeyModal(): void
+    {
+        // Perubahan 7: Kunci asli hanya ditampilkan satu kali saat diterbitkan
+        $this->showAccessKeyModal = false;
+        $this->issuedAccessKey = '';
+        $this->issuedLiveRecapUrl = '';
+    }
+
+    public function confirmRevokeAccessKey(VotingService $voting): void
+    {
+        $this->showRevokeAccessKeyModal = false;
+
+        try {
+            /** @var StaffAccount $operator */
+            $operator = Auth::guard('staff')->user();
+            $result = $voting->revokeAccessKey($this->election->id, $operator->id);
+
+            if (! $result['ok']) {
+                $this->dispatch('toast', message: 'Gagal', type: 'error');
+
+                return;
+            }
+
+            $this->election->refresh();
+            $this->dispatch('toast', message: 'Dicabut', type: 'success');
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal mencabut access key rekap real-time.');
+        }
+    }
+
+    public function openDeleteElectionModal(): void
+    {
+        if ($this->election->currentPhase() === 'berlangsung') {
+            $this->dispatch('toast', message: 'Gagal', type: 'error');
+
+            return;
+        }
+
+        $this->resetValidation();
+        $this->deleteConfirmName = '';
+        $this->showDeleteElectionModal = true;
+    }
+
+    public function closeDeleteElectionModal(): void
+    {
+        $this->showDeleteElectionModal = false;
+        $this->deleteConfirmName = '';
+    }
+
+    public function confirmDeleteElection(VotingService $voting, SupabaseStorageService $storage): void
+    {
+        $this->resetValidation();
+
+        if ($this->election->currentPhase() === 'berlangsung') {
+            $this->addError('deleteConfirmName', 'Pemilihan yang sedang berlangsung dilarang dihapus.');
+            $this->dispatch('toast', message: 'Gagal', type: 'error');
+
+            return;
+        }
+
+        if (trim($this->deleteConfirmName) !== trim($this->election->name)) {
+            $this->addError('deleteConfirmName', 'Ketik nama pemilihan secara persis untuk mengonfirmasi penghapusan permanen.');
+            $this->dispatch('toast', message: 'Gagal', type: 'error');
+
+            return;
+        }
+
+        try {
+            /** @var StaffAccount $operator */
+            $operator = Auth::guard('staff')->user();
+
+            $result = $voting->deleteElection(
+                electionId: $this->election->id,
+                operatorId: $operator->id,
+                confirmName: $this->deleteConfirmName,
+                storage: $storage
+            );
+
+            if (! $result['ok']) {
+                $this->addError('deleteConfirmName', $result['message']);
+                $this->dispatch('toast', message: 'Gagal', type: 'error');
+
+                return;
+            }
+
+            $this->showDeleteElectionModal = false;
+            session()->flash('success', 'Terhapus');
+            $this->redirectRoute('operator.elections');
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal menghapus pemilihan.', 'deleteConfirmName');
+        }
+    }
+
+    public function render(TokenService $tokens)
     {
         View::share('activeElection', $this->election);
 
@@ -522,12 +668,21 @@ class ElectionDetailPage extends Component
         $candidates = $this->election->candidates()->get();
         $voterRightsCount = $this->election->voterRights()->count();
         $tz = (string) config('evoting.display_timezone', 'Asia/Makassar');
+        $veRow = DB::selectOne('select has_access_key, access_key_created_at from evoting.v_elections where id = ?::uuid', [$this->election->id]);
+        $hasAccessKey = (bool) ($veRow->has_access_key ?? false);
+        $accessKeyCreatedAt = ! empty($veRow->access_key_created_at)
+            ? CarbonImmutable::parse($veRow->access_key_created_at)->setTimezone($tz)
+            : null;
+        $liveRecapUrl = $tokens->liveRecapUrl($this->election->id);
 
         return view('livewire.operator.election-detail-page', [
             'phase' => $phase,
             'candidates' => $candidates,
             'voterRightsCount' => $voterRightsCount,
             'tz' => $tz,
+            'hasAccessKey' => $hasAccessKey,
+            'accessKeyCreatedAt' => $accessKeyCreatedAt,
+            'liveRecapUrl' => $liveRecapUrl,
         ]);
     }
 }

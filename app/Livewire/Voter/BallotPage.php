@@ -40,6 +40,14 @@ class BallotPage extends Component
 
     public string $sessionExpiresLabel = '';
 
+    // Perubahan 3.2: Gerbang Persetujuan Operator untuk Perangkat Bersama
+    public bool $waitingForDeviceApproval = false;
+
+    /**
+     * idle | approved | pending | rejected
+     */
+    public string $approvalButtonState = 'idle';
+
     // UI-017: Detail Kendala
     public string $errorCode = '';
 
@@ -77,6 +85,21 @@ class BallotPage extends Component
                 return;
             }
 
+            if ($openResult['code'] === 'approval_required') {
+                $this->stage = 'memilih';
+                $this->waitingForDeviceApproval = true;
+                $this->approvalButtonState = 'idle';
+                $this->applySessionExpiry($openResult['session_expires_at']);
+
+                return;
+            }
+
+            if ($openResult['code'] === 'device_rejected') {
+                $this->setTroubleState('device_rejected', 'Aksesmu telah ditolak oleh operator, silakan minta QR baru jika kamu memang punya hak suara');
+
+                return;
+            }
+
             if (! $openResult['ok']) {
                 $this->setTroubleState($openResult['code'], $openResult['message']);
 
@@ -86,6 +109,7 @@ class BallotPage extends Component
             if ($openResult['status'] === 'sedang_memilih') {
                 $this->stage = 'memilih';
                 $this->isResumedSession = true;
+                $this->waitingForDeviceApproval = false;
                 $this->applySessionExpiry($openResult['session_expires_at']);
 
                 return;
@@ -118,13 +142,45 @@ class BallotPage extends Component
 
             if ($result['code'] === 'already_voted') {
                 $this->selectedCandidateId = null;
+                $this->waitingForDeviceApproval = false;
                 $this->stage = 'selesai';
                 $this->dispatch('step-changed');
 
                 return;
             }
 
+            if ($result['code'] === 'approval_required') {
+                $this->applySessionExpiry(
+                    CarbonImmutable::now('UTC')->addMilliseconds(VotingService::$dbOffsetMs)->addMinutes(10)
+                );
+                $this->stage = 'memilih';
+                $this->waitingForDeviceApproval = true;
+                $this->approvalButtonState = 'idle';
+                $this->dispatch('step-changed');
+                $this->dispatch('toast', message: 'Menunggu izin', type: 'warning');
+
+                return;
+            }
+
+            if ($result['code'] === 'approval_expired') {
+                $this->waitingForDeviceApproval = false;
+                $this->stage = 'verifikasi';
+                $this->dispatch('step-changed');
+                $this->dispatch('toast', message: 'Kedaluwarsa', type: 'warning');
+
+                return;
+            }
+
+            if ($result['code'] === 'device_rejected') {
+                $this->waitingForDeviceApproval = false;
+                $this->setTroubleState('device_rejected', 'Aksesmu telah ditolak oleh operator, silakan minta QR baru jika kamu memang punya hak suara');
+                $this->dispatch('step-changed');
+
+                return;
+            }
+
             if (! $result['ok']) {
+                $this->waitingForDeviceApproval = false;
                 $this->setTroubleState($result['code'], $result['message']);
                 $this->dispatch('step-changed');
 
@@ -134,16 +190,88 @@ class BallotPage extends Component
             $this->applySessionExpiry(
                 CarbonImmutable::now('UTC')->addMilliseconds(VotingService::$dbOffsetMs)->addMinutes(10)
             );
+            $this->waitingForDeviceApproval = false;
             $this->stage = 'memilih';
             $this->dispatch('step-changed');
+            $this->dispatch('toast', message: 'Berhasil', type: 'success');
         } catch (Throwable $e) {
             $this->reportSafeError($e, 'Gagal memulai sesi memilih. Silakan coba kembali.');
         }
     }
 
+    public function pollDeviceApproval(VotingService $voting): void
+    {
+        if (! $this->waitingForDeviceApproval) {
+            return;
+        }
+
+        $this->checkDeviceApproval($voting, false);
+    }
+
+    public function checkDeviceApprovalManual(VotingService $voting): string
+    {
+        return $this->checkDeviceApproval($voting, true);
+    }
+
+    public function checkDeviceApproval(VotingService $voting, bool $isManual = false): string
+    {
+        try {
+            $res = $voting->checkDeviceApproval($this->token, $this->browserId);
+
+            if ($res['code'] === 'approved') {
+                $this->approvalButtonState = 'approved';
+                $this->waitingForDeviceApproval = false;
+                if ($res['session_expires_at']) {
+                    $this->applySessionExpiry($res['session_expires_at']);
+                }
+                $this->stage = 'memilih';
+                $this->dispatch('toast', message: 'Diizinkan', type: 'success');
+
+                return 'approved';
+            }
+
+            if ($res['code'] === 'pending') {
+                if ($isManual) {
+                    $this->approvalButtonState = 'pending';
+                    $this->dispatch('toast', message: 'Belum diizinkan', type: 'warning');
+                }
+                $this->waitingForDeviceApproval = true;
+
+                return 'pending';
+            }
+
+            if ($res['code'] === 'rejected') {
+                $this->approvalButtonState = 'rejected';
+                $this->waitingForDeviceApproval = false;
+                $this->setTroubleState('device_rejected', 'Aksesmu telah ditolak oleh operator, silakan minta QR baru jika kamu memang punya hak suara');
+                $this->dispatch('toast', message: 'Tidak diizinkan', type: 'error');
+
+                return 'rejected';
+            }
+
+            if ($res['code'] === 'approval_expired') {
+                $this->waitingForDeviceApproval = false;
+                $this->approvalButtonState = 'idle';
+                $this->stage = 'verifikasi';
+                $this->dispatch('toast', message: 'Kedaluwarsa', type: 'warning');
+
+                return 'expired';
+            }
+
+            $this->waitingForDeviceApproval = false;
+            $this->setTroubleState($res['code'], $res['message']);
+
+            return 'error';
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal memeriksa status persetujuan operator.');
+
+            return 'error';
+        }
+    }
+
     public function selectCandidate(string $candidateId): void
     {
-        if ($this->stage !== 'memilih' || ! $this->electionId) {
+        if ($this->stage !== 'memilih' || $this->waitingForDeviceApproval || ! $this->electionId) {
             return;
         }
 
@@ -247,6 +375,11 @@ class BallotPage extends Component
         $this->errorCode = $code;
 
         match ($code) {
+            'device_rejected' => [
+                $this->errorTitle = 'Akses Ditolak oleh Operator',
+                $this->errorDescription = 'Aksesmu telah ditolak oleh operator, silakan minta QR baru jika kamu memang punya hak suara',
+                $this->errorNextStep = 'Silakan hubungi petugas Operator di meja verifikasi untuk meminta kode QR baru apabila Anda memiliki hak pilih.',
+            ],
             'invalid_token' => [
                 $this->errorTitle = 'Kode QR Tidak Valid atau Sudah Dicabut',
                 $this->errorDescription = 'Tautan QR yang Anda buka tidak dikenali atau sudah diganti dengan QR baru.',

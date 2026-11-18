@@ -300,9 +300,55 @@ class VoterMonitorPage extends Component
             $this->issuedIsReissue = true;
             $this->showQrModal = true;
 
-            $this->dispatch('toast', message: 'QR lama dicabut dan QR baru berhasil diterbitkan.', type: 'success');
+            $this->dispatch('toast', message: 'Berhasil', type: 'success');
         } catch (Throwable $e) {
             $this->reportSafeError($e, 'Gagal menerbitkan ulang kode QR. Silakan coba kembali.', 'reissueReason');
+        }
+    }
+
+    public function approveSharedDevice(string $voterRightId, VotingService $voting): void
+    {
+        if (! $this->acquireIdempotencyLock('approve_device:'.$voterRightId, 3)) {
+            return;
+        }
+
+        try {
+            /** @var StaffAccount $operator */
+            $operator = Auth::guard('staff')->user();
+            $result = $voting->decideDeviceApproval($voterRightId, $operator->id, 'setujui');
+
+            if (! $result['ok']) {
+                $this->dispatch('toast', message: 'Gagal', type: 'error');
+
+                return;
+            }
+
+            $this->dispatch('toast', message: 'Disetujui', type: 'success');
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal menyetujui akses perangkat bersama.');
+        }
+    }
+
+    public function rejectSharedDevice(string $voterRightId, VotingService $voting): void
+    {
+        if (! $this->acquireIdempotencyLock('reject_device:'.$voterRightId, 3)) {
+            return;
+        }
+
+        try {
+            /** @var StaffAccount $operator */
+            $operator = Auth::guard('staff')->user();
+            $result = $voting->decideDeviceApproval($voterRightId, $operator->id, 'tolak');
+
+            if (! $result['ok']) {
+                $this->dispatch('toast', message: 'Gagal', type: 'error');
+
+                return;
+            }
+
+            $this->dispatch('toast', message: 'Ditolak', type: 'success');
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal menolak akses perangkat bersama.');
         }
     }
 
@@ -332,7 +378,24 @@ class VoterMonitorPage extends Component
                 ir.is_consistent as ir_consistent,
                 d_last.browser_id as last_browser_id,
                 d_last.user_agent as last_user_agent,
-                d_last.access_type as last_access_type
+                d_last.access_type as last_access_type,
+                (
+                    select coalesce(jsonb_agg(jsonb_build_object(
+                        \'id\', s.id,
+                        \'short_id\', upper( left(s.id::text, 7) ),
+                        \'name\', s.name,
+                        \'browser_hash\', upper( left(encode(sha256(s.browser_id::bytea), \'hex\'), 6) )
+                    )), \'[]\'::jsonb)
+                    from (
+                        select distinct vr2.id, vr2.name, d1.browser_id
+                        from evoting.device_access_logs d1
+                        join evoting.device_access_logs d2 on d2.browser_id = d1.browser_id
+                        join evoting.voter_rights vr2 on vr2.id = d2.voter_right_id
+                        where d1.voter_right_id = m.id
+                          and vr2.election_id = m.election_id
+                          and vr2.id <> m.id
+                    ) s
+                ) as shared_peers_json
             from evoting.v_voter_right_monitor m
             cross join ir
             join evoting.voter_rights vr on vr.id = m.id
@@ -347,7 +410,27 @@ class VoterMonitorPage extends Component
             order by m.updated_at desc
         ', [$this->election->id, $this->election->id]);
 
-        $allCollection = collect($allMonitorRows);
+        $allCollection = collect($allMonitorRows)->map(function ($row) {
+            $peers = [];
+            if (! empty($row->shared_peers_json)) {
+                $decoded = json_decode((string) $row->shared_peers_json, true);
+                if (is_array($decoded)) {
+                    $peers = $decoded;
+                }
+            }
+            $row->shared_peers = $peers;
+            $row->shared_group_tag = ! empty($peers) && isset($peers[0]['browser_hash'])
+                ? '#'.$peers[0]['browser_hash']
+                : ($row->last_browser_id ? '#'.strtoupper(substr(hash('sha256', (string) $row->last_browser_id), 0, 6)) : null);
+
+            return $row;
+        });
+
+        $pendingApprovals = $allCollection->filter(function ($r) {
+            return $r->status === 'sedang_memilih'
+                && ($r->device_approval_status ?? 'tidak_perlu') === 'menunggu'
+                && ! $r->session_expired;
+        })->values();
 
         $totalRights = $allCollection->count();
         $countBelum = $allCollection->where('status', 'belum_memilih')->count();
@@ -438,6 +521,7 @@ class VoterMonitorPage extends Component
             'phase' => $phase,
             'tz' => $tz,
             'voterRows' => $allCollection,
+            'pendingApprovals' => $pendingApprovals,
             'existingVotersForClient' => $existingVotersForClient,
             'totalRights' => $totalRights,
             'countBelum' => $countBelum,

@@ -1,5 +1,5 @@
 @php
-  $appName = config('app.name') ?: 'E-Voting';
+  $appName = config('app.name') ?: 'DigiVoting';
 @endphp
 <!DOCTYPE html>
 <html lang="id">
@@ -7,11 +7,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="csrf-token" content="{{ csrf_token() }}" />
-  <meta name="description" content="{{ $appName }} — Sistem E-Voting Sekolah Berbasis QR Token Sekali Pakai" />
+  <meta name="description" content="{{ $appName }} — Sistem Pemungutan Suara Elektronik Sekolah Berbasis QR Token Sekali Pakai" />
+  @if(request()->routeIs('live-recap.*'))
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+  @endif
   <meta name="theme-color" content="#132a63" />
   <link rel="icon" type="image/png" href="{{ asset('SMPN7-e-voting_logo.png') }}" />
-  <title>{{ isset($title) ? $title . ' — ' . $appName : $appName . ' — Sistem E-Voting' }}</title>
-  <link rel="stylesheet" href="{{ asset('css/suarasekolah.css') }}?v=6" />
+  <title>{{ isset($title) ? $title . ' — ' . $appName : $appName . ' — Sistem Pemungutan Suara Elektronik' }}</title>
+  <link rel="stylesheet" href="{{ asset('css/suarasekolah.css') }}?v=7" />
   @livewireStyles
 </head>
 <body>
@@ -35,7 +38,7 @@
         <img src="{{ asset('SMPN7-e-voting_logo.png') }}" alt="{{ $appName }}" class="brand-logo" />
         <span class="brand-text">
           <strong>{{ $appName }}</strong>
-          <small>Sistem E-Voting QR Token</small>
+          <small>Sistem Voting QR Token</small>
         </span>
       </a>
 
@@ -164,9 +167,36 @@
     document.addEventListener('livewire:navigated', () => {
       document.body.classList.remove('is-navigating');
     });
+    window.normalizeShortToast = function (message, type = 'info') {
+      const text = String(message || '').trim();
+      if (!text) return type === 'error' ? 'Gagal' : 'Berhasil';
+      const words = text.split(/\s+/);
+      if (words.length <= 2) return text;
+      const lower = text.toLowerCase();
+      if (type === 'error' || type === 'warning' || lower.includes('gagal')) return 'Gagal';
+      if (lower.includes('salin')) return 'Disalin';
+      if (lower.includes('hapus')) return 'Terhapus';
+      if (lower.includes('simpan')) return 'Tersimpan';
+      if (lower.includes('perbarui')) return 'Diperbarui';
+      if (lower.includes('setuju')) return 'Disetujui';
+      if (lower.includes('tolak')) return 'Ditolak';
+      if (lower.includes('cabut')) return 'Dicabut';
+      if (lower.includes('reset')) return 'Direset';
+      return 'Berhasil';
+    };
+
+    window.unlockActionButtons = function (scope = document) {
+      scope.querySelectorAll('button[data-locked="true"], button[data-loading="true"]').forEach((btn) => {
+        delete btn.dataset.locked;
+        delete btn.dataset.loading;
+        btn.disabled = false;
+      });
+    };
+
     window.showToast = function (message, type = 'info') {
       const root = document.getElementById('toast-root');
       if (!root || !message) return;
+      const shortMsg = window.normalizeShortToast(message, type);
       const iconMap = {
         success: '#i-check-circle',
         error: '#i-alert',
@@ -177,7 +207,7 @@
       toast.className = `toast toast-${type}`;
       toast.innerHTML = `
         <svg class="icon"><use href="${iconMap[type] || '#i-info'}"></use></svg>
-        <div>${message}</div>
+        <div><strong>${shortMsg}</strong></div>
       `;
       root.appendChild(toast);
       requestAnimationFrame(() => toast.classList.add('is-visible'));
@@ -185,8 +215,39 @@
         toast.classList.remove('is-visible');
         toast.classList.add('is-leaving');
         setTimeout(() => toast.remove(), 240);
-      }, 4200);
+      }, 2800);
     };
+
+    // Universal instant button lock (milidetik pertama saat klik) untuk mencegah spam/double-submit
+    document.addEventListener('click', function (e) {
+      const btn = e.target.closest('button[data-action-btn="true"], button[type="submit"]');
+      if (!btn || btn.disabled) return;
+      if (btn.dataset.locked === 'true') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return false;
+      }
+      btn.dataset.locked = 'true';
+      btn.dataset.loading = 'true';
+      queueMicrotask(() => {
+        btn.disabled = true;
+      });
+      if (btn.dataset.transientOpener === 'true') {
+        setTimeout(() => {
+          delete btn.dataset.locked;
+          delete btn.dataset.loading;
+          btn.disabled = false;
+        }, 900);
+      }
+    }, true);
+
+    // Jika pengguna mengubah input di dalam form, buka kembali kunci tombol simpan di form tersebut
+    document.addEventListener('input', function (e) {
+      const form = e.target.closest('form');
+      if (form) {
+        window.unlockActionButtons(form);
+      }
+    }, true);
 
     // Saat scroll di luar modal (.modal-backdrop), geser area halaman di belakangnya;
     // saat scroll di dalam .modal, biarkan hanya konten modal (.modal-body) yang bergeser.
@@ -202,8 +263,26 @@
       Livewire.on('toast', (payload) => {
         const data = Array.isArray(payload) ? payload[0] : payload;
         if (data && data.message) {
-          window.showToast(data.message, data.type || 'info');
+          const type = data.type || 'info';
+          window.showToast(data.message, type);
+          if (type === 'error' || type === 'warning') {
+            window.unlockActionButtons(document);
+          }
         }
+      });
+
+      Livewire.hook('commit', ({ succeed, fail }) => {
+        succeed(() => {
+          requestAnimationFrame(() => {
+            if (document.querySelector('.field-error, .alert-danger')) {
+              window.unlockActionButtons(document);
+            }
+          });
+        });
+        fail(() => {
+          window.unlockActionButtons(document);
+          window.showToast('Gagal', 'error');
+        });
       });
     });
 

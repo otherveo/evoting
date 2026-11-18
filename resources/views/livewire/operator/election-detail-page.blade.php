@@ -1,4 +1,4 @@
-{{-- UI-008: Halaman Detail Pemilihan, Jadwal, Paslon, & Tautan Publik --}}
+{{-- UI-008: Halaman Detail Pemilihan (Urutan: 1 Identitas -> 2 Paslon -> 3 Jadwal -> 4 Tautan) --}}
 <div class="container page view-enter">
   <div class="page-heading">
     <div>
@@ -8,7 +8,7 @@
       </div>
       <h1>{{ $election->name }}</h1>
       <p class="lede">
-        Atur identitas pemilihan, batas maksimum hak pilih, jadwal pelaksanaan berpresisi menit, serta daftar pasangan calon.
+        Atur identitas pemilihan, daftar pasangan calon, jadwal pelaksanaan berpresisi menit, serta tautan halaman publik secara berurutan.
       </p>
     </div>
     <div class="heading-actions">
@@ -20,15 +20,22 @@
         <svg class="icon"><use href="#i-chart"></use></svg>
         <span>Rekapitulasi</span>
       </a>
+      @if($phase !== 'berlangsung')
+        <x-action-button
+          variant="danger-ghost"
+          icon="#i-trash"
+          wire:click="openDeleteElectionModal"
+          loadingText="Membuka..."
+        >
+          Hapus Pemilihan
+        </x-action-button>
+      @endif
     </div>
   </div>
 
-  {{-- Bagian 1: Identitas Pemilihan, Kuota Hak Pilih, & Pengaturan Jadwal --}}
+  {{-- Bagian 1 (Identitas), Bagian 2 (Paslon), & Bagian 3 (Jadwal) sesuai hierarki sekuensial --}}
   @include('livewire.operator.partials.detail-info-schedule')
 
-  {{-- Bagian 2: Tautan Halaman Publik --}}
+  {{-- Bagian 4: Tautan Halaman Publik & Access Key Rekap Real-Time (Selalu Paling Bawah) --}}
   @include('livewire.operator.partials.detail-public-links')
-
-  {{-- Bagian 3: Daftar & Modal Pengelolaan Pasangan Calon --}}
-  @include('livewire.operator.partials.detail-candidates')
 </div>

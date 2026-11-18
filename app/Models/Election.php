@@ -18,11 +18,17 @@ class Election extends Model
 
     public $incrementing = false;
 
+    public $timestamps = false;
+
     protected $fillable = [
         'name',
         'max_voter_rights',
         'starts_at',
         'ends_at',
+    ];
+
+    protected $hidden = [
+        'access_key_hash',
     ];
 
     protected function casts(): array
@@ -31,9 +37,15 @@ class Election extends Model
             'max_voter_rights' => 'integer',
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
+            'access_key_created_at' => 'datetime',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];
+    }
+
+    public function hasActiveAccessKey(): bool
+    {
+        return $this->access_key_created_at !== null || ! empty($this->attributes['access_key_hash'] ?? null);
     }
 
     public function candidates(): HasMany

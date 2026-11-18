@@ -6077,3 +6077,420 @@ input[type="password"]::-ms-reveal,
 input[type="password"]::-ms-clear {
   display: none;
 }
+
+/* =========================================================
+   Update v1 Styles:
+   - Bug 1: Instant button lock, not-allowed cursor, disabled visual state
+   - Perubahan 2: Numbered section badges, collapsible dropdowns, 4-step wizard
+   - Perubahan 3: Shared device group badge & approval check button states
+   - Perubahan 5: Landing page 2-sided flow section
+   - Perubahan 7: Live recap red warning banner & access key panel
+   ========================================================= */
+.btn:disabled,
+.btn[disabled],
+.btn[data-loading],
+.btn[data-locked],
+.btn.is-loading {
+  cursor: not-allowed !important;
+  pointer-events: auto !important;
+  opacity: 0.58 !important;
+  filter: grayscale(0.32) saturate(0.65) brightness(0.92) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Numbered section badges & Collapsible sections */
+.section-numbered-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  min-width: 0;
+}
+
+.section-num-badge {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.section-num-badge.is-large {
+  width: 34px;
+  height: 34px;
+  font-size: 0.9rem;
+}
+
+.collapsible-head {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  transition: background-color 150ms ease;
+}
+
+.collapsible-head:hover {
+  background-color: #f8faff;
+}
+
+.collapsible-head-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+
+.collapse-chevron {
+  width: 30px;
+  height: 30px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  transition: transform 200ms ease, background-color 150ms ease;
+}
+
+.collapse-chevron .icon {
+  width: 15px;
+  height: 15px;
+  transition: transform 200ms ease;
+}
+
+.collapse-chevron.is-open .icon {
+  transform: rotate(90deg);
+}
+
+/* 4-Step Election Creation Wizard */
+.wizard-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.wizard-steps {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  flex-wrap: wrap;
+}
+
+.wizard-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted-soft);
+}
+
+.wizard-steps li.is-active {
+  color: var(--brand);
+}
+
+.wizard-steps li.is-active .section-num-badge {
+  background: var(--brand);
+  color: #ffffff;
+}
+
+.wizard-steps li.is-done {
+  color: var(--green);
+}
+
+.wizard-steps li.is-done .section-num-badge {
+  border-color: var(--green);
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.wizard-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.wizard-card-head h3 {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--ink);
+  margin: 0;
+}
+
+.wizard-card-head p {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+.wizard-candidates-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.wizard-candidate-box {
+  padding: 16px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.wizard-candidate-box-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.84rem;
+  color: var(--ink);
+}
+
+/* Shared Device Indicator & Approval Check Button */
+.shared-device-box {
+  margin-top: 5px;
+  padding: 6px 9px;
+  background: #fff8eb;
+  border: 1px solid #f3dcaf;
+  border-radius: 9px;
+}
+
+.shared-group-pill {
+  display: inline-block;
+  padding: 1px 6px;
+  margin-left: 4px;
+  border-radius: 6px;
+  background: #fde6b8;
+  color: #7c4a08;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+
+.shared-peers-text {
+  margin-top: 3px;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  color: #6e450b;
+}
+
+.approval-check-btn.is-pending {
+  background: linear-gradient(145deg, #d97706, #b45309) !important;
+  border-color: #b45309 !important;
+  color: #ffffff !important;
+}
+
+.approval-check-btn.is-approved {
+  background: linear-gradient(145deg, #15803d, #166534) !important;
+  border-color: #166534 !important;
+  color: #ffffff !important;
+}
+
+.approval-check-btn.is-rejected {
+  background: linear-gradient(145deg, #b91c1c, #991b1b) !important;
+  border-color: #991b1b !important;
+  color: #ffffff !important;
+}
+
+/* Landing Page 2-Sided Flow Section */
+.landing-shell {
+  min-height: calc(100dvh - 78px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 26px 16px 46px;
+}
+
+.landing-flow-section {
+  width: min(860px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  padding: 32px 36px;
+}
+
+.landing-flow-head {
+  text-align: center;
+  max-width: 600px;
+  margin: 0 auto 24px;
+}
+
+.landing-flow-head h2 {
+  margin-top: 8px;
+  font-size: clamp(1.35rem, 2.5vw, 1.75rem);
+  font-weight: 850;
+  color: var(--ink);
+  letter-spacing: -0.03em;
+}
+
+.landing-flow-head p {
+  margin-top: 6px;
+  font-size: 0.84rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.landing-flow-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.landing-flow-card {
+  padding: 20px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.landing-flow-card.is-voter-flow {
+  background: linear-gradient(160deg, #f4f8ff 0%, #eef5ff 100%);
+  border-color: #d3e2fb;
+}
+
+.landing-flow-card-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.landing-flow-tag {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brand-bright);
+}
+
+.landing-flow-card-head h3 {
+  font-size: 0.96rem;
+  font-weight: 800;
+  color: var(--ink);
+  margin: 2px 0 0;
+}
+
+.landing-step-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.landing-step-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+}
+
+.landing-step-num {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1.5px solid var(--brand);
+  color: var(--brand);
+  font-size: 0.72rem;
+  font-weight: 850;
+  margin-top: 1px;
+}
+
+.landing-step-list strong {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+
+.landing-step-list span {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* Access Key Panel & Live Recap Red Danger Banner */
+.access-key-panel {
+  padding: 18px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 15px;
+}
+
+.access-key-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.live-recap-danger-banner {
+  position: sticky;
+  top: 74px;
+  z-index: 40;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, #991b1b 0%, #b91c1c 100%);
+  color: #ffffff;
+  border: 2px solid #fecaca;
+  border-radius: 15px;
+  box-shadow: 0 14px 28px -14px rgba(153, 27, 27, 0.65);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.live-recap-danger-banner .icon {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  color: #fef2f2;
+  margin-top: 1px;
+}
+
+@media (max-width: 760px) {
+  .landing-flow-section {
+    padding: 24px 18px;
+  }
+
+  .landing-flow-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .collapsible-head {
+    flex-wrap: wrap;
+  }
+}

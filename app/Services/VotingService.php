@@ -292,6 +292,191 @@ class VotingService
         ];
     }
 
+    /**
+     * Memanggil evoting.fn_decide_device_approval untuk menyetujui atau menolak perangkat bersama.
+     *
+     * @return array{ok: bool, code: string, message: string, voter_right_id: ?string, election_id: ?string}
+     */
+    public function decideDeviceApproval(string $voterRightId, string $operatorId, string $decision): array
+    {
+        $row = DB::selectOne(
+            'select * from evoting.fn_decide_device_approval(?::uuid, ?::uuid, ?)',
+            [$voterRightId, $operatorId, trim($decision)]
+        );
+
+        $code = (string) ($row->o_result_code ?? 'error');
+
+        return [
+            'ok' => $code === 'ok',
+            'code' => $code,
+            'message' => $this->translateResultMessage($code, (string) ($row->o_message ?? '')),
+            'voter_right_id' => isset($row->o_voter_right_id) ? (string) $row->o_voter_right_id : null,
+            'election_id' => isset($row->o_election_id) ? (string) $row->o_election_id : null,
+        ];
+    }
+
+    /**
+     * Memanggil evoting.fn_check_device_approval untuk memeriksa status persetujuan perangkat bersama oleh pemilih.
+     *
+     * @return array{ok: bool, code: string, message: string, voter_right_id: ?string, election_id: ?string, session_expires_at: ?CarbonImmutable}
+     */
+    public function checkDeviceApproval(string $rawToken, string $browserId): array
+    {
+        $tokenHash = $this->tokens->hashToken($rawToken);
+
+        $row = DB::selectOne(
+            'select * from evoting.fn_check_device_approval(?, ?)',
+            [$tokenHash, $browserId]
+        );
+
+        $code = (string) ($row->o_result_code ?? 'invalid_token');
+
+        return [
+            'ok' => $code === 'approved',
+            'code' => $code,
+            'message' => (string) ($row->o_message ?? $this->translateResultMessage($code, '')),
+            'voter_right_id' => isset($row->o_voter_right_id) ? (string) $row->o_voter_right_id : null,
+            'election_id' => isset($row->o_election_id) ? (string) $row->o_election_id : null,
+            'session_expires_at' => ! empty($row->o_session_expires_at)
+                ? CarbonImmutable::parse($row->o_session_expires_at)
+                : null,
+        ];
+    }
+
+    /**
+     * Memanggil evoting.fn_delete_election dan menghapus berkas foto paslon terkait di Supabase Storage.
+     *
+     * @return array{ok: bool, code: string, message: string}
+     */
+    public function deleteElection(
+        string $electionId,
+        string $operatorId,
+        string $confirmName,
+        SupabaseStorageService $storage
+    ): array {
+        $photoPaths = DB::table('evoting.candidates')
+            ->where('election_id', $electionId)
+            ->whereNotNull('photo_path')
+            ->pluck('photo_path')
+            ->filter(fn ($p) => is_string($p) && $p !== '')
+            ->values()
+            ->all();
+
+        $row = DB::selectOne(
+            'select * from evoting.fn_delete_election(?::uuid, ?::uuid, ?)',
+            [$electionId, $operatorId, trim($confirmName)]
+        );
+
+        $code = (string) ($row->o_result_code ?? 'error');
+
+        if ($code === 'ok') {
+            unset(self::$scheduleCache[$electionId]);
+            foreach ($photoPaths as $path) {
+                $storage->deleteCandidatePhoto($path);
+            }
+        }
+
+        return [
+            'ok' => $code === 'ok',
+            'code' => $code,
+            'message' => $this->translateResultMessage($code, (string) ($row->o_message ?? '')),
+        ];
+    }
+
+    /**
+     * Menerbitkan access_key baru 64 karakter untuk rekap real-time (otomatis mencabut kunci lama).
+     *
+     * @return array{ok: bool, code: string, message: string, raw_key: ?string}
+     */
+    public function issueAccessKey(string $electionId, string $operatorId): array
+    {
+        $pair = $this->tokens->generateAccessKey();
+
+        $row = DB::selectOne(
+            'select * from evoting.fn_issue_access_key(?::uuid, ?, ?::uuid)',
+            [$electionId, $pair['hash'], $operatorId]
+        );
+
+        $code = (string) ($row->o_result_code ?? 'error');
+
+        return [
+            'ok' => $code === 'ok',
+            'code' => $code,
+            'message' => $this->translateResultMessage($code, (string) ($row->o_message ?? '')),
+            'raw_key' => $code === 'ok' ? $pair['raw'] : null,
+        ];
+    }
+
+    /**
+     * Mencabut access_key rekap real-time yang sedang aktif pada pemilihan.
+     *
+     * @return array{ok: bool, code: string, message: string}
+     */
+    public function revokeAccessKey(string $electionId, string $operatorId): array
+    {
+        $row = DB::selectOne(
+            'select * from evoting.fn_revoke_access_key(?::uuid, ?::uuid)',
+            [$electionId, $operatorId]
+        );
+
+        $code = (string) ($row->o_result_code ?? 'error');
+
+        return [
+            'ok' => $code === 'ok',
+            'code' => $code,
+            'message' => $this->translateResultMessage($code, (string) ($row->o_message ?? '')),
+        ];
+    }
+
+    /**
+     * Memanggil evoting.fn_live_election_results untuk membaca hasil real-time menggunakan hash access_key.
+     *
+     * @return array{ok: bool, code: string, items: list<array{candidate_id: string, number: int, name: string, vote_count: int}>}
+     */
+    public function liveElectionResults(string $electionId, string $keyHash): array
+    {
+        $rows = DB::select(
+            'select * from evoting.fn_live_election_results(?::uuid, ?)',
+            [$electionId, $keyHash]
+        );
+
+        if ($rows === []) {
+            return [
+                'ok' => true,
+                'code' => 'ok',
+                'items' => [],
+            ];
+        }
+
+        $firstCode = (string) ($rows[0]->o_result_code ?? 'not_found');
+        if ($firstCode !== 'ok') {
+            return [
+                'ok' => false,
+                'code' => $firstCode,
+                'items' => [],
+            ];
+        }
+
+        $items = [];
+        foreach ($rows as $r) {
+            if ($r->candidate_id === null) {
+                continue;
+            }
+            $items[] = [
+                'candidate_id' => (string) $r->candidate_id,
+                'number' => (int) $r->candidate_number,
+                'name' => (string) $r->candidate_name,
+                'vote_count' => (int) $r->vote_count,
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'code' => 'ok',
+            'items' => $items,
+        ];
+    }
+
     private function translateResultMessage(string $code, string $fallback): string
     {
         if ($fallback !== '') {
@@ -313,6 +498,11 @@ class VotingService
             'too_few_candidates' => 'Jadwal hanya dapat diatur apabila terdapat minimal 2 pasangan calon.',
             'invalid_reason' => 'Alasan tindakan wajib diisi.',
             'not_ended' => 'Hasil perolehan suara belum tersedia karena masa pemilihan belum berakhir.',
+            'approval_required' => 'Menunggu persetujuan operator.',
+            'approval_expired' => 'Batas waktu tunggu 10 menit telah berakhir.',
+            'device_rejected', 'rejected' => 'Aksesmu telah ditolak oleh operator, silakan minta QR baru jika kamu memang punya hak suara',
+            'name_mismatch' => 'Nama pemilihan yang diketik tidak cocok.',
+            'invalid_key' => 'Access key tidak valid atau sudah dicabut.',
             default => 'Terjadi kendala saat memproses permintaan. Silakan coba kembali.',
         };
     }

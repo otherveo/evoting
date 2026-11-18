@@ -7,7 +7,9 @@ use App\Livewire\Auth\ActivateAccountPage;
 use App\Livewire\Auth\LoginPage;
 use App\Livewire\Auth\VerifyTwoFactorPage;
 use App\Livewire\Operator\ElectionDetailPage;
+use App\Livewire\Operator\ElectionIndexPage;
 use App\Livewire\Operator\VoterMonitorPage;
+use App\Livewire\Public\LiveRecapPage;
 use App\Models\Candidate;
 use App\Models\Election;
 use App\Models\StaffAccount;
@@ -438,18 +440,187 @@ class EvotingSystemTest extends TestCase
         $this->assertSame(TokenService::QR_MODE_CUSTOM, $tokens->getQrMode());
         $this->assertStringContainsString('<image ', $tokens->renderQrSvg('https://example.test/v/sample-token', 240));
 
-        // Header & root landing page use SMPN7-e-voting_logo.png and APP_NAME with fallback "E-Voting"
+        // Header & root landing page use SMPN7-e-voting_logo.png and DigiVoting brand
         config(['app.name' => '']);
         $this->get(route('home'))
             ->assertStatus(200)
             ->assertSee('SMPN7-e-voting_logo.png')
-            ->assertSee('Pemilihan Sekolah Berbasis QR Token Sekali Pakai')
+            ->assertSee('DigiVoting')
+            ->assertSee('Sisi Operator Pemilihan')
+            ->assertSee('Sisi Anonim / Pemilih')
             ->assertDontSee('SuaraSekolah');
 
         $this->get(route('admin.operators'))
             ->assertStatus(200)
             ->assertSee('SMPN7-e-voting_logo.png')
-            ->assertSee('E-Voting')
+            ->assertSee('DigiVoting')
             ->assertDontSee('SuaraSekolah');
+    }
+
+    public function test_update_v1_features_and_bug_fixes(): void
+    {
+        $voting = app(VotingService::class);
+        $tokens = app(TokenService::class);
+        $storage = app(SupabaseStorageService::class);
+        $dbNow = $voting->databaseNow();
+
+        $operator = StaffAccount::create([
+            'username' => 'op_update_v1',
+            'full_name' => 'Operator Update V1',
+            'password_hash' => Hash::make('SandiOperator123!'),
+            'role' => 'operator',
+            'is_active' => true,
+            'totp_secret' => null,
+            'totp_enabled' => false,
+            'must_change_password' => false,
+        ]);
+
+        // BUG 1: Spam-calling createElection 10x creates only 1 election
+        $uniqueSpamName = 'Pilketis Spam Uji '.uniqid();
+        $component = Livewire::actingAs($operator, 'staff')
+            ->test(ElectionIndexPage::class)
+            ->set('name', $uniqueSpamName)
+            ->set('maxVoterRights', 50);
+
+        for ($i = 0; $i < 10; $i++) {
+            $component->call('createElection');
+        }
+
+        $this->assertSame(1, Election::where('name', $uniqueSpamName)->count());
+        $election = Election::where('name', $uniqueSpamName)->firstOrFail();
+
+        // PERUBAHAN 1: Bounds 3..10000
+        Livewire::actingAs($operator, 'staff')
+            ->test(ElectionDetailPage::class, ['election' => $election])
+            ->set('name', $uniqueSpamName)
+            ->set('maxVoterRights', 2)
+            ->call('saveElectionInfo')
+            ->assertHasErrors(['maxVoterRights']);
+
+        Livewire::actingAs($operator, 'staff')
+            ->test(ElectionDetailPage::class, ['election' => $election])
+            ->set('name', $uniqueSpamName)
+            ->set('maxVoterRights', 10001)
+            ->call('saveElectionInfo')
+            ->assertHasErrors(['maxVoterRights']);
+
+        // BUG 2 (a): Rename new election (persiapan without schedule)
+        $renamedA = 'Pilketis Rename A '.uniqid();
+        Livewire::actingAs($operator, 'staff')
+            ->test(ElectionDetailPage::class, ['election' => $election])
+            ->set('name', $renamedA)
+            ->set('maxVoterRights', 10)
+            ->call('saveElectionInfo')
+            ->assertHasNoErrors();
+        $this->assertSame($renamedA, $election->fresh()->name);
+
+        $c1 = Candidate::create(['election_id' => $election->id, 'number' => 1, 'name' => 'Paslon Alpha']);
+        $c2 = Candidate::create(['election_id' => $election->id, 'number' => 2, 'name' => 'Paslon Beta']);
+
+        // BUG 2 (b): Rename scheduled election (persiapan with future schedule)
+        $voting->setElectionSchedule($election->id, $dbNow->addMinutes(30), $dbNow->addHours(3), $operator->id);
+        $renamedB = 'Pilketis Rename B '.uniqid();
+        Livewire::actingAs($operator, 'staff')
+            ->test(ElectionDetailPage::class, ['election' => $election->fresh()])
+            ->set('name', $renamedB)
+            ->set('maxVoterRights', 12)
+            ->call('saveElectionInfo')
+            ->assertHasNoErrors();
+        $this->assertSame($renamedB, $election->fresh()->name);
+
+        // BUG 2 (c): Rename ongoing election (berlangsung)
+        $voting->setElectionSchedule($election->id, $dbNow->subMinute(), $dbNow->addHours(3), $operator->id);
+        $renamedC = 'Pilketis Rename C '.uniqid();
+        Livewire::actingAs($operator, 'staff')
+            ->test(ElectionDetailPage::class, ['election' => $election->fresh()])
+            ->set('name', $renamedC)
+            ->set('maxVoterRights', 15)
+            ->call('saveElectionInfo')
+            ->assertHasNoErrors();
+        $this->assertSame($renamedC, $election->fresh()->name);
+
+        // PERUBAHAN 3.2: Shared-device operator approval gate
+        $vr1 = $voting->createVoterRight($election->id, 'Nayla Putri', $operator->id);
+        $vr2 = $voting->createVoterRight($election->id, 'Lindawaty Nono', $operator->id);
+        $vr3 = $voting->createVoterRight($election->id, 'Budi Hartono', $operator->id);
+
+        $sharedBrowser = 'shared_browser_device_80884E_123456';
+
+        // Voter 1 starts on the device (first user -> no approval needed)
+        $start1 = $voting->startVoting($vr1['raw_token'], $sharedBrowser, 'Chrome Android', '10.0.0.10');
+        $this->assertTrue($start1['ok']);
+        $this->assertSame('ok', $start1['code']);
+
+        // Voter 2 starts on the SAME device -> locked with approval_required
+        $start2 = $voting->startVoting($vr2['raw_token'], $sharedBrowser, 'Chrome Android', '10.0.0.10');
+        $this->assertFalse($start2['ok']);
+        $this->assertSame('approval_required', $start2['code']);
+
+        // Check permission while pending -> returns pending
+        $checkPending = $voting->checkDeviceApproval($vr2['raw_token'], $sharedBrowser);
+        $this->assertSame('pending', $checkPending['code']);
+
+        // Operator approves Voter 2
+        $approveRes = $voting->decideDeviceApproval($vr2['voter_right_id'], $operator->id, 'setujui');
+        $this->assertTrue($approveRes['ok']);
+
+        $checkApproved = $voting->checkDeviceApproval($vr2['raw_token'], $sharedBrowser);
+        $this->assertSame('approved', $checkApproved['code']);
+
+        // Voter 3 starts on the SAME device -> locked -> Operator rejects Voter 3
+        $start3 = $voting->startVoting($vr3['raw_token'], $sharedBrowser, 'Chrome Android', '10.0.0.10');
+        $this->assertSame('approval_required', $start3['code']);
+
+        $rejectRes = $voting->decideDeviceApproval($vr3['voter_right_id'], $operator->id, 'tolak');
+        $this->assertTrue($rejectRes['ok']);
+
+        $checkRejected = $voting->checkDeviceApproval($vr3['raw_token'], $sharedBrowser);
+        $this->assertSame('rejected', $checkRejected['code']);
+        $this->assertSame(
+            'Aksesmu telah ditolak oleh operator, silakan minta QR baru jika kamu memang punya hak suara',
+            $checkRejected['message']
+        );
+
+        // Old QR of Voter 3 is permanently revoked
+        $reopen3 = $voting->openQr($vr3['raw_token'], $sharedBrowser, 'Chrome Android', '10.0.0.10');
+        $this->assertFalse($reopen3['ok']);
+        $this->assertSame('device_rejected', $reopen3['code']);
+
+        // PERUBAHAN 7: Real-time recap access key (64 chars, 1 active key, revocable)
+        $key1 = $voting->issueAccessKey($election->id, $operator->id);
+        $this->assertTrue($key1['ok']);
+        $this->assertSame(64, strlen((string) $key1['raw_key']));
+        $this->assertDoesNotMatchRegularExpression('/\s/', (string) $key1['raw_key']);
+
+        // Issuing key 2 revokes key 1
+        $key2 = $voting->issueAccessKey($election->id, $operator->id);
+        $this->assertTrue($key2['ok']);
+        $this->assertFalse($voting->liveElectionResults($election->id, $tokens->hashToken((string) $key1['raw_key']))['ok']);
+        $this->assertTrue($voting->liveElectionResults($election->id, $tokens->hashToken((string) $key2['raw_key']))['ok']);
+
+        Livewire::test(LiveRecapPage::class, ['election' => $election->fresh()])
+            ->assertSee('PERINGATAN: Halaman ini menampilkan hasil sementara secara real-time.')
+            ->set('accessKeyInput', (string) $key2['raw_key'])
+            ->call('verifyAccessKey')
+            ->assertSet('isAuthorized', true)
+            ->assertSee('Paslon Alpha');
+
+        // PERUBAHAN 6: Delete election is rejected while berlangsung, and succeeds when ditutup
+        $delWhileOngoing = $voting->deleteElection($election->id, $operator->id, $renamedC, $storage);
+        $this->assertFalse($delWhileOngoing['ok']);
+        $this->assertSame('wrong_phase', $delWhileOngoing['code']);
+
+        // End election so phase becomes ditutup (keep starts_at locked to existing value)
+        $election->refresh();
+        $endSched = $voting->setElectionSchedule(
+            $election->id,
+            CarbonImmutable::instance($election->starts_at),
+            $voting->databaseNow()->subSecond(),
+            $operator->id
+        );
+        $this->assertTrue($endSched['ok']);
+        $delOk = $voting->deleteElection($election->id, $operator->id, $renamedC, $storage);
+        $this->assertTrue($delOk['ok']);
+        $this->assertNull(Election::find($election->id));
     }
 }

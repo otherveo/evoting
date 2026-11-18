@@ -1,96 +1,115 @@
-{{-- FR-011, BR-011, BR-024, AC-013: Panel Daftar Pasangan Calon & Modal Tambah/Ubah/Hapus Paslon --}}
-<section class="panel">
-  <div class="panel-head">
-    <div>
-      <h2 class="panel-title">
-        <svg class="icon"><use href="#i-users"></use></svg>
-        <span>Daftar Pasangan Calon ({{ $candidates->count() }})</span>
-      </h2>
-      {{-- BR-024: Paslon hanya dapat diubah pada Fase Persiapan --}}
-      <p class="panel-sub">
-        @if($phase === 'persiapan')
-          Tambahkan atau ubah pasangan calon beserta foto, visi, dan misi sebelum pemilihan berlangsung.
-        @else
-          Daftar pasangan calon telah dikunci karena pemilihan sudah melewati Fase Persiapan.
-        @endif
-      </p>
+{{-- FR-011, BR-011, BR-024, AC-013: Section 2 Daftar Pasangan Calon (Collapsible Dropdown + Nomor 2) --}}
+<section class="panel collapsible-panel" style="margin-bottom: 16px;" x-data="{ open: true }">
+  <div
+    class="panel-head collapsible-head"
+    role="button"
+    tabindex="0"
+    :aria-expanded="open ? 'true' : 'false'"
+    x-on:click="open = !open"
+    x-on:keydown.enter.prevent="open = !open"
+    x-on:keydown.space.prevent="open = !open"
+  >
+    <div class="section-numbered-title">
+      <span class="section-num-badge">2</span>
+      <div>
+        <h2 class="panel-title">
+          <svg class="icon"><use href="#i-users"></use></svg>
+          <span>Daftar Pasangan Calon ({{ $candidates->count() }})</span>
+        </h2>
+        {{-- BR-024: Paslon hanya dapat diubah pada Fase Persiapan --}}
+        <p class="panel-sub">
+          @if($phase === 'persiapan')
+            Tambahkan minimal 2 pasangan calon beserta foto, visi, dan misi sebelum mengatur jadwal pemilihan.
+          @else
+            Daftar pasangan calon telah dikunci karena pemilihan sudah melewati Fase Persiapan.
+          @endif
+        </p>
+      </div>
     </div>
 
-    @if($phase === 'persiapan')
-      <x-action-button
-        variant="primary"
-        icon="#i-plus"
-        wire:click="openAddCandidateModal"
-        loadingText="Membuka..."
-      >
-        Tambah Paslon
-      </x-action-button>
-    @endif
+    <div class="collapsible-head-right" x-on:click.stop>
+      @if($phase === 'persiapan')
+        <x-action-button
+          variant="primary"
+          size="sm"
+          icon="#i-plus"
+          wire:click="openAddCandidateModal"
+          loadingText="Membuka..."
+        >
+          Tambah Paslon
+        </x-action-button>
+      @endif
+      <span class="collapse-chevron" :class="{ 'is-open': open }" x-on:click="open = !open">
+        <svg class="icon"><use href="#i-chevron-right"></use></svg>
+      </span>
+    </div>
   </div>
 
-  <div style="padding: 20px 23px;">
-    @if($candidates->isEmpty())
-      <div class="empty-state">
-        <div class="empty-icon"><svg class="icon"><use href="#i-users"></use></svg></div>
-        <h3>Belum ada paslon</h3>
-        <p>Tambahkan minimal 2 pasangan calon agar jadwal pemilihan dapat diatur.</p>
-      </div>
-    @else
-      <div class="candidate-grid">
-        @foreach($candidates as $cand)
-          <div class="candidate-card" style="cursor: default;" wire:key="cand-{{ $cand->id }}">
-            <div class="candidate-media">
-              <img src="{{ $cand->photoUrl() }}" alt="Foto {{ $cand->name }}" class="candidate-photo" />
-              <span class="candidate-number">NO. {{ $cand->formattedNumber() }}</span>
+  <div x-show="open" class="collapsible-body">
+    <div style="padding: 20px 23px;">
+      @if($candidates->isEmpty())
+        <div class="empty-state">
+          <div class="empty-icon"><svg class="icon"><use href="#i-users"></use></svg></div>
+          <h3>Belum ada paslon</h3>
+          <p>Tambahkan minimal 2 pasangan calon agar jadwal pemilihan dapat diatur.</p>
+        </div>
+      @else
+        <div class="candidate-grid">
+          @foreach($candidates as $cand)
+            <div class="candidate-card" style="cursor: default;" wire:key="cand-{{ $cand->id }}">
+              <div class="candidate-media">
+                <img src="{{ $cand->photoUrl() }}" alt="Foto {{ $cand->name }}" class="candidate-photo" />
+                <span class="candidate-number">NO. {{ $cand->formattedNumber() }}</span>
+              </div>
+              <div class="candidate-body">
+                <span class="candidate-kicker">PASANGAN CALON {{ $cand->formattedNumber() }}</span>
+                <h3 class="candidate-names">{{ $cand->name }}</h3>
+
+                @if($cand->vision)
+                  <div class="candidate-vision">
+                    <span>VISI</span>
+                    <p>{{ $cand->vision }}</p>
+                  </div>
+                @endif
+
+                @php $missions = $cand->missionItems(); @endphp
+                @if(!empty($missions))
+                  <ul class="mission-list">
+                    @foreach($missions as $m)
+                      <li>{{ $m }}</li>
+                    @endforeach
+                  </ul>
+                @endif
+
+                @if($phase === 'persiapan')
+                  <div style="margin-top: auto; padding-top: 14px; display: flex; gap: 8px; border-top: 1px solid #eef2f8;">
+                    <x-action-button
+                      variant="secondary"
+                      size="xs"
+                      icon="#i-edit"
+                      wire:click="openEditCandidateModal('{{ $cand->id }}')"
+                      loadingText="Memuat..."
+                    >
+                      Ubah
+                    </x-action-button>
+
+                    <x-action-button
+                      variant="danger-ghost"
+                      size="xs"
+                      icon="#i-trash"
+                      wire:click="promptDeleteCandidate('{{ $cand->id }}')"
+                      loadingText="Memuat..."
+                    >
+                      Hapus
+                    </x-action-button>
+                  </div>
+                @endif
+              </div>
             </div>
-            <div class="candidate-body">
-              <span class="candidate-kicker">PASANGAN CALON {{ $cand->formattedNumber() }}</span>
-              <h3 class="candidate-names">{{ $cand->name }}</h3>
-
-              @if($cand->vision)
-                <div class="candidate-vision">
-                  <span>VISI</span>
-                  <p>{{ $cand->vision }}</p>
-                </div>
-              @endif
-
-              @php $missions = $cand->missionItems(); @endphp
-              @if(!empty($missions))
-                <ul class="mission-list">
-                  @foreach($missions as $m)
-                    <li>{{ $m }}</li>
-                  @endforeach
-                </ul>
-              @endif
-
-              @if($phase === 'persiapan')
-                <div style="margin-top: auto; padding-top: 14px; display: flex; gap: 8px; border-top: 1px solid #eef2f8;">
-                  <x-action-button
-                    variant="secondary"
-                    size="xs"
-                    icon="#i-edit"
-                    wire:click="openEditCandidateModal('{{ $cand->id }}')"
-                    loadingText="Memuat..."
-                  >
-                    Ubah
-                  </x-action-button>
-
-                  <x-action-button
-                    variant="danger-ghost"
-                    size="xs"
-                    icon="#i-trash"
-                    wire:click="promptDeleteCandidate('{{ $cand->id }}')"
-                    loadingText="Memuat..."
-                  >
-                    Hapus
-                  </x-action-button>
-                </div>
-              @endif
-            </div>
-          </div>
-        @endforeach
-      </div>
-    @endif
+          @endforeach
+        </div>
+      @endif
+    </div>
   </div>
 </section>
 

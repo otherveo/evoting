@@ -52,6 +52,51 @@ class TokenService
     }
 
     /**
+     * Menghasilkan access_key rekap real-time 64 karakter (huruf + angka + simbol, tanpa spasi) dengan CSPRNG
+     * beserta hash SHA-256 hex 64 karakter untuk penyimpanan satu arah di database.
+     *
+     * @return array{raw: string, hash: string}
+     */
+    public function generateAccessKey(): array
+    {
+        $upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+        $lower = 'abcdefghijkmnopqrstuvwxyz';
+        $digits = '0123456789';
+        $symbols = '!@#$%^&*()-_=+[]{}.,:~';
+        $all = $upper.$lower.$digits.$symbols;
+        $max = strlen($all) - 1;
+
+        $chars = [
+            $upper[random_int(0, strlen($upper) - 1)],
+            $lower[random_int(0, strlen($lower) - 1)],
+            $digits[random_int(0, strlen($digits) - 1)],
+            $symbols[random_int(0, strlen($symbols) - 1)],
+        ];
+
+        for ($i = 4; $i < 64; $i++) {
+            $chars[] = $all[random_int(0, $max)];
+        }
+
+        // Fisher-Yates CSPRNG shuffle
+        for ($i = 63; $i > 0; $i--) {
+            $j = random_int(0, $i);
+            [$chars[$i], $chars[$j]] = [$chars[$j], $chars[$i]];
+        }
+
+        $raw = implode('', $chars);
+
+        return [
+            'raw' => $raw,
+            'hash' => $this->hashToken($raw),
+        ];
+    }
+
+    public function liveRecapUrl(string $electionId): string
+    {
+        return route('live-recap.view', ['election' => $electionId]);
+    }
+
+    /**
      * Membaca mode konfigurasi QR saat ini ('custom' dengan logo tengah, atau 'standard' polos).
      */
     public function getQrMode(): string

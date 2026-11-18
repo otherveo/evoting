@@ -1,5 +1,5 @@
 @php
-  $appName = config('app.name') ?: 'E-Voting';
+  $appName = config('app.name') ?: 'DigiVoting';
 @endphp
 <!DOCTYPE html>
 <html lang="id">
@@ -11,7 +11,7 @@
   <meta name="theme-color" content="#132a63" />
   <link rel="icon" type="image/png" href="{{ asset('SMPN7-e-voting_logo.png') }}" />
   <title>{{ isset($title) ? $title . ' — ' . $appName : 'Bilik Suara — ' . $appName }}</title>
-  <link rel="stylesheet" href="{{ asset('css/suarasekolah.css') }}?v=4" />
+  <link rel="stylesheet" href="{{ asset('css/suarasekolah.css') }}?v=7" />
   @livewireStyles
 </head>
 <body>
@@ -51,9 +51,31 @@
 
   @livewireScripts
   <script>
+    window.normalizeShortToast = function (message, type = 'info') {
+      const text = String(message || '').trim();
+      if (!text) return type === 'error' ? 'Gagal' : 'Berhasil';
+      const words = text.split(/\s+/).length;
+      if (words <= 2) return text;
+      const lower = text.toLowerCase();
+      if (type === 'error' || type === 'warning' || lower.includes('gagal')) return 'Gagal';
+      if (lower.includes('simpan')) return 'Tersimpan';
+      if (lower.includes('setuju') || lower.includes('diizinkan')) return 'Diizinkan';
+      if (lower.includes('tolak')) return 'Ditolak';
+      return 'Berhasil';
+    };
+
+    window.unlockActionButtons = function (scope = document) {
+      scope.querySelectorAll('button[data-locked="true"], button[data-loading="true"]').forEach((btn) => {
+        delete btn.dataset.locked;
+        delete btn.dataset.loading;
+        btn.disabled = false;
+      });
+    };
+
     window.showToast = function (message, type = 'info') {
       const root = document.getElementById('toast-root');
       if (!root || !message) return;
+      const shortMsg = window.normalizeShortToast(message, type);
       const iconMap = {
         success: '#i-check-circle',
         error: '#i-alert',
@@ -64,7 +86,7 @@
       toast.className = `toast toast-${type}`;
       toast.innerHTML = `
         <svg class="icon"><use href="${iconMap[type] || '#i-info'}"></use></svg>
-        <div>${message}</div>
+        <div><strong>${shortMsg}</strong></div>
       `;
       root.appendChild(toast);
       requestAnimationFrame(() => toast.classList.add('is-visible'));
@@ -72,18 +94,43 @@
         toast.classList.remove('is-visible');
         toast.classList.add('is-leaving');
         setTimeout(() => toast.remove(), 240);
-      }, 4200);
+      }, 2800);
     };
+
+    document.addEventListener('click', function (e) {
+      const btn = e.target.closest('button[data-action-btn="true"], button[type="submit"]');
+      if (!btn || btn.disabled) return;
+      if (btn.dataset.locked === 'true') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return false;
+      }
+      btn.dataset.locked = 'true';
+      btn.dataset.loading = 'true';
+      queueMicrotask(() => {
+        btn.disabled = true;
+      });
+    }, true);
 
     document.addEventListener('livewire:initialized', () => {
       Livewire.on('toast', (payload) => {
         const data = Array.isArray(payload) ? payload[0] : payload;
         if (data && data.message) {
-          window.showToast(data.message, data.type || 'info');
+          const type = data.type || 'info';
+          window.showToast(data.message, type);
+          if (type === 'error' || type === 'warning') {
+            window.unlockActionButtons(document);
+          }
         }
       });
       Livewire.on('step-changed', () => {
         window.scrollTo({ top: 0, behavior: 'auto' });
+      });
+      Livewire.hook('commit', ({ fail }) => {
+        fail(() => {
+          window.unlockActionButtons(document);
+          window.showToast('Gagal', 'error');
+        });
       });
     });
   </script>

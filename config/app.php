@@ -13,7 +13,9 @@ return [
     |
     */
 
-    'name' => env('APP_NAME') ?: 'E-Voting',
+    'name' => in_array(env('APP_NAME'), [null, '', 'Laravel', 'E-Voting', 'SuaraSekolah'], true)
+        ? 'DigiVoting'
+        : (string) env('APP_NAME'),
 
     /*
     |--------------------------------------------------------------------------
