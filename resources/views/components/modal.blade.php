@@ -5,6 +5,7 @@
     'iconVariant' => '',
     'maxWidth' => '560px',
     'closeAction' => null,
+    'alpineClose' => null,
 ])
 
 @php
@@ -17,7 +18,20 @@
 @endphp
 
 @teleport('body')
-  <div class="modal-backdrop is-visible" role="dialog" aria-modal="true" aria-label="{{ $title }}">
+  <div
+    class="modal-backdrop is-visible"
+    role="dialog"
+    aria-modal="true"
+    aria-label="{{ $title }}"
+    x-data
+    @if($alpineClose)
+      x-on:click.self="{{ $alpineClose }}"
+      x-on:keydown.escape.window="{{ $alpineClose }}"
+    @elseif($closeAction)
+      x-on:click.self="$wire.{{ $closeAction }}"
+      x-on:keydown.escape.window="$wire.{{ $closeAction }}"
+    @endif
+  >
     <div class="modal" style="--modal-width: {{ $maxWidth }};">
       <div class="modal-header">
         <div class="modal-heading">
@@ -32,7 +46,16 @@
           </div>
         </div>
 
-        @if($closeAction)
+        @if($alpineClose)
+          <button
+            type="button"
+            class="icon-btn"
+            x-on:click="{{ $alpineClose }}"
+            aria-label="Tutup dialog"
+          >
+            <svg class="icon"><use href="#i-x"></use></svg>
+          </button>
+        @elseif($closeAction)
           <button
             type="button"
             class="icon-btn"

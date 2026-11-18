@@ -70,7 +70,6 @@ class ElectionIndexPage extends Component
 
     private function resetWizardDefaults(): void
     {
-        $tz = (string) config('evoting.display_timezone', 'Asia/Makassar');
         $this->name = '';
         $this->maxVoterRights = 300;
         $this->submitToken = (string) Str::uuid();
@@ -84,11 +83,19 @@ class ElectionIndexPage extends Component
             ],
         ];
         $this->wizardPhotos = [];
-        $this->wizardStartsAt = now()->setTimezone($tz)->addMinutes(15)->format('Y-m-d\TH:i');
-        $this->wizardEndsAt = now()->setTimezone($tz)->addHours(4)->format('Y-m-d\TH:i');
+        $this->wizardStartsAt = '';
+        $this->wizardEndsAt = '';
         $this->createdElectionId = null;
         $this->createdTurnoutUrl = '';
         $this->createdResultsUrl = '';
+    }
+
+    private function isStep1Valid(string $name, int $maxRights): bool
+    {
+        $cleanName = preg_replace('/\s+/u', ' ', trim($name)) ?? trim($name);
+        $len = mb_strlen($cleanName);
+
+        return $len >= 3 && $len <= 160 && $maxRights >= 3 && $maxRights <= 10000;
     }
 
     public function openCreateModal(): void
@@ -100,9 +107,237 @@ class ElectionIndexPage extends Component
 
     public function closeCreateModal(): void
     {
-        // Perubahan 2.2: Keluar di tengah wizard membatalkan semuanya (tidak ada yang tersimpan ke database)
+        if ($this->isCreated && $this->createdElectionId) {
+            $id = $this->createdElectionId;
+            $this->showCreateModal = false;
+            $this->resetWizardDefaults();
+            $this->redirectRoute('operator.elections.detail', $id);
+
+            return;
+        }
+
+        if ($this->isStep1Valid($this->name, $this->maxVoterRights)) {
+            $this->saveWizardDraft(
+                $this->name,
+                $this->maxVoterRights,
+                $this->wizardCandidates,
+                $this->wizardStartsAt,
+                $this->wizardEndsAt
+            );
+
+            return;
+        }
+
         $this->showCreateModal = false;
         $this->resetWizardDefaults();
+    }
+
+    /**
+     * Bagian B Update v4: Simpan pemilihan sebagai draft ("Saya ingin melengkapinya nanti" atau keluar setelah Step 1 terisi).
+     * Bila Step 1 belum terisi valid, batalkan pembuatan tanpa menyimpan apa pun.
+     *
+     * @param  list<array{number?: int|string, name?: string, vision?: string, missions?: string}>  $candidatesPayload
+     */
+    public function saveWizardDraft(
+        string $electionName = '',
+        int $maxRights = 0,
+        array $candidatesPayload = [],
+        string $startsAtLocal = '',
+        string $endsAtLocal = '',
+        ?AuditService $audit = null,
+        ?VotingService $voting = null,
+        ?SupabaseStorageService $storage = null
+    ): bool {
+        $audit ??= app(AuditService::class);
+        $voting ??= app(VotingService::class);
+        $storage ??= app(SupabaseStorageService::class);
+
+        if ($this->isCreated && $this->createdElectionId) {
+            $id = $this->createdElectionId;
+            $this->showCreateModal = false;
+            $this->resetWizardDefaults();
+            $this->redirectRoute('operator.elections.detail', $id);
+
+            return true;
+        }
+
+        $resolvedName = $electionName !== '' ? $electionName : $this->name;
+        $resolvedMaxRights = $maxRights !== 0 ? $maxRights : $this->maxVoterRights;
+        $resolvedCandidates = $candidatesPayload !== [] ? $candidatesPayload : $this->wizardCandidates;
+        $resolvedStartsAt = $startsAtLocal !== '' ? $startsAtLocal : $this->wizardStartsAt;
+        $resolvedEndsAt = $endsAtLocal !== '' ? $endsAtLocal : $this->wizardEndsAt;
+
+        if (! $this->isStep1Valid($resolvedName, $resolvedMaxRights)) {
+            $this->showCreateModal = false;
+            $this->resetWizardDefaults();
+
+            return false;
+        }
+
+        $this->name = $resolvedName;
+        $this->maxVoterRights = $resolvedMaxRights;
+
+        $normalizedCandidates = [];
+        $usedNumbers = [];
+        foreach ($resolvedCandidates as $idx => $item) {
+            $cName = preg_replace('/\s+/u', ' ', trim((string) ($item['name'] ?? ''))) ?? '';
+            $cNum = (int) ($item['number'] ?? ($idx + 1));
+            if ($cName === '' || mb_strlen($cName) < 2 || mb_strlen($cName) > 160) {
+                continue;
+            }
+            if ($cNum < 1 || in_array($cNum, $usedNumbers, true)) {
+                continue;
+            }
+            $usedNumbers[] = $cNum;
+            $missionsText = (string) ($item['missions'] ?? '');
+            $missionsArray = array_values(array_filter(array_map(
+                static fn (string $line) => trim(preg_replace('/^[-•*\d.)\s]+/u', '', trim($line)) ?? ''),
+                preg_split('/\r\n|\r|\n/', $missionsText) ?: []
+            ), static fn (string $v) => $v !== ''));
+
+            $normalizedCandidates[] = [
+                'index' => $idx,
+                'number' => $cNum,
+                'name' => $cName,
+                'vision' => trim((string) ($item['vision'] ?? '')) !== '' ? trim((string) ($item['vision'] ?? '')) : null,
+                'missions' => $missionsArray !== [] ? $missionsArray : null,
+            ];
+        }
+
+        $tz = (string) config('evoting.display_timezone', 'Asia/Makassar');
+        $dbNow = $voting->databaseNow();
+        $startsUtc = null;
+        $endsUtc = null;
+        $hasValidFutureSchedule = false;
+
+        if (
+            preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/', trim($resolvedStartsAt)) === 1
+            && preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/', trim($resolvedEndsAt)) === 1
+        ) {
+            try {
+                $parsedStart = CarbonImmutable::createFromFormat('Y-m-d\TH:i', trim($resolvedStartsAt), $tz)->setTimezone('UTC');
+                $parsedEnd = CarbonImmutable::createFromFormat('Y-m-d\TH:i', trim($resolvedEndsAt), $tz)->setTimezone('UTC');
+                if ($parsedStart && $parsedEnd && $parsedStart->gt($dbNow) && $parsedEnd->gt($parsedStart)) {
+                    $startsUtc = $parsedStart;
+                    $endsUtc = $parsedEnd;
+                    $hasValidFutureSchedule = true;
+                }
+            } catch (Throwable) {
+                $hasValidFutureSchedule = false;
+            }
+        }
+
+        /** @var StaffAccount $operator */
+        $operator = Auth::guard('staff')->user();
+        $cleanName = preg_replace('/\s+/u', ' ', trim($resolvedName)) ?? trim($resolvedName);
+        $lockKey = 'wizard_election:'.$operator->id.':'.($this->submitToken !== '' ? $this->submitToken : mb_strtolower($cleanName));
+
+        if (! $this->acquireIdempotencyLock($lockKey, 15)) {
+            return false;
+        }
+
+        try {
+            $election = DB::transaction(function () use (
+                $cleanName,
+                $resolvedMaxRights,
+                $operator,
+                $normalizedCandidates,
+                $hasValidFutureSchedule,
+                $startsUtc,
+                $endsUtc,
+                $audit,
+                $voting,
+                $storage
+            ) {
+                DB::selectOne('select pg_advisory_xact_lock(hashtext(?))', ['create_el:'.mb_strtolower($cleanName)]);
+
+                $existing = Election::query()
+                    ->whereRaw('lower(name) = ?', [mb_strtolower($cleanName)])
+                    ->where('created_at', '>=', now()->subSeconds(15))
+                    ->first();
+
+                if ($existing) {
+                    return $existing;
+                }
+
+                $el = Election::create([
+                    'name' => $cleanName,
+                    'max_voter_rights' => $resolvedMaxRights,
+                ]);
+
+                $audit->log(
+                    actorType: 'operator',
+                    actorId: $operator->id,
+                    action: 'buat_pemilihan',
+                    objectType: 'election',
+                    objectId: $el->id,
+                    detail: [
+                        'name' => $el->name,
+                        'max_voter_rights' => $el->max_voter_rights,
+                        'is_draft' => true,
+                    ]
+                );
+
+                foreach ($normalizedCandidates as $candData) {
+                    $candId = (string) Str::uuid();
+                    $photoPath = null;
+                    $uploadedPhoto = $this->wizardPhotos[$candData['index']] ?? null;
+                    if ($uploadedPhoto) {
+                        $photoPath = $storage->uploadCandidatePhoto($el->id, $candId, $uploadedPhoto);
+                    }
+
+                    $cand = new Candidate([
+                        'election_id' => $el->id,
+                        'number' => $candData['number'],
+                        'name' => $candData['name'],
+                        'vision' => $candData['vision'],
+                        'missions' => $candData['missions'],
+                        'photo_path' => $photoPath,
+                    ]);
+                    $cand->id = $candId;
+                    $cand->save();
+
+                    $audit->log(
+                        actorType: 'operator',
+                        actorId: $operator->id,
+                        action: 'tambah_paslon',
+                        objectType: 'candidate',
+                        objectId: $cand->id,
+                        detail: [
+                            'election_id' => $el->id,
+                            'number' => $cand->number,
+                            'name' => $cand->name,
+                        ]
+                    );
+                }
+
+                if ($hasValidFutureSchedule && $startsUtc && $endsUtc && count($normalizedCandidates) >= 2) {
+                    $voting->setElectionSchedule(
+                        electionId: $el->id,
+                        startsAtUtc: $startsUtc,
+                        endsAtUtc: $endsUtc,
+                        operatorId: $operator->id
+                    );
+                }
+
+                return $el;
+            });
+
+            $this->isCreated = true;
+            $this->submitToken = '';
+            $this->createdElectionId = $election->id;
+            $this->showCreateModal = false;
+
+            session()->flash('success', 'Draft tersimpan');
+            $this->dispatch('toast', message: 'Draft tersimpan', type: 'success');
+            $this->redirectRoute('operator.elections.detail', $election);
+
+            return true;
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal menyimpan draft pemilihan.', 'name');
+
+            return false;
+        }
     }
 
     /**
@@ -200,6 +435,16 @@ class ElectionIndexPage extends Component
     ): bool {
         if ($this->isCreated) {
             return true;
+        }
+
+        $tz = (string) config('evoting.display_timezone', 'Asia/Makassar');
+        if ($startNow) {
+            if (trim($startsAtLocal) === '') {
+                $startsAtLocal = now()->setTimezone($tz)->format('Y-m-d\TH:i');
+            }
+            if (trim($endsAtLocal) === '') {
+                $endsAtLocal = now()->setTimezone($tz)->addHours(4)->format('Y-m-d\TH:i');
+            }
         }
 
         $this->name = $electionName;

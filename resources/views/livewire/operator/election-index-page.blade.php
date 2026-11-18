@@ -110,16 +110,19 @@
     </div>
   @endif
 
-  {{-- Perubahan 2.2 & 2.3: Modal Wizard Sekuensial 4 Langkah Pembuatan Pemilihan (Client-Side Dulu) --}}
+  {{-- Perubahan 2.2, 2.3 & Update v4: Modal Wizard Sekuensial 4 Langkah Pembuatan Pemilihan --}}
   @if($showCreateModal)
     <x-modal
       title="Panduan Pembuatan Pemilihan Baru"
-      subtitle="Data tidak disimpan ke server sampai Anda menyelesaikan Langkah 3. Keluar di tengah jalan akan membatalkan seluruh isian."
+      subtitle="Keluar setelah Identitas terisi akan menyimpan pemilihan sebagai draft untuk dilengkapi nanti di halaman konfigurasi; keluar saat Identitas masih kosong akan membatalkan pembuatan."
       icon="#i-ballot"
       maxWidth="720px"
       closeAction="closeCreateModal"
+      alpineClose="window.dispatchEvent(new CustomEvent('wizard-exit'))"
     >
       <div
+        class="modal-shell"
+        x-on:wizard-exit.window="handleWizardExit()"
         x-data="{
           step: 1,
           elName: @js($name),
@@ -137,7 +140,7 @@
           get canProceedStep1() {
             const n = (this.elName || '').trim();
             const m = Number(this.elMaxRights);
-            return n.length >= 3 && Number.isInteger(m) && m >= 3 && m <= 10000;
+            return n.length >= 3 && n.length <= 160 && Number.isInteger(m) && m >= 3 && m <= 10000;
           },
           get canProceedStep2() {
             if (!Array.isArray(this.candidates) || this.candidates.length < 2) return false;
@@ -150,12 +153,33 @@
             }
             return true;
           },
+          handleWizardExit() {
+            if (this.savingWizard) return;
+            if (this.step === 4) {
+              $wire.closeCreateModal();
+              return;
+            }
+            if (!this.canProceedStep1) {
+              $wire.saveWizardDraft('', 0, [], '', '');
+              return;
+            }
+            this.savingWizard = true;
+            $wire.saveWizardDraft(
+              this.elName,
+              Number(this.elMaxRights),
+              this.candidates,
+              this.startsAt,
+              this.endsAt
+            ).finally(() => {
+              this.savingWizard = false;
+            });
+          },
           goStep2() {
             this.step1Error = '';
             const n = (this.elName || '').trim();
             const m = Number(this.elMaxRights);
-            if (n.length < 3) {
-              this.step1Error = 'Nama pemilihan wajib diisi minimal 3 karakter.';
+            if (n.length < 3 || n.length > 160) {
+              this.step1Error = 'Nama pemilihan wajib diisi minimal 3 dan maksimal 160 karakter.';
               window.showToast('Gagal', 'error');
               return;
             }
@@ -191,7 +215,7 @@
           submitWizard(startNow = false) {
             if (this.savingWizard) return;
             this.step3Error = '';
-            if (!this.startsAt || !this.endsAt) {
+            if (!startNow && (!this.startsAt || !this.endsAt)) {
               this.step3Error = 'Waktu Mulai dan Waktu Selesai wajib diisi.';
               window.showToast('Gagal', 'error');
               return;
@@ -223,8 +247,8 @@
         }"
       >
         <div class="modal-body">
-          {{-- Tombol keluar sekuensial di bagian atas popup --}}
-          <div class="wizard-top-bar" x-show="step < 4">
+          {{-- Indikator langkah 1–4 + tombol simpan draft "Saya ingin melengkapinya nanti" (hanya di step 2, 3, 4) --}}
+          <div class="wizard-top-bar">
             <ol class="wizard-steps" aria-label="Tahapan Pembuatan Pemilihan">
               <li :class="{ 'is-active': step === 1, 'is-done': step > 1 }">
                 <span class="section-num-badge">1</span>
@@ -246,8 +270,10 @@
 
             <button
               type="button"
-              class="btn btn-xs btn-secondary"
-              wire:click="closeCreateModal"
+              class="btn btn-xs btn-secondary wizard-draft-btn"
+              x-show="step > 1"
+              x-cloak
+              x-on:click="handleWizardExit()"
               x-bind:disabled="savingWizard"
             >
               <span>Saya ingin melengkapinya nanti</span>
@@ -504,7 +530,7 @@
         <div class="modal-footer">
           <template x-if="step === 1">
             <div style="display: flex; width: 100%; justify-content: space-between; gap: 10px;">
-              <button type="button" class="btn btn-secondary" wire:click="closeCreateModal">Batal</button>
+              <button type="button" class="btn btn-secondary" x-on:click="handleWizardExit()" x-bind:disabled="savingWizard">Batal</button>
               <button
                 type="button"
                 class="btn btn-primary"

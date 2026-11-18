@@ -254,8 +254,53 @@
     </div>
   @endif
 
-  <div class="panel-foot">
-    <span>Menampilkan <strong>{{ $voterRows->count() }}</strong> dari <strong>{{ $totalRights }}</strong> Hak Pilih</span>
-    <span>Diperbarui otomatis setiap 3 detik · Waktu server: <strong>{{ now()->setTimezone($tz)->format('H:i:s') }}</strong></span>
+   <div class="panel-foot" style="flex-wrap: wrap; gap: 12px;">
+    <div>
+      <span>Menampilkan <strong>{{ $voterRows->count() }}</strong> dari <strong>{{ $voterPaginator->total() }}</strong> Hak Pilih</span>
+      @if($isPollingPage ?? true)
+        <span style="display: block; margin-top: 2px;">Diperbarui otomatis setiap 3 detik · Waktu server: <strong>{{ now()->setTimezone($tz)->format('H:i:s') }}</strong></span>
+      @else
+        <span style="display: block; margin-top: 2px; color: var(--amber); font-weight: 700;">
+          Pembaruan otomatis dijeda di halaman {{ $voterPaginator->currentPage() }} (snapshot) · Kembali ke halaman 1 untuk live update
+        </span>
+      @endif
+    </div>
+
+    <div class="pagination-controls" style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+      @if($voterPaginator->onFirstPage())
+        <button type="button" class="btn btn-xs btn-secondary" disabled>Sebelumnya</button>
+      @else
+        <x-action-button variant="secondary" size="xs" wire:click="previousPage" loadingText="Memuat...">
+          Sebelumnya
+        </x-action-button>
+      @endif
+
+      @php
+        $currP = $voterPaginator->currentPage();
+        $lastP = max(1, $voterPaginator->lastPage());
+        $startP = max(1, $currP - 2);
+        $endP = min($lastP, $currP + 2);
+      @endphp
+      @for($p = $startP; $p <= $endP; $p++)
+        <button
+          type="button"
+          class="btn btn-xs {{ $p === $currP ? 'btn-primary' : 'btn-secondary' }}"
+          wire:click="gotoPage({{ $p }})"
+          @if($p === $currP) aria-current="page" @endif
+        >
+          {{ $p }}
+        </button>
+      @endfor
+
+      <span style="margin-inline: 4px;">Halaman <strong>{{ $currP }}</strong> / {{ $lastP }}</span>
+
+      @if($voterPaginator->hasMorePages())
+        <x-action-button variant="secondary" size="xs" wire:click="nextPage" loadingText="Memuat...">
+          Berikutnya
+        </x-action-button>
+      @else
+        <button type="button" class="btn btn-xs btn-secondary" disabled>Berikutnya</button>
+      @endif
+    </div>
   </div>
 </section>

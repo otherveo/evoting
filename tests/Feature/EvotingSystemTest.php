@@ -535,7 +535,7 @@ class EvotingSystemTest extends TestCase
         Livewire::actingAs($operator, 'staff')
             ->test(ElectionDetailPage::class, ['election' => $election->fresh()])
             ->set('name', $renamedC)
-            ->set('maxVoterRights', 15)
+            ->set('maxVoterRights', 50)
             ->call('saveElectionInfo')
             ->assertHasNoErrors();
         $this->assertSame($renamedC, $election->fresh()->name);
@@ -643,6 +643,69 @@ class EvotingSystemTest extends TestCase
 
         $legacyApprove = $voting->decideDeviceApproval((string) $legacyRow->o_voter_right_id, $operatorB->id, 'setujui');
         $this->assertTrue($legacyApprove['ok']);
+
+        // UPDATE V4 BAGIAN A: Monitor pagination (25 per page) + poll only on page 1
+        DB::select(
+            "select (evoting.fn_create_voter_right(?::uuid, 'Pemilih Paginasi ' || g, 'pemilih paginasi ' || g, encode(sha256(('tok_v4_' || g || '_' || ?)::bytea), 'hex'), ?::uuid)).* from generate_series(1, 23) g",
+            [$election->id, uniqid(), $operator->id]
+        );
+
+        $monitorComp = Livewire::actingAs($operator, 'staff')
+            ->test(VoterMonitorPage::class, ['election' => $election->fresh()]);
+
+        $this->assertCount(25, $monitorComp->viewData('voterRows'));
+        $this->assertTrue($monitorComp->viewData('isPollingPage'));
+        $monitorComp->assertSeeHtml('wire:poll.3s.visible');
+
+        $monitorComp->call('gotoPage', 2);
+        $this->assertCount(2, $monitorComp->viewData('voterRows'));
+        $this->assertFalse($monitorComp->viewData('isPollingPage'));
+        $monitorComp->assertDontSeeHtml('wire:poll.3s.visible');
+        $monitorComp->assertSee('Pembaruan otomatis dijeda di halaman 2');
+
+        $monitorComp->call('gotoPage', 1);
+        $this->assertCount(25, $monitorComp->viewData('voterRows'));
+        $this->assertTrue($monitorComp->viewData('isPollingPage'));
+        $monitorComp->assertSeeHtml('wire:poll.3s.visible');
+
+        // UPDATE V4 BAGIAN B & C: Wizard draft behavior, subtitle, & copy-link-label outside token-box
+        $countBeforeCancel = Election::count();
+        Livewire::actingAs($operator, 'staff')
+            ->test(ElectionIndexPage::class)
+            ->call('openCreateModal')
+            ->assertSee('Keluar setelah Identitas terisi akan menyimpan pemilihan sebagai draft')
+            ->assertDontSee('Keluar di tengah jalan akan membatalkan seluruh isian')
+            ->set('name', '')
+            ->call('closeCreateModal');
+        $this->assertSame($countBeforeCancel, Election::count());
+
+        $draftName = 'Pilketis Draft V4 '.uniqid();
+        Livewire::actingAs($operator, 'staff')
+            ->test(ElectionIndexPage::class)
+            ->call('openCreateModal')
+            ->call(
+                'saveWizardDraft',
+                $draftName,
+                120,
+                [
+                    ['number' => 1, 'name' => 'Paslon Tunggal Draft', 'vision' => 'Visi Draft', 'missions' => 'Misi 1'],
+                    ['number' => 2, 'name' => '', 'vision' => '', 'missions' => ''],
+                ],
+                '',
+                ''
+            )
+            ->assertDispatched('toast', message: 'Draft tersimpan', type: 'success');
+
+        $draftElection = Election::where('name', $draftName)->first();
+        $this->assertNotNull($draftElection);
+        $this->assertSame(120, $draftElection->max_voter_rights);
+        $this->assertNull($draftElection->starts_at);
+        $this->assertNull($draftElection->ends_at);
+        $this->assertSame(1, Candidate::where('election_id', $draftElection->id)->count());
+
+        Livewire::actingAs($operator, 'staff')
+            ->test(ElectionDetailPage::class, ['election' => $draftElection])
+            ->assertSeeHtml('class="copy-link-label"');
 
         // PERUBAHAN 7: Real-time recap access key (64 chars, 1 active key, revocable)
         $key1 = $voting->issueAccessKey($election->id, $operator->id);

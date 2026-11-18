@@ -9,12 +9,15 @@ use App\Models\VoterRight;
 use App\Services\TokenService;
 use App\Services\VotingService;
 use Carbon\CarbonImmutable;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\View;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Livewire\WithPagination;
 use Throwable;
 
 #[Layout('layouts.app')]
@@ -22,6 +25,7 @@ use Throwable;
 class VoterMonitorPage extends Component
 {
     use HandlesSafeErrors;
+    use WithPagination;
 
     public Election $election;
 
@@ -66,6 +70,16 @@ class VoterMonitorPage extends Component
     public function mount(Election $election): void
     {
         $this->election = $election;
+    }
+
+    public function updatedSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedStatusFilter(): void
+    {
+        $this->resetPage();
     }
 
     public function openRegisterModal(): void
@@ -407,7 +421,7 @@ class VoterMonitorPage extends Component
                 limit 1
             ) d_last on true
             where m.election_id = ?::uuid
-            order by m.updated_at desc
+            order by vr.created_at desc, vr.id asc
         ', [$this->election->id, $this->election->id]);
 
         $allCollection = collect($allMonitorRows)->map(function ($row) {
@@ -493,6 +507,25 @@ class VoterMonitorPage extends Component
             return true;
         })->values();
 
+        $perPage = 25;
+        $totalFiltered = $filtered->count();
+        $lastPage = max(1, (int) ceil($totalFiltered / $perPage));
+        $currentPage = min(max(1, (int) $this->getPage()), $lastPage);
+        $pageItems = $filtered->forPage($currentPage, $perPage)->values();
+
+        $voterPaginator = new LengthAwarePaginator(
+            items: $pageItems,
+            total: $totalFiltered,
+            perPage: $perPage,
+            currentPage: $currentPage,
+            options: ['path' => Paginator::resolveCurrentPath()]
+        );
+
+        $isPollingPage = $currentPage === 1;
+        if (! $isPollingPage) {
+            $pendingApprovals = collect();
+        }
+
         $detailData = null;
         if ($this->showDetailModal && $this->selectedVoterRightId) {
             $monitorItem = $allCollection->firstWhere('id', $this->selectedVoterRightId);
@@ -530,7 +563,9 @@ class VoterMonitorPage extends Component
         return view('livewire.operator.voter-monitor-page', [
             'phase' => $phase,
             'tz' => $tz,
-            'voterRows' => $allCollection,
+            'voterRows' => $voterPaginator->getCollection(),
+            'voterPaginator' => $voterPaginator,
+            'isPollingPage' => $isPollingPage,
             'pendingApprovals' => $pendingApprovals,
             'existingVotersForClient' => $existingVotersForClient,
             'totalRights' => $totalRights,

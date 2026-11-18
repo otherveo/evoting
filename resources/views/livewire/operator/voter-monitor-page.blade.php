@@ -1,10 +1,10 @@
-{{-- UI-009, FR-023, FR-025, KP-003, NFR-016: Halaman Pantau Pemilih Operator (Polling Real-Time 3 Detik) --}}
-<div class="container page view-enter" @if(!$showRegisterModal && !$showQrModal && !$showDetailModal) wire:poll.3s.visible @endif>
+{{-- UI-009, FR-023, FR-025, KP-003, NFR-016: Halaman Pantau Pemilih Operator (Polling Real-Time 3 Detik Hanya di Halaman 1) --}}
+<div class="container page view-enter" @if(($isPollingPage ?? true) && !$showRegisterModal && !$showQrModal && !$showDetailModal) wire:poll.3s.visible @endif>
   <div class="page-heading">
     <div>
       <div class="eyebrow">
         <svg class="icon"><use href="#i-monitor"></use></svg>
-        <span>DASHBOARD MONITORING OPERATOR · PEMBARUAN OTOMATIS</span>
+        <span>DASHBOARD MONITORING OPERATOR · {{ ($isPollingPage ?? true) ? 'PEMBARUAN OTOMATIS' : 'JEDA POLL (HALAMAN ' . $voterPaginator->currentPage() . ')' }}</span>
       </div>
       <h1>{{ $election->name }}</h1>
       <p class="lede">
