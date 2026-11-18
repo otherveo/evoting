@@ -16,14 +16,14 @@
           <img src="{{ asset('SMPN7-e-voting_logo.png') }}" alt="{{ $appName }}" class="landing-logo" />
           <div class="eyebrow" style="margin: 0;">
             <svg class="icon"><use href="#i-shield"></use></svg>
-            <span>SISTEM PEMUNGUTAN SUARA ELEKTRONIK</span>
+            <span>SISTEM PEMUNGUTAN SUARA DIGITAL</span>
           </div>
         </div>
 
         <h1 id="landing-title">{{ $appName }} — Pemilihan Sekolah Berbasis QR Token Sekali Pakai</h1>
 
         <p class="landing-lede">
-          Platform pemungutan suara elektronik yang memisahkan identitas pemilih dari pilihan suara secara struktural. Cepat di meja verifikasi, rahasia di bilik suara, dan akuntabel hingga rekapitulasi akhir.
+          Platform pemungutan suara digital yang memisahkan identitas pemilih dari pilihan suara secara struktural. Cepat di meja verifikasi, rahasia di bilik suara, dan akuntabel hingga rekapitulasi akhir.
         </p>
 
         <div class="landing-pillars" aria-label="Keunggulan Sistem">

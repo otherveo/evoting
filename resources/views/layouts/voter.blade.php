@@ -7,7 +7,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="csrf-token" content="{{ csrf_token() }}" />
-  <meta name="description" content="Bilik Suara Elektronik — {{ $appName }}" />
+  <meta name="description" content="Bilik Suara Digital — {{ $appName }}" />
   <meta name="theme-color" content="#132a63" />
   <link rel="icon" type="image/png" href="{{ asset('SMPN7-e-voting_logo.png') }}" />
   <title>{{ isset($title) ? $title . ' — ' . $appName : 'Bilik Suara — ' . $appName }}</title>
@@ -30,7 +30,7 @@
         <img src="{{ asset('SMPN7-e-voting_logo.png') }}" alt="{{ $appName }}" class="brand-logo" />
         <span class="brand-text">
           <strong>{{ $appName }}</strong>
-          <small>Bilik Suara Elektronik</small>
+          <small>Bilik Suara Digital</small>
         </span>
       </div>
 

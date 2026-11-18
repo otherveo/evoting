@@ -13,7 +13,7 @@
     <div>
       <div class="eyebrow">
         <svg class="icon"><use href="#i-ballot"></use></svg>
-        <span>TAHAP 2 DARI 4 · SURAT SUARA ELEKTRONIK</span>
+        <span>TAHAP 2 DARI 4 · SURAT SUARA Digital</span>
       </div>
       <h1>Pilih Satu Pasangan Calon</h1>
       <p class="lede">

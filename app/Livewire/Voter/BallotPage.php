@@ -14,7 +14,7 @@ use Livewire\Component;
 use Throwable;
 
 #[Layout('layouts.voter')]
-#[Title('Bilik Suara Elektronik')]
+#[Title('Bilik Suara Digital')]
 class BallotPage extends Component
 {
     use HandlesSafeErrors;
