@@ -426,10 +426,20 @@ class VoterMonitorPage extends Component
             return $row;
         });
 
-        $pendingApprovals = $allCollection->filter(function ($r) {
-            return $r->status === 'sedang_memilih'
+        /** @var StaffAccount|null $currentOperator */
+        $currentOperator = Auth::guard('staff')->user();
+        $currentOperatorId = $currentOperator?->id;
+
+        $pendingApprovals = $allCollection->filter(function ($r) use ($currentOperatorId) {
+            $isWaiting = $r->status === 'sedang_memilih'
                 && ($r->device_approval_status ?? 'tidak_perlu') === 'menunggu'
                 && ! $r->session_expired;
+
+            if (! $isWaiting) {
+                return false;
+            }
+
+            return $r->issued_by === null || $r->issued_by === $currentOperatorId;
         })->values();
 
         $totalRights = $allCollection->count();

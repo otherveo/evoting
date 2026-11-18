@@ -134,12 +134,14 @@ create table if not exists evoting.voter_rights (
   device_approval_status text not null default 'tidak_perlu'
     check (device_approval_status in ('tidak_perlu', 'menunggu', 'disetujui', 'ditolak')),
   device_approval_requested_at timestamptz null,
+  issued_by uuid null references evoting.staff_accounts (id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 alter table evoting.voter_rights add column if not exists device_approval_status text not null default 'tidak_perlu'
   check (device_approval_status in ('tidak_perlu', 'menunggu', 'disetujui', 'ditolak'));
 alter table evoting.voter_rights add column if not exists device_approval_requested_at timestamptz null;
+alter table evoting.voter_rights add column if not exists issued_by uuid null references evoting.staff_accounts (id) on delete set null;
 create unique index if not exists voter_rights_token_hash_unique
   on evoting.voter_rights (token_hash);
 create index if not exists voter_rights_election_status_idx
@@ -325,7 +327,8 @@ select
     )
   ) as device_warning,
   vr.device_approval_status,
-  vr.device_approval_requested_at
+  vr.device_approval_requested_at,
+  vr.issued_by
 from evoting.voter_rights vr
 join evoting.elections e on e.id = vr.election_id;
 
@@ -381,8 +384,8 @@ begin
     return query select 'limit_reached', 'Batas maksimum hak pilih tercapai.', null::uuid, p_election_id;
     return;
   end if;
-  insert into evoting.voter_rights (election_id, name, name_normalized, status, token_hash)
-  values (p_election_id, p_name, p_name_normalized, 'belum_memilih', p_token_hash)
+  insert into evoting.voter_rights (election_id, name, name_normalized, status, token_hash, issued_by)
+  values (p_election_id, p_name, p_name_normalized, 'belum_memilih', p_token_hash, p_operator_id)
   returning id into v_id;
   insert into evoting.audit_logs (actor_type, actor_id, action, object_type, object_id, detail)
   values ('operator', p_operator_id, 'buat_hak_pilih', 'voter_right', v_id,
@@ -869,6 +872,10 @@ begin
     return query select 'wrong_status', 'Pemilih ini sedang tidak menunggu persetujuan perangkat.', v_vr.id, v_vr.election_id;
     return;
   end if;
+  if v_vr.issued_by is not null and v_vr.issued_by <> p_operator_id then
+    return query select 'bukan_penerbit', 'Permintaan ini hanya dapat diputuskan oleh operator yang menerbitkan QR.', v_vr.id, v_vr.election_id;
+    return;
+  end if;
   if evoting.fn_election_phase(v_vr.election_id) <> 'berlangsung' then
     return query select 'wrong_phase', 'Keputusan hanya dapat diberikan saat pemilihan berlangsung.', v_vr.id, v_vr.election_id;
     return;
@@ -1145,7 +1152,7 @@ grant select, insert, update on evoting.staff_accounts to evoting_app;
 grant select, insert on evoting.elections to evoting_app;
 grant update (name, max_voter_rights, updated_at) on evoting.elections to evoting_app;
 grant select, insert, update, delete on evoting.candidates to evoting_app;
-grant select (id, election_id, name, name_normalized, status, session_started_at, session_browser_id, device_approval_status, device_approval_requested_at, created_at, updated_at)
+grant select (id, election_id, name, name_normalized, status, session_started_at, session_browser_id, device_approval_status, device_approval_requested_at, issued_by, created_at, updated_at)
   on evoting.voter_rights to evoting_app;
 -- votes: SENGAJA tanpa grant apa pun untuk evoting_app.
 grant select, insert on evoting.device_access_logs to evoting_app;

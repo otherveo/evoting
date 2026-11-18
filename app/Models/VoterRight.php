@@ -32,6 +32,7 @@ class VoterRight extends Model
         'session_browser_id',
         'device_approval_status',
         'device_approval_requested_at',
+        'issued_by',
         'created_at',
         'updated_at',
     ];

@@ -500,6 +500,7 @@ class VotingService
             'not_ended' => 'Hasil perolehan suara belum tersedia karena masa pemilihan belum berakhir.',
             'approval_required' => 'Menunggu persetujuan operator.',
             'approval_expired' => 'Batas waktu tunggu 10 menit telah berakhir.',
+            'bukan_penerbit' => 'Permintaan ini hanya dapat diputuskan oleh operator yang menerbitkan QR.',
             'device_rejected', 'rejected' => 'Aksesmu telah ditolak oleh operator, silakan minta QR baru jika kamu memang punya hak suara',
             'name_mismatch' => 'Nama pemilihan yang diketik tidak cocok.',
             'invalid_key' => 'Access key tidak valid atau sudah dicabut.',

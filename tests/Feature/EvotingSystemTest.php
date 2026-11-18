@@ -21,6 +21,7 @@ use App\Services\VotingService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
@@ -539,7 +540,16 @@ class EvotingSystemTest extends TestCase
             ->assertHasNoErrors();
         $this->assertSame($renamedC, $election->fresh()->name);
 
-        // PERUBAHAN 3.2: Shared-device operator approval gate
+        // PERUBAHAN 3.2 + UPDATE V2: Shared-device operator approval gate & issuer isolation
+        $operatorB = StaffAccount::create([
+            'username' => 'op_b_update_v2',
+            'full_name' => 'Operator Kedua V2',
+            'password_hash' => Hash::make('SandiOperator123!'),
+            'role' => 'operator',
+            'is_active' => true,
+            'totp_enabled' => false,
+        ]);
+
         $vr1 = $voting->createVoterRight($election->id, 'Nayla Putri', $operator->id);
         $vr2 = $voting->createVoterRight($election->id, 'Lindawaty Nono', $operator->id);
         $vr3 = $voting->createVoterRight($election->id, 'Budi Hartono', $operator->id);
@@ -560,14 +570,42 @@ class EvotingSystemTest extends TestCase
         $checkPending = $voting->checkDeviceApproval($vr2['raw_token'], $sharedBrowser);
         $this->assertSame('pending', $checkPending['code']);
 
-        // Operator approves Voter 2
+        // UPDATE V2: Operator A (issuer) sees the pending approval popup on monitor page
+        Livewire::actingAs($operator, 'staff')
+            ->test(VoterMonitorPage::class, ['election' => $election->fresh()])
+            ->assertSee('Permintaan Persetujuan Perangkat Bersama');
+
+        // UPDATE V2: Operator B (non-issuer) does NOT see the pending approval popup
+        Livewire::actingAs($operatorB, 'staff')
+            ->test(VoterMonitorPage::class, ['election' => $election->fresh()])
+            ->assertDontSee('Permintaan Persetujuan Perangkat Bersama');
+
+        // UPDATE V2: Operator B cannot decide Operator A's QR approval request
+        $wrongOpRes = $voting->decideDeviceApproval($vr2['voter_right_id'], $operatorB->id, 'setujui');
+        $this->assertFalse($wrongOpRes['ok']);
+        $this->assertSame('bukan_penerbit', $wrongOpRes['code']);
+        $this->assertSame(
+            'Permintaan ini hanya dapat diputuskan oleh operator yang menerbitkan QR.',
+            $wrongOpRes['message']
+        );
+
+        // Status remains pending after Operator B's rejected attempt and no audit log is created
+        $this->assertSame('pending', $voting->checkDeviceApproval($vr2['raw_token'], $sharedBrowser)['code']);
+        $this->assertFalse(
+            DB::table('evoting.audit_logs')
+                ->where('actor_id', $operatorB->id)
+                ->where('object_id', $vr2['voter_right_id'])
+                ->exists()
+        );
+
+        // Operator A approves Voter 2
         $approveRes = $voting->decideDeviceApproval($vr2['voter_right_id'], $operator->id, 'setujui');
         $this->assertTrue($approveRes['ok']);
 
         $checkApproved = $voting->checkDeviceApproval($vr2['raw_token'], $sharedBrowser);
         $this->assertSame('approved', $checkApproved['code']);
 
-        // Voter 3 starts on the SAME device -> locked -> Operator rejects Voter 3
+        // Voter 3 starts on the SAME device -> locked -> Operator A rejects Voter 3
         $start3 = $voting->startVoting($vr3['raw_token'], $sharedBrowser, 'Chrome Android', '10.0.0.10');
         $this->assertSame('approval_required', $start3['code']);
 
@@ -585,6 +623,24 @@ class EvotingSystemTest extends TestCase
         $reopen3 = $voting->openQr($vr3['raw_token'], $sharedBrowser, 'Chrome Android', '10.0.0.10');
         $this->assertFalse($reopen3['ok']);
         $this->assertSame('device_rejected', $reopen3['code']);
+
+        // UPDATE V2: Legacy row (issued_by IS NULL) is visible to and decidable by any operator
+        $legacyPair = $tokens->generateVoterToken();
+        $legacyRawToken = $legacyPair['raw'];
+        $legacyHash = $legacyPair['hash'];
+        $legacyRow = DB::selectOne(
+            'select * from evoting.fn_create_voter_right(?::uuid, ?, ?, ?, null::uuid)',
+            [$election->id, 'Pemilih Lama Legacy', 'pemilih lama legacy', $legacyHash]
+        );
+        $startLegacy = $voting->startVoting($legacyRawToken, $sharedBrowser, 'Chrome Android', '10.0.0.10');
+        $this->assertSame('approval_required', $startLegacy['code']);
+
+        Livewire::actingAs($operatorB, 'staff')
+            ->test(VoterMonitorPage::class, ['election' => $election->fresh()])
+            ->assertSee('Permintaan Persetujuan Perangkat Bersama');
+
+        $legacyApprove = $voting->decideDeviceApproval((string) $legacyRow->o_voter_right_id, $operatorB->id, 'setujui');
+        $this->assertTrue($legacyApprove['ok']);
 
         // PERUBAHAN 7: Real-time recap access key (64 chars, 1 active key, revocable)
         $key1 = $voting->issueAccessKey($election->id, $operator->id);

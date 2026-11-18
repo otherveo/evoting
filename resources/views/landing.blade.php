@@ -20,7 +20,7 @@
           </div>
         </div>
 
-        <h1 id="landing-title">{{ $appName }} — Pemilihan Sekolah Berbasis QR Token Sekali Pakai</h1>
+        <h1 id="landing-title">{{ $appName }} — Pemilihan Ketua OSIS Berbasis QR Token Sekali Pakai</h1>
 
         <p class="landing-lede">
           Platform pemungutan suara digital yang memisahkan identitas pemilih dari pilihan suara secara struktural. Cepat di meja verifikasi, rahasia di bilik suara, dan akuntabel hingga rekapitulasi akhir.
