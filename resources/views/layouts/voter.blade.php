@@ -11,7 +11,7 @@
   <meta name="theme-color" content="#132a63" />
   <link rel="icon" type="image/png" href="{{ asset('SMPN7-e-voting_logo.png') }}" />
   <title>{{ isset($title) ? $title . ' — ' . $appName : 'Bilik Suara — ' . $appName }}</title>
-  <link rel="stylesheet" href="{{ asset('css/suarasekolah.css') }}?v=8" />
+  <link rel="stylesheet" href="{{ asset('css/suarasekolah.css') }}?v=9" />
   @livewireStyles
 </head>
 <body>
@@ -65,6 +65,9 @@
     };
 
     window.unlockActionButtons = function (scope = document) {
+      scope.querySelectorAll('form[data-submitting="true"]').forEach((form) => {
+        delete form.dataset.submitting;
+      });
       scope.querySelectorAll('button[data-locked="true"], button[data-loading="true"]').forEach((btn) => {
         delete btn.dataset.locked;
         delete btn.dataset.loading;
@@ -99,18 +102,25 @@
 
     document.addEventListener('click', function (e) {
       const btn = e.target.closest('button[data-action-btn="true"], button[type="submit"]');
-      if (!btn || btn.disabled) return;
+      if (!btn) return;
       if (btn.dataset.locked === 'true') {
         e.preventDefault();
         e.stopImmediatePropagation();
         return false;
       }
+    }, true);
+
+    document.addEventListener('click', function (e) {
+      const btn = e.target.closest('button[data-action-btn="true"]');
+      if (!btn || btn.disabled || btn.type === 'submit') return;
       btn.dataset.locked = 'true';
       btn.dataset.loading = 'true';
-      queueMicrotask(() => {
-        btn.disabled = true;
-      });
-    }, true);
+      setTimeout(() => {
+        if (btn.dataset.locked === 'true') {
+          btn.disabled = true;
+        }
+      }, 0);
+    }, false);
 
     document.addEventListener('livewire:initialized', () => {
       Livewire.on('toast', (payload) => {

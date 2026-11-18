@@ -6099,6 +6099,16 @@ input[type="password"]::-ms-clear {
   box-shadow: none !important;
 }
 
+.btn[data-loading] > .btn-label-idle,
+.btn[data-locked] > .btn-label-idle {
+  display: none !important;
+}
+
+.btn[data-loading] > .btn-label-loading,
+.btn[data-locked] > .btn-label-loading {
+  display: inline-flex !important;
+}
+
 /* Numbered section badges & Collapsible sections */
 .section-numbered-title {
   display: flex;

@@ -14,7 +14,7 @@
   <meta name="theme-color" content="#132a63" />
   <link rel="icon" type="image/png" href="{{ asset('SMPN7-e-voting_logo.png') }}" />
   <title>{{ isset($title) ? $title . ' — ' . $appName : $appName . ' — Sistem Pemungutan Suara Elektronik' }}</title>
-  <link rel="stylesheet" href="{{ asset('css/suarasekolah.css') }}?v=8" />
+  <link rel="stylesheet" href="{{ asset('css/suarasekolah.css') }}?v=9" />
   @livewireStyles
 </head>
 <body>
@@ -186,6 +186,9 @@
     };
 
     window.unlockActionButtons = function (scope = document) {
+      scope.querySelectorAll('form[data-submitting="true"]').forEach((form) => {
+        delete form.dataset.submitting;
+      });
       scope.querySelectorAll('button[data-locked="true"], button[data-loading="true"]').forEach((btn) => {
         delete btn.dataset.locked;
         delete btn.dataset.loading;
@@ -218,28 +221,59 @@
       }, 2800);
     };
 
-    // Universal instant button lock (milidetik pertama saat klik) untuk mencegah spam/double-submit
+    // 1. Capture phase: blokir klik ganda jika tombol atau form sudah terkunci
     document.addEventListener('click', function (e) {
       const btn = e.target.closest('button[data-action-btn="true"], button[type="submit"]');
-      if (!btn || btn.disabled) return;
-      if (btn.dataset.locked === 'true') {
+      if (!btn) return;
+      const form = btn.closest('form');
+      if (btn.dataset.locked === 'true' || (btn.type === 'submit' && form && form.dataset.submitting === 'true')) {
         e.preventDefault();
         e.stopImmediatePropagation();
         return false;
       }
+    }, true);
+
+    // 2. Bubble phase untuk tombol non-submit (wire:click): kunci tepat setelah event diterima Livewire
+    document.addEventListener('click', function (e) {
+      const btn = e.target.closest('button[data-action-btn="true"]');
+      if (!btn || btn.disabled || btn.type === 'submit') return;
       btn.dataset.locked = 'true';
       btn.dataset.loading = 'true';
-      queueMicrotask(() => {
-        btn.disabled = true;
-      });
+      setTimeout(() => {
+        if (btn.dataset.locked === 'true') {
+          btn.disabled = true;
+        }
+      }, 0);
       if (btn.dataset.transientOpener === 'true') {
         setTimeout(() => {
           delete btn.dataset.locked;
           delete btn.dataset.loading;
           btn.disabled = false;
-        }, 900);
+        }, 700);
       }
-    }, true);
+    }, false);
+
+    // 3. Submit phase untuk form (wire:submit / POST): kunci tombol submit tepat saat form disubmit
+    document.addEventListener('submit', function (e) {
+      const form = e.target;
+      if (!form || form.tagName !== 'FORM') return;
+      if (form.dataset.submitting === 'true') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return false;
+      }
+      form.dataset.submitting = 'true';
+      const submitBtns = form.querySelectorAll('button[type="submit"], button[data-action-btn="true"][type="submit"]');
+      submitBtns.forEach((btn) => {
+        btn.dataset.locked = 'true';
+        btn.dataset.loading = 'true';
+        setTimeout(() => {
+          if (btn.dataset.locked === 'true') {
+            btn.disabled = true;
+          }
+        }, 0);
+      });
+    }, false);
 
     // Jika pengguna mengubah input di dalam form, buka kembali kunci tombol simpan di form tersebut
     document.addEventListener('input', function (e) {
