@@ -853,6 +853,7 @@ class EvotingSystemTest extends TestCase
             ->get(route('operator.elections.recap', $election))
             ->assertStatus(200)
             ->assertSee('css/operator/recap-reveal.css?v=', false)
+            ->assertSee('js/operator/recap-reveal.js?v=', false)
             ->assertSee('1 / 3 suara terpakai');
 
         $recapA = Livewire::actingAs($operatorA, 'staff')
@@ -903,7 +904,9 @@ class EvotingSystemTest extends TestCase
             ->assertSee('Pilih Jeda Antar Angka Suara')
             ->assertSee('Pilih Urutan Tampil Paslon')
             ->assertSee('Acak Urutan')
-            ->assertSee('Play (Mulai Animasi)');
+            ->assertSee('Play (Mulai Animasi)')
+            ->assertDontSee('buildResultRow')
+            ->assertSeeHtml('window.createRecapSim(');
         $this->assertSame('animasi', $election->fresh()->recap_mode);
 
         // Pastikan data snapshot suara sudah dimuat ke klien sekali saat opsi animasi ditekan
