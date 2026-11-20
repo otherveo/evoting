@@ -20,12 +20,19 @@ class ElectionRecapPage extends Component
 
     public Election $election;
 
-    public int $revealDelayInput = 1000;
+    public int $revealDelayInput = 150;
+
+    /**
+     * null (langkah pilih mode) | 'biasa' | 'animasi'
+     * Selalu dimulai dari null agar menekan "Buka Rekapitulasi" tidak membocorkan hasil duluan.
+     */
+    public ?string $activeViewMode = null;
 
     public function mount(Election $election): void
     {
         $this->election = $election;
-        $this->revealDelayInput = (int) ($election->reveal_delay_ms ?: 1000);
+        $this->revealDelayInput = (int) ($election->reveal_delay_ms ?: 150);
+        $this->activeViewMode = null;
     }
 
     private function canUnlockRecap(array $integrity, string $phase): bool
@@ -72,6 +79,7 @@ class ElectionRecapPage extends Component
             $this->election->update([
                 'recap_open' => true,
             ]);
+            $this->activeViewMode = null;
             $this->dispatch('toast', message: 'Dibuka', type: 'success');
         } catch (Throwable $e) {
             $this->reportSafeError($e, 'Gagal membuka halaman rekapitulasi.', 'recapLock');
@@ -85,10 +93,16 @@ class ElectionRecapPage extends Component
             $this->election->update([
                 'recap_open' => false,
             ]);
+            $this->activeViewMode = null;
             $this->dispatch('toast', message: 'Ditutup', type: 'info');
         } catch (Throwable $e) {
             $this->reportSafeError($e, 'Gagal menutup halaman rekapitulasi.');
         }
+    }
+
+    public function backToModeChoice(): void
+    {
+        $this->activeViewMode = null;
     }
 
     public function setRecapMode(string $mode): void
@@ -102,7 +116,8 @@ class ElectionRecapPage extends Component
             $this->election->update([
                 'recap_mode' => $mode,
             ]);
-            $this->dispatch('toast', message: 'Tersimpan', type: 'success');
+            $this->activeViewMode = $mode;
+            $this->dispatch('toast', message: $mode === 'animasi' ? 'Mode animasi' : 'Mode biasa', type: 'success');
         } catch (Throwable $e) {
             $this->reportSafeError($e, 'Gagal mengubah mode tampilan rekapitulasi.');
         }
@@ -453,7 +468,7 @@ class ElectionRecapPage extends Component
         $leadingCandidates = [];
         $revealCandidates = [];
 
-        if ($isRecapOpen) {
+        if ($isRecapOpen && $this->activeViewMode !== null) {
             $snapshot = $this->buildResultsSnapshot($voting);
             $resultsData = $snapshot['results_data'];
             $leadingCandidates = $snapshot['leading_candidates'];
@@ -480,9 +495,10 @@ class ElectionRecapPage extends Component
             'integrity' => $integrity,
             'canUnlockRecap' => $canUnlockRecap,
             'isRecapOpen' => $isRecapOpen,
+            'activeViewMode' => $this->activeViewMode,
             'recapMode' => (string) ($this->election->recap_mode ?: 'biasa'),
             'revealMode' => (string) ($this->election->reveal_mode ?: 'satu'),
-            'revealDelayMs' => (int) ($this->election->reveal_delay_ms ?: 1000),
+            'revealDelayMs' => (int) ($this->election->reveal_delay_ms ?: 150),
             'revealLocked' => (bool) $this->election->reveal_locked,
             'isLocalRevealRunner' => $isLocalRevealRunner,
             'savedOrder' => $savedOrder,

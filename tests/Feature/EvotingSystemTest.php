@@ -869,15 +869,26 @@ class EvotingSystemTest extends TestCase
         $this->assertTrue($voting->confirmVote($vr3['raw_token'], 'br_v5_3', $c2->id, 'UA', '10.0.0.3')['ok']);
 
         // Syarat kuota penuh (3/3) terpenuhi meski fase masih berlangsung -> Operator A bisa buka & tutup bebas
+        // Setelah menekan "Buka Rekapitulasi", masuk ke Langkah 3 (Pilih Mode) — hasil BELUM dibocorkan!
         $recapA->call('openRecap')
-            ->assertHasNoErrors();
+            ->assertHasNoErrors()
+            ->assertSet('activeViewMode', null)
+            ->assertSee('Pilih Mode Tampilan')
+            ->assertDontSee('Paslon Dua V5');
         $this->assertTrue($election->fresh()->recap_open);
 
-        // Operator B melihat state terbuka yang sama dan dapat melihat Mode Biasa (live results)
+        // Operator B melihat state terbuka (Langkah 3: pilih mode) dan dapat membuka Mode Biasa
         $recapB = Livewire::actingAs($operatorB, 'staff')
             ->test(ElectionRecapPage::class, ['election' => $election->fresh()])
             ->assertSee('Rekapitulasi Terbuka')
-            ->assertSee('Paslon Dua V5');
+            ->assertSee('Pilih Mode Tampilan')
+            ->assertDontSee('Paslon Dua V5')
+            ->call('setRecapMode', 'biasa')
+            ->assertSet('activeViewMode', 'biasa')
+            ->assertSee('Paslon Dua V5')
+            ->call('backToModeChoice')
+            ->assertSet('activeViewMode', null)
+            ->assertDontSee('Paslon Dua V5');
 
         // Tutup & buka kembali secara bebas oleh Operator A
         $this->actingAs($operatorA, 'staff');
@@ -886,11 +897,21 @@ class EvotingSystemTest extends TestCase
         $recapA->call('openRecap');
         $this->assertTrue($election->fresh()->recap_open);
 
-        // --- BAGIAN B.2 & B.3: Mode Animasi (Reveal), urutan, delay validation 20..10000, lock & reset ---
-        $recapA->call('setRecapMode', 'animasi');
+        // --- BAGIAN B.2 & B.3: Mode Animasi (100% client-side sekali muat, referensi vote-simulation.html) ---
+        $recapA->call('setRecapMode', 'animasi')
+            ->assertSet('activeViewMode', 'animasi')
+            ->assertSee('Pilih Jeda Antar Angka Suara')
+            ->assertSee('Pilih Urutan Tampil Paslon')
+            ->assertSee('Acak Urutan')
+            ->assertSee('Play (Mulai Animasi)');
         $this->assertSame('animasi', $election->fresh()->recap_mode);
 
-        // Validasi delay di luar rentang 20..10000 ditolak
+        // Pastikan data snapshot suara sudah dimuat ke klien sekali saat opsi animasi ditekan
+        $animCandidates = $recapA->viewData('revealCandidates');
+        $this->assertCount(3, $animCandidates);
+        $this->assertSame(3, $recapA->viewData('totalVotesCast'));
+
+        // Validasi delay di server tetap terjaga di rentang 20..10000
         $recapA->call('saveRevealDelay', 19)->assertHasErrors(['revealDelayInput']);
         $recapA->call('saveRevealDelay', 10001)->assertHasErrors(['revealDelayInput']);
         $recapA->call('saveRevealDelay', 650)->assertHasNoErrors();
@@ -907,20 +928,16 @@ class EvotingSystemTest extends TestCase
         $recapA->call('setRevealMode', 'satu');
         $this->assertSame('satu', $election->fresh()->reveal_mode);
 
-        // Mulai Animasi -> mengunci konfigurasi untuk operator lain & memuat data sekali
+        // Mulai Animasi -> mengunci konfigurasi untuk operator lain
         $recapA->call('startReveal');
         $elAfterStart = $election->fresh();
         $this->assertTrue($elAfterStart->reveal_locked);
         $this->assertSame($operatorA->id, (string) $elAfterStart->reveal_locked_by);
         $this->assertSame([], $elAfterStart->revealed_ids);
 
-        // Operator A (runner) melihat kontrol kecepatan lokal 1x/2x/4x
-        $recapA->assertSeeHtml('reveal-speed-controls');
-
-        // Operator B tidak bisa mengubah konfigurasi selama terkunci & TIDAK melihat kontrol kecepatan lokal
-        $recapB = Livewire::actingAs($operatorB, 'staff')
+        // Operator B tidak bisa mengubah konfigurasi selama terkunci
+        Livewire::actingAs($operatorB, 'staff')
             ->test(ElectionRecapPage::class, ['election' => $election->fresh()])
-            ->assertDontSeeHtml('reveal-speed-controls')
             ->call('setRevealMode', 'semua')
             ->call('saveRevealDelay', 5000);
         $this->assertSame('satu', $election->fresh()->reveal_mode);

@@ -5,7 +5,7 @@
 
 <div
   class="container page view-enter"
-  @if(!($isRecapOpen && $recapMode === 'animasi' && $revealLocked && $isLocalRevealRunner)) wire:poll.3s.visible @endif
+  @if(!$isRecapOpen) wire:poll.3s.visible @endif
 >
   <div class="page-heading">
     <div>
@@ -76,7 +76,7 @@
   </section>
 
   @if(!$isRecapOpen)
-    {{-- Update v5 B.1: Halaman Rekapitulasi Terkunci (Kunci Operator) --}}
+    {{-- LANGKAH 1 & 2: Halaman Rekapitulasi Terkunci (Kunci Operator) --}}
     <section class="locked-results" aria-label="Rekapitulasi Per Paslon Terkunci">
       <div class="locked-visual" aria-hidden="true">
         <span class="locked-ring"></span>
@@ -95,9 +95,9 @@
       @if($canUnlockRecap)
         <p class="locked-lede">
           @if($phase === 'ditutup')
-            Pemilihan telah memasuki fase <strong>Ditutup</strong>. Anda sekarang dapat membuka halaman rekapitulasi secara bebas dan menutupnya kembali kapan saja.
+            Pemilihan telah memasuki fase <strong>Ditutup</strong>. Tekan <strong>Buka Rekapitulasi</strong> untuk memilih mode tampilan (Mode Biasa atau Mode Animasi) tanpa langsung membocorkan hasil.
           @else
-            Seluruh kuota hak pilih (<strong>{{ $integrity['total_voted'] }} / {{ $election->max_voter_rights }} suara</strong>) telah terpakai. Anda sekarang dapat membuka halaman rekapitulasi secara bebas.
+            Seluruh kuota hak pilih (<strong>{{ $integrity['total_voted'] }} / {{ $election->max_voter_rights }} suara</strong>) telah terpakai. Tekan <strong>Buka Rekapitulasi</strong> untuk memilih mode tampilan hasil.
           @endif
         </p>
       @else
@@ -157,7 +157,7 @@
       </p>
     </section>
   @else
-    {{-- Update v5 B.1 & B.2: Bar Kontrol Rekapitulasi Terbuka (Tutup + Pilih Mode Biasa / Animasi) --}}
+    {{-- Bar Kontrol Rekapitulasi Terbuka --}}
     <div class="recap-control-bar">
       <div class="recap-control-left">
         <span class="status-badge is-sudah">
@@ -165,43 +165,94 @@
           <span>Rekapitulasi Terbuka</span>
         </span>
 
-        <div class="recap-mode-switch" role="tablist" aria-label="Mode Tampilan Rekapitulasi">
-          <button
-            type="button"
-            role="tab"
-            aria-selected="{{ $recapMode === 'biasa' ? 'true' : 'false' }}"
-            class="recap-mode-btn {{ $recapMode === 'biasa' ? 'is-active' : '' }}"
-            wire:click="setRecapMode('biasa')"
-          >
-            <svg class="icon"><use href="#i-chart"></use></svg>
-            <span>Mode Biasa</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected="{{ $recapMode === 'animasi' ? 'true' : 'false' }}"
-            class="recap-mode-btn {{ $recapMode === 'animasi' ? 'is-active' : '' }}"
-            wire:click="setRecapMode('animasi')"
-          >
-            <svg class="icon"><use href="#i-sparkles"></use></svg>
-            <span>Mode Animasi (Reveal)</span>
-          </button>
-        </div>
+        @if($activeViewMode === 'biasa')
+          <span class="status-badge is-belum">Mode Biasa</span>
+        @elseif($activeViewMode === 'animasi')
+          <span class="status-badge is-sedang">Mode Animasi (Reveal)</span>
+        @else
+          <span class="status-badge is-belum">Langkah 3 · Pilih Mode Tampilan</span>
+        @endif
       </div>
 
-      <x-action-button
-        variant="secondary"
-        size="sm"
-        icon="#i-lock"
-        wire:click="closeRecap"
-        loadingText="Menutup..."
-      >
-        Tutup Rekapitulasi
-      </x-action-button>
+      <div class="recap-control-right">
+        @if($activeViewMode !== null)
+          <x-action-button
+            variant="soft"
+            size="sm"
+            icon="#i-rotate"
+            wire:click="backToModeChoice"
+            loadingText="Kembali..."
+          >
+            Ganti Mode
+          </x-action-button>
+        @endif
+
+        <x-action-button
+          variant="secondary"
+          size="sm"
+          icon="#i-lock"
+          wire:click="closeRecap"
+          loadingText="Menutup..."
+        >
+          Tutup Rekapitulasi
+        </x-action-button>
+      </div>
     </div>
 
-    @if($recapMode === 'biasa')
-      {{-- Update v5 B.2: Mode Biasa (x-results-breakdown live) --}}
+    @if($activeViewMode === null)
+      {{-- LANGKAH 3: Pilih Mode Tampilan (Biasa vs Animasi) — Hasil BELUM Ditampilkan (Tanpa Spoiler) --}}
+      <section class="panel mode-choice-panel" aria-label="Pilih Mode Tampilan Rekapitulasi">
+        <div class="mode-choice-head">
+          <div class="eyebrow" style="justify-content: center;">
+            <svg class="icon"><use href="#i-sparkles"></use></svg>
+            <span>LANGKAH 3 · PILIH MODE TAMPILAN HASIL</span>
+          </div>
+          <h2>Bagaimana Anda ingin menampilkan hasil rekapitulasi?</h2>
+          <p>
+            Hasil suara per pasangan calon masih tersembunyi agar tidak bocor sebelum waktunya. Pilih <strong>Mode Biasa</strong> untuk langsung melihat tabel lengkap, atau <strong>Mode Animasi</strong> untuk menampilkan suara satu per satu secara dramatis.
+          </p>
+        </div>
+
+        <div class="mode-choice-grid">
+          <button
+            type="button"
+            class="mode-choice-card"
+            wire:click="setRecapMode('biasa')"
+          >
+            <span class="mode-choice-icon">
+              <svg class="icon"><use href="#i-chart"></use></svg>
+            </span>
+            <h3>Mode Biasa (Tabel Langsung)</h3>
+            <p>
+              Langsung menampilkan ringkasan pemenang, tabel perolehan suara setiap pasangan calon, dan persentase secara penuh dalam satu halaman.
+            </p>
+            <span class="mode-choice-cta">
+              <span>Tampilkan Mode Biasa</span>
+              <svg class="icon"><use href="#i-arrow-right"></use></svg>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            class="mode-choice-card is-animasi"
+            wire:click="setRecapMode('animasi')"
+          >
+            <span class="mode-choice-icon">
+              <svg class="icon"><use href="#i-sparkles"></use></svg>
+            </span>
+            <h3>Mode Animasi (Reveal Bertahap)</h3>
+            <p>
+              Atur jeda antar angka suara, susun urutan tampil paslon tanpa membocorkan jumlah suara, lalu jalankan animasi hitung-naik dan papan peringkat langsung di browser.
+            </p>
+            <span class="mode-choice-cta">
+              <span>Siapkan Mode Animasi</span>
+              <svg class="icon"><use href="#i-arrow-right"></use></svg>
+            </span>
+          </button>
+        </div>
+      </section>
+    @elseif($activeViewMode === 'biasa')
+      {{-- LANGKAH 4a: Mode Biasa (Tabel Rekap Langsung) --}}
       <x-results-breakdown
         :election="$election"
         :resultsData="$resultsData ?? []"
@@ -215,572 +266,670 @@
         winnerNote="Dihitung otomatis dari tabel suara anonim."
       />
     @else
-      {{-- Update v5 B.3–B.8: Mode Animasi (Reveal) --}}
-      <section class="panel reveal-config-panel" aria-label="Konfigurasi Animasi Reveal">
-        <div class="panel-head">
-          <div>
-            <h2 class="panel-title">
-              <svg class="icon"><use href="#i-sparkles"></use></svg>
-              <span>Konfigurasi Animasi Reveal</span>
-            </h2>
-            <p class="panel-sub">
-              Susun urutan tampil paslon, pilih mode reveal, dan atur durasi hitung-naik (20–10.000 ms). Setelah dimulai, konfigurasi terkunci hingga ditekan Reset.
-            </p>
-          </div>
-          <span class="status-badge {{ $revealLocked ? 'is-sedang' : 'is-belum' }}">
-            <span class="status-dot"></span>
-            <span>{{ $revealLocked ? 'Konfigurasi Terkunci (Reveal Aktif)' : 'Siap Dikonfigurasi' }}</span>
-          </span>
-        </div>
+      {{-- LANGKAH 4b: Mode Animasi (Data Diambil SEKALI, 100% Murni Client-Side Mengikuti Referensi vote-simulation.html) --}}
+      <div
+        class="sim-wrap"
+        wire:key="sim-anim-root-{{ $election->id }}"
+        wire:ignore
+        x-data="{
+          candidates: @js($revealCandidates),
+          totalVotes: @js($totalVotesCast),
+          orderIds: [],
+          delayMs: 150,
+          delayError: '',
+          running: false,
+          abortFlag: false,
+          skipFlag: false,
+          speed: 1,
+          wakers: [],
+          statusText: 'Siap dijalankan — atur jeda dan urutan tampil, lalu tekan Play',
+          hasResults: false,
+          dragId: null,
 
-        <div class="reveal-config-body">
-          {{-- B.3.1: Urutan tampil paslon --}}
-          <div>
-            <div class="reveal-config-section-title">
-              <div>
-                <strong>1. Urutan Tampil Paslon</strong>
-                <span>Klik paslon sesuai urutan tampil yang diinginkan, atau gunakan tombol Acak Urutan Tampil.</span>
+          /* Konstanta animasi persis referensi vote-simulation.html */
+          POP_MS: 520,
+          START_DELAY: 1000,
+          PULSE_MS: 500,
+          HOLD_MS: 2000,
+          DROP_MS: 520,
+          GROW_MS: 520,
+          SHIFT_MS: 560,
+
+          init() {
+            this.orderIds = this.candidates.map(c => String(c.id));
+
+            this._scrimEl = document.createElement('div');
+            this._scrimEl.className = 'sim-scrim';
+            this._layerEl = document.createElement('div');
+            this._layerEl.className = 'sim-layer';
+            document.body.appendChild(this._scrimEl);
+            document.body.appendChild(this._layerEl);
+
+            this._onKeyDown = (e) => {
+              if (e.key === 'Escape' && this.running) {
+                this.skipNow();
+              }
+            };
+            window.addEventListener('keydown', this._onKeyDown);
+          },
+
+          destroy() {
+            this.abortFlag = true;
+            this.skipNow();
+            window.removeEventListener('keydown', this._onKeyDown);
+            this.cleanupOverlay();
+            if (this._scrimEl) {
+              this._scrimEl.remove();
+              this._scrimEl = null;
+            }
+            if (this._layerEl) {
+              this._layerEl.remove();
+              this._layerEl = null;
+            }
+          },
+
+          candById(id) {
+            return this.candidates.find(c => String(c.id) === String(id)) || null;
+          },
+
+          get orderedCandidates() {
+            return this.orderIds.map(id => this.candById(id)).filter(Boolean);
+          },
+
+          formatVotes(val) {
+            return new Intl.NumberFormat('id-ID').format(Math.max(0, Math.round(Number(val) || 0)));
+          },
+
+          formatShare(votes) {
+            const pct = this.totalVotes > 0 ? (Number(votes) / this.totalVotes) * 100 : 0;
+            return pct.toFixed(1).replace('.', ',') + '%';
+          },
+
+          sharePct(votes) {
+            if (this.totalVotes <= 0) return 0;
+            return Math.min(100, Math.max(0, (Number(votes) / this.totalVotes) * 100));
+          },
+
+          esc(str) {
+            return String(str).replace(/[&<>\"']/g, c => ({
+              '&': '&amp;',
+              '<': '&lt;',
+              '>': '&gt;',
+              '\"': '&quot;',
+              '\'': '&#39;'
+            }[c]));
+          },
+
+          setDelayPreset(val) {
+            if (this.running) return;
+            this.delayMs = val;
+            this.delayError = '';
+          },
+
+          validateDelay() {
+            const v = Number(this.delayMs);
+            if (!Number.isFinite(v) || !Number.isInteger(v) || v < 20 || v > 10000) {
+              this.delayError = 'Jeda antar angka wajib berupa bilangan bulat antara 20 ms hingga 10000 ms (10 detik).';
+              return false;
+            }
+            this.delayError = '';
+            return true;
+          },
+
+          shuffleOrder() {
+            if (this.running) return;
+            const arr = [...this.orderIds];
+            for (let i = arr.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            this.orderIds = arr;
+          },
+
+          moveOrder(index, delta) {
+            if (this.running) return;
+            const target = index + delta;
+            if (target < 0 || target >= this.orderIds.length) return;
+            const arr = [...this.orderIds];
+            [arr[index], arr[target]] = [arr[target], arr[index]];
+            this.orderIds = arr;
+          },
+
+          /* Pointer-event Drag & Drop persis referensi vote-simulation.html (instan di mouse & sentuh) */
+          onHandleDown(e, id) {
+            if (this.running) return;
+            e.preventDefault();
+            this.dragId = String(id);
+            e.currentTarget.setPointerCapture(e.pointerId);
+          },
+
+          onSetupMove(e) {
+            if (!this.dragId || this.running) return;
+            const overEl = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-setup-id]');
+            if (!overEl) return;
+            const overId = String(overEl.dataset.setupId);
+            if (overId === this.dragId) return;
+
+            const rect = overEl.getBoundingClientRect();
+            const insertBefore = e.clientY < rect.top + rect.height / 2;
+
+            const arr = this.orderIds.filter(x => x !== this.dragId);
+            const overIdx = arr.indexOf(overId);
+            if (overIdx === -1) return;
+            arr.splice(insertBefore ? overIdx : overIdx + 1, 0, this.dragId);
+            this.orderIds = arr;
+          },
+
+          onSetupUp() {
+            this.dragId = null;
+          },
+
+          /* Jeda yang menghormati kecepatan lokal (1x/2x/4x) & bisa dilewati (tombol x / Esc) */
+          wait(ms) {
+            if (this.skipFlag || this.abortFlag) return Promise.resolve();
+            const scaled = Math.max(8, Math.round(ms / this.speed));
+            return new Promise((resolve) => {
+              const timer = setTimeout(finish, scaled);
+              const finish = () => {
+                clearTimeout(timer);
+                this.wakers = this.wakers.filter(fn => fn !== finish);
+                resolve();
+              };
+              this.wakers.push(finish);
+            });
+          },
+
+          skipNow() {
+            this.skipFlag = true;
+            [...this.wakers].forEach(fn => fn());
+          },
+
+          doneAnim(anim) {
+            return anim.finished.catch(() => {});
+          },
+
+          cleanupOverlay() {
+            if (this._layerEl) this._layerEl.innerHTML = '';
+            if (this._scrimEl) this._scrimEl.classList.remove('on');
+          },
+
+          buildPop(c) {
+            const el = document.createElement('div');
+            el.className = 'sim-pop';
+            el.innerHTML = `
+              <button class='sim-pop-close' type='button' aria-label='Lewati animasi'>&times;</button>
+              <img class='sim-photo--lg' src='${this.esc(c.photo_url)}' alt='${this.esc(c.name)}' />
+              <div class='sim-pop-no'>PASLON NO. ${this.esc(c.formatted_number)}</div>
+              <div class='sim-pop-name'>${this.esc(c.name)}</div>
+              <div class='sim-pop-count'>0</div>
+              <div class='sim-pop-unit'>SUARA SAH</div>
+              <div class='sim-pop-speed' aria-label='Kontrol Kecepatan Lokal'>
+                <span class='sim-pop-speed-label'>Kecepatan</span>
+                <button type='button' class='sim-speed-btn ${this.speed === 1 ? 'is-active' : ''}' data-speed='1'>1x</button>
+                <button type='button' class='sim-speed-btn ${this.speed === 2 ? 'is-active' : ''}' data-speed='2'>2x</button>
+                <button type='button' class='sim-speed-btn ${this.speed === 4 ? 'is-active' : ''}' data-speed='4'>4x</button>
               </div>
-              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <x-action-button
-                  variant="soft"
-                  size="xs"
-                  icon="#i-sparkles"
-                  wire:key="btn-shuffle-{{ md5(json_encode($savedOrder)) }}-{{ $revealLocked ? '1' : '0' }}"
-                  wire:click="shuffleRevealOrder"
-                  loadingText="Mengacak..."
-                  :disabled="$revealLocked"
-                >
-                  Acak Urutan Tampil
-                </x-action-button>
-                <x-action-button
-                  variant="secondary"
-                  size="xs"
-                  icon="#i-rotate"
-                  wire:key="btn-clear-order-{{ count($savedOrder) }}-{{ $revealLocked ? '1' : '0' }}"
-                  wire:click="clearRevealOrder"
-                  loadingText="Mereset..."
-                  :disabled="$revealLocked || empty($savedOrder)"
-                >
-                  Kosongkan Pilihan
-                </x-action-button>
-              </div>
-            </div>
-
-            <div class="reveal-order-grid">
-              @foreach($candidatesList as $cand)
-                @php
-                  $pickedIdx = array_search((string) $cand->id, $savedOrder, true);
-                  $isPicked = $pickedIdx !== false;
-                @endphp
-                <button
-                  type="button"
-                  class="reveal-order-card {{ $isPicked ? 'is-picked' : '' }}"
-                  wire:click="toggleCandidateOrder('{{ $cand->id }}')"
-                  wire:key="rev-ord-{{ $cand->id }}"
-                  @if($revealLocked) disabled @endif
-                >
-                  <span class="reveal-order-num">{{ $cand->formattedNumber() }}</span>
-                  <div class="reveal-order-info">
-                    <strong>{{ $cand->name }}</strong>
-                    <small>{{ $isPicked ? 'Dipilih untuk urutan #' . ($pickedIdx + 1) : 'Klik untuk menambahkan ke urutan' }}</small>
-                  </div>
-                  @if($isPicked)
-                    <span class="reveal-order-badge">#{{ $pickedIdx + 1 }}</span>
-                  @endif
-                </button>
-              @endforeach
-            </div>
-          </div>
-
-          {{-- B.3.3 & B.3.4: Mode Reveal & Delay (20 - 10000 ms) --}}
-          <div class="reveal-settings-row">
-            <div>
-              <div class="reveal-config-section-title" style="margin-bottom: 8px;">
-                <strong>2. Mode Reveal</strong>
-              </div>
-              <div class="reveal-mode-options">
-                <button
-                  type="button"
-                  class="btn btn-sm {{ $revealMode === 'satu' ? 'btn-primary' : 'btn-secondary' }}"
-                  wire:click="setRevealMode('satu')"
-                  @if($revealLocked) disabled @endif
-                >
-                  <span>Satu per Satu Paslon</span>
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-sm {{ $revealMode === 'semua' ? 'btn-primary' : 'btn-secondary' }}"
-                  wire:click="setRevealMode('semua')"
-                  @if($revealLocked) disabled @endif
-                >
-                  <span>Langsung Semua Paslon</span>
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <div class="reveal-config-section-title" style="margin-bottom: 8px;">
-                <strong>3. Durasi Hitung-Naik per Paslon (20 – 10.000 ms)</strong>
-              </div>
-              <form wire:submit="saveRevealDelay" class="reveal-delay-box" novalidate>
-                <input
-                  id="reveal-delay-input"
-                  type="number"
-                  min="20"
-                  max="10000"
-                  step="10"
-                  wire:model="revealDelayInput"
-                  class="field-input @error('revealDelayInput') is-invalid @enderror"
-                  @if($revealLocked) disabled @endif
-                  aria-label="Durasi delay animasi dalam milidetik"
-                />
-                <span class="field-hint" style="margin: 0; white-space: nowrap;">ms (maks 10 detik)</span>
-                <x-action-button
-                  type="submit"
-                  variant="secondary"
-                  size="sm"
-                  target="saveRevealDelay"
-                  wire:key="btn-save-delay-{{ $revealDelayMs }}-{{ $revealLocked ? '1' : '0' }}"
-                  loadingText="Menyimpan..."
-                  :disabled="$revealLocked"
-                >
-                  Simpan Delay
-                </x-action-button>
-              </form>
-              @error('revealDelayInput')
-                <div class="field-error" role="alert">
-                  <svg class="icon"><use href="#i-alert"></use></svg>
-                  <span>{{ $message }}</span>
-                </div>
-              @enderror
-            </div>
-          </div>
-
-          {{-- B.3.5: Tombol Mulai Animasi & Reset --}}
-          <div class="reveal-actions-bar">
-            <div class="field-hint" style="margin: 0;">
-              @if($revealLocked)
-                Konfigurasi terkunci selama reveal aktif. Tekan <strong>Reset</strong> untuk membuka kunci dan kembali ke konfigurasi.
-              @else
-                Urutan aktif: <strong>{{ count($effectiveOrder) }} paslon</strong> · Mode: <strong>{{ $revealMode === 'semua' ? 'Langsung Semua' : 'Satu per Satu' }}</strong> · Delay: <strong>{{ $revealDelayMs }} ms</strong>
-              @endif
-            </div>
-
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-              <x-action-button
-                variant="secondary"
-                icon="#i-rotate"
-                wire:key="btn-reset-reveal-{{ $revealLocked ? '1' : '0' }}"
-                wire:click="resetReveal"
-                loadingText="Mereset..."
-                :disabled="!$revealLocked"
-              >
-                Reset
-              </x-action-button>
-
-              <x-action-button
-                variant="primary"
-                icon="#i-sparkles"
-                wire:key="btn-start-reveal-{{ $revealLocked ? '1' : '0' }}"
-                wire:click="startReveal"
-                loadingText="Memulai..."
-                :disabled="$revealLocked || $candidatesList->isEmpty()"
-              >
-                Mulai Animasi
-              </x-action-button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      @if($revealLocked)
-        @if($isLocalRevealRunner)
-          {{-- Arena Reveal Interaktif Sisi Klien (Data Diambil SEKALI, Kontrol Kecepatan Lokal 1x/2x/4x) --}}
-          <div
-            wire:key="reveal-runner-{{ $election->id }}-{{ $revealMode }}-{{ $revealDelayMs }}"
-            wire:ignore
-            x-data="{
-              candidates: @js($revealCandidates),
-              order: @js($effectiveOrder),
-              initialRevealedIds: @js($revealedIds),
-              mode: @js($revealMode),
-              delayMs: @js($revealDelayMs),
-              totalVotes: @js($totalVotesCast),
-              speed: 1,
-              isAnimating: false,
-              isFinished: false,
-              stageCards: [],
-              rankedList: [],
-              newlyLandedIds: [],
-              shiftedDownIds: [],
-              rafId: null,
-              cancelled: false,
-
-              candById(id) {
-                return this.candidates.find(c => String(c.id) === String(id)) || null;
-              },
-
-              formatVotes(val) {
-                return new Intl.NumberFormat('id-ID').format(Math.max(0, Math.round(Number(val) || 0)));
-              },
-
-              formatShare(cand) {
-                const votes = Number(cand.vote_count) || 0;
-                const pct = this.totalVotes > 0 ? (votes / this.totalVotes) * 100 : 0;
-                return pct.toFixed(1).replace('.', ',') + '%';
-              },
-
-              barWidth(cand) {
-                const votes = Number(cand.vote_count) || 0;
-                const pct = this.totalVotes > 0 ? (votes / this.totalVotes) * 100 : 0;
-                return Math.min(100, Math.max(0, pct)) + '%';
-              },
-
-              setSpeed(mult) {
+            `;
+            el.querySelector('.sim-pop-close').addEventListener('click', () => this.skipNow());
+            el.querySelectorAll('.sim-speed-btn').forEach((btn) => {
+              btn.addEventListener('click', () => {
+                const mult = Number(btn.dataset.speed);
                 if ([1, 2, 4].includes(mult)) {
                   this.speed = mult;
+                  el.querySelectorAll('.sim-speed-btn').forEach((b) => {
+                    b.classList.toggle('is-active', Number(b.dataset.speed) === mult);
+                  });
                 }
-              },
+              });
+            });
+            return el;
+          },
 
-              sortRanked(list) {
-                return [...list].sort((a, b) => {
-                  const diff = (Number(b.vote_count) || 0) - (Number(a.vote_count) || 0);
-                  if (diff !== 0) return diff;
-                  return (Number(a.number) || 0) - (Number(b.number) || 0);
-                });
-              },
+          buildResultRow(c) {
+            const li = document.createElement('li');
+            li.className = 'sim-result';
+            li.dataset.id = String(c.id);
+            li.style.visibility = 'hidden';
+            li.innerHTML = `
+              <span class='sim-rank'>#1</span>
+              <img class='sim-photo' src='${this.esc(c.photo_url)}' alt='${this.esc(c.name)}' />
+              <div class='sim-who'>
+                <div class='sim-name-row'>
+                  <span class='name'>${this.esc(c.name)}</span>
+                  <span class='sim-top-badge' hidden>TERATAS</span>
+                </div>
+                <div class='meta'>Paslon No. ${this.esc(c.formatted_number)}</div>
+              </div>
+              <div class='sim-score-wrap'>
+                <strong class='sim-score'>${this.formatVotes(c.vote_count)}</strong>
+                <span class='sim-share'>${this.formatShare(c.vote_count)}</span>
+              </div>
+              <div class='sim-bar'><i></i></div>
+            `;
+            return li;
+          },
 
-              landCandidates(candsToLand) {
-                const prevRanks = {};
-                this.rankedList.forEach((item, idx) => {
-                  prevRanks[String(item.id)] = idx;
-                });
+          refreshRanks() {
+            const listEl = this.$refs.simList;
+            if (!listEl) return;
+            [...listEl.children].forEach((el, idx) => {
+              const rankEl = el.querySelector('.sim-rank');
+              const topBadge = el.querySelector('.sim-top-badge');
+              if (rankEl) rankEl.textContent = '#' + (idx + 1);
+              el.classList.toggle('is-rank-1', idx === 0);
+              if (topBadge) topBadge.hidden = idx !== 0;
+            });
+          },
 
-                const existingIds = new Set(this.rankedList.map(i => String(i.id)));
-                const additions = [];
-                for (const c of candsToLand) {
-                  if (!existingIds.has(String(c.id))) {
-                    additions.push({ ...c });
-                    existingIds.add(String(c.id));
-                  }
-                }
+          async moveToList(c, pop) {
+            const listEl = this.$refs.simList;
+            const scrim = this._scrimEl;
+            const li = this.buildResultRow(c);
 
-                const nextList = this.sortRanked([...this.rankedList, ...additions]);
-                const landedIds = additions.map(a => String(a.id));
-                const shiftedIds = [];
-                nextList.forEach((item, newIdx) => {
-                  const sid = String(item.id);
-                  if (prevRanks[sid] !== undefined && newIdx > prevRanks[sid]) {
-                    shiftedIds.push(sid);
-                  }
-                });
+            // Cari posisi: suara lebih tinggi di atas (seri -> nomor urut lebih kecil di atas)
+            const beforeEl = [...listEl.children].find((el) => {
+              const other = this.candById(el.dataset.id);
+              if (!other) return false;
+              const oVotes = Number(other.vote_count) || 0;
+              const cVotes = Number(c.vote_count) || 0;
+              return oVotes < cVotes || (oVotes === cVotes && Number(other.number) > Number(c.number));
+            });
 
-                this.rankedList = nextList;
-                this.newlyLandedIds = landedIds;
-                this.shiftedDownIds = shiftedIds;
+            // Rekam posisi baris lama untuk FLIP shift
+            const siblings = [...listEl.children];
+            const beforeTop = new Map(siblings.map(el => [el, el.getBoundingClientRect().top]));
 
-                setTimeout(() => {
-                  this.newlyLandedIds = [];
-                  this.shiftedDownIds = [];
-                }, 520);
+            listEl.insertBefore(li, beforeEl || null);
+            this.hasResults = true;
+            li.scrollIntoView({ block: 'nearest' });
 
-                if (landedIds.length > 0) {
-                  $wire.markCandidatesRevealed(landedIds);
-                }
-              },
-
-              sleepScaled(ms) {
-                return new Promise((resolve) => {
-                  let elapsed = 0;
-                  let last = performance.now();
-                  const step = (now) => {
-                    if (this.cancelled) {
-                      resolve();
-                      return;
-                    }
-                    const dt = Math.max(0, now - last);
-                    last = now;
-                    elapsed += dt * this.speed;
-                    if (elapsed >= ms) {
-                      resolve();
-                      return;
-                    }
-                    this.rafId = requestAnimationFrame(step);
-                  };
-                  this.rafId = requestAnimationFrame(step);
-                });
-              },
-
-              animateCountUp(cards) {
-                return new Promise((resolve) => {
-                  const hasPositive = cards.some(c => (Number(c.vote_count) || 0) > 0);
-                  if (!hasPositive) {
-                    cards.forEach(c => { c.displayCount = 0; });
-                    resolve();
-                    return;
-                  }
-
-                  let progress = 0;
-                  let last = performance.now();
-                  const duration = Math.max(20, Number(this.delayMs) || 1000);
-
-                  const tick = (now) => {
-                    if (this.cancelled) {
-                      resolve();
-                      return;
-                    }
-                    const dt = Math.max(0, now - last);
-                    last = now;
-                    progress = Math.min(1, progress + (dt * this.speed) / duration);
-
-                    for (const card of cards) {
-                      const target = Number(card.vote_count) || 0;
-                      card.displayCount = target === 0 ? 0 : Math.round(target * progress);
-                    }
-
-                    if (progress >= 1) {
-                      for (const card of cards) {
-                        card.displayCount = Number(card.vote_count) || 0;
-                      }
-                      resolve();
-                      return;
-                    }
-                    this.rafId = requestAnimationFrame(tick);
-                  };
-
-                  this.rafId = requestAnimationFrame(tick);
-                });
-              },
-
-              async initReveal() {
-                this.cancelled = false;
-                const alreadySet = new Set(this.initialRevealedIds.map(String));
-                const alreadyRevealed = [];
-                for (const cid of this.order) {
-                  if (alreadySet.has(String(cid))) {
-                    const found = this.candById(cid);
-                    if (found) alreadyRevealed.push({ ...found });
-                  }
-                }
-                this.rankedList = this.sortRanked(alreadyRevealed);
-
-                const remaining = this.order
-                  .filter(cid => !alreadySet.has(String(cid)))
-                  .map(cid => this.candById(cid))
-                  .filter(Boolean);
-
-                if (remaining.length === 0) {
-                  this.isAnimating = false;
-                  this.isFinished = true;
-                  this.stageCards = [];
-                  return;
-                }
-
-                this.isAnimating = true;
-                this.isFinished = false;
-
-                if (this.mode === 'semua') {
-                  this.stageCards = remaining.map(c => ({
-                    ...c,
-                    displayCount: 0,
-                    flying: false,
-                  }));
-                  await this.animateCountUp(this.stageCards);
-                  if (this.cancelled) return;
-                  await this.sleepScaled(380);
-                  if (this.cancelled) return;
-                  this.stageCards.forEach(c => { c.flying = true; });
-                  await this.sleepScaled(420);
-                  if (this.cancelled) return;
-                  this.landCandidates(remaining);
-                  this.stageCards = [];
-                } else {
-                  for (const cand of remaining) {
-                    if (this.cancelled) return;
-                    const cardObj = {
-                      ...cand,
-                      displayCount: 0,
-                      flying: false,
-                    };
-                    this.stageCards = [cardObj];
-                    if ((Number(cand.vote_count) || 0) > 0) {
-                      await this.animateCountUp(this.stageCards);
-                    } else {
-                      cardObj.displayCount = 0;
-                    }
-                    if (this.cancelled) return;
-                    await this.sleepScaled(360);
-                    if (this.cancelled) return;
-                    this.stageCards[0].flying = true;
-                    await this.sleepScaled(420);
-                    if (this.cancelled) return;
-                    this.landCandidates([cand]);
-                    this.stageCards = [];
-                    await this.sleepScaled(220);
-                  }
-                }
-
-                if (!this.cancelled) {
-                  this.isAnimating = false;
-                  this.isFinished = true;
-                }
-              },
-
-              destroy() {
-                this.cancelled = true;
-                if (this.rafId) cancelAnimationFrame(this.rafId);
+            siblings.forEach((el) => {
+              const dy = beforeTop.get(el) - el.getBoundingClientRect().top;
+              if (dy) {
+                el.animate(
+                  [{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0)' }],
+                  { duration: Math.round(this.SHIFT_MS / this.speed), easing: 'cubic-bezier(.2,.8,.2,1)' }
+                );
               }
-            }"
-            x-init="initReveal()"
-          >
-            <div class="reveal-arena" :class="{ 'is-finished': isFinished }">
-              {{-- Area Kiri: Daftar Peringkat Perolehan Suara --}}
-              <section class="panel" aria-label="Daftar Peringkat Perolehan Suara">
-                <div class="panel-head">
+            });
+            this.refreshRanks();
+
+            const a = pop.getBoundingClientRect();
+            const b = li.getBoundingClientRect();
+            const px = v => v + 'px';
+
+            // Kunci popup pada koordinat fixed awalnya, sembunyikan tombol close & kontrol kecepatan
+            const closeBtn = pop.querySelector('.sim-pop-close');
+            const speedBox = pop.querySelector('.sim-pop-speed');
+            if (closeBtn) closeBtn.hidden = true;
+            if (speedBox) speedBox.hidden = true;
+
+            Object.assign(pop.style, {
+              position: 'fixed',
+              left: px(a.left),
+              top: px(a.top),
+              width: px(a.width),
+              height: px(a.height),
+              margin: '0',
+            });
+            scrim.classList.remove('on');
+
+            // Tahap 1: kotak utuh turun ke slot baris tujuan
+            const drop = pop.animate(
+              [{ transform: 'translateY(0)' }, { transform: `translateY(${b.top - a.top}px)` }],
+              { duration: Math.round(this.DROP_MS / this.speed), easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' }
+            );
+            await this.doneAnim(drop);
+            drop.cancel();
+            pop.style.top = px(b.top);
+
+            // Tahap 2: kotak melebar/morph jadi baris hasil; isi popup memudar, baris hasil muncul
+            [...pop.children]
+              .filter(el => !el.classList.contains('sim-pop-close') && !el.classList.contains('sim-pop-speed'))
+              .forEach(el => el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 240, fill: 'forwards' }));
+
+            li.style.visibility = '';
+            li.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 340, delay: 110, fill: 'backwards' });
+
+            const grow = pop.animate([
+              {
+                left: px(a.left),
+                width: px(a.width),
+                height: px(a.height),
+                borderRadius: '22px',
+                boxShadow: '0 30px 80px -20px rgba(15,27,61,.55)',
+              },
+              {
+                left: px(b.left),
+                width: px(b.width),
+                height: px(b.height),
+                borderRadius: '16px',
+                boxShadow: '0 30px 80px -20px rgba(15,27,61,0)',
+              },
+            ], { duration: Math.round(this.GROW_MS / this.speed), easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' });
+
+            await this.doneAnim(grow);
+            pop.remove();
+
+            // Bilah proporsional baru terisi setelah angka berhenti dan kartu mendarat
+            const barFill = li.querySelector('.sim-bar i');
+            if (barFill) {
+              requestAnimationFrame(() => {
+                barFill.style.width = this.sharePct(c.vote_count) + '%';
+              });
+            }
+          },
+
+          async runCandidate(c, delay) {
+            this.skipFlag = false;
+            const scrim = this._scrimEl;
+            const layer = this._layerEl;
+            scrim.classList.add('on');
+
+            const pop = this.buildPop(c);
+            layer.appendChild(pop);
+
+            // 1. Pop-in: 0 -> 110% -> 100%
+            await this.doneAnim(pop.animate([
+              { transform: 'scale(0)', opacity: 0 },
+              { transform: 'scale(1.1)', opacity: 1, offset: 0.6 },
+              { transform: 'scale(1)', opacity: 1 },
+            ], { duration: Math.round(this.POP_MS / this.speed), easing: 'ease-out' }));
+            if (this.abortFlag) return;
+
+            // 2. Jeda awal, lalu count-up 0 -> n (paslon 0 suara langsung tampil 0 tanpa animasi hitung)
+            const countEl = pop.querySelector('.sim-pop-count');
+            const targetVotes = Math.max(0, Number(c.vote_count) || 0);
+
+            if (targetVotes > 0) {
+              await this.wait(this.START_DELAY);
+              if (this.abortFlag) return;
+
+              for (let i = 0; i <= targetVotes; i++) {
+                if (this.abortFlag) return;
+                if (this.skipFlag) {
+                  countEl.textContent = this.formatVotes(targetVotes);
+                  break;
+                }
+                countEl.textContent = this.formatVotes(i);
+                if (i < targetVotes) {
+                  await this.wait(delay);
+                }
+              }
+            } else {
+              countEl.textContent = '0';
+              await this.wait(450);
+            }
+            if (this.abortFlag) return;
+
+            // 3. Denyut sekali setelah sampai di n
+            await this.doneAnim(pop.animate([
+              { transform: 'scale(1)' },
+              { transform: 'scale(1.08)', offset: 0.5 },
+              { transform: 'scale(1)' },
+            ], { duration: Math.round(this.PULSE_MS / this.speed), easing: 'ease-in-out' }));
+            if (this.abortFlag) return;
+
+            // 4. Jeda hold, lalu turun & morph ke daftar peringkat
+            await this.wait(this.HOLD_MS);
+            if (this.abortFlag) return;
+
+            await this.moveToList(c, pop);
+          },
+
+          async playAnimation() {
+            if (this.running) return;
+            if (!this.validateDelay()) {
+              window.showToast('Gagal', 'error');
+              return;
+            }
+            if (this.orderedCandidates.length === 0) return;
+
+            this.running = true;
+            this.abortFlag = false;
+            this.skipFlag = false;
+            this.speed = 1;
+
+            const delay = Math.max(20, Math.min(10000, Math.floor(Number(this.delayMs) || 150)));
+            const order = this.orderedCandidates;
+
+            if (this.$refs.simList) {
+              this.$refs.simList.innerHTML = '';
+            }
+            this.hasResults = false;
+
+            for (let i = 0; i < order.length && !this.abortFlag; i++) {
+              this.statusText = `Menghitung ${i + 1} dari ${order.length}: ${order[i].name}`;
+              await this.runCandidate(order[i], delay);
+            }
+
+            this.statusText = this.abortFlag
+              ? 'Animasi dihentikan'
+              : `Selesai · ${order.length} paslon diurutkan berdasarkan perolehan suara (Total ${this.formatVotes(this.totalVotes)} suara)`;
+
+            this.running = false;
+            this.cleanupOverlay();
+          },
+
+          resetResults() {
+            if (this.running) return;
+            if (this.$refs.simList) {
+              this.$refs.simList.innerHTML = '';
+            }
+            this.hasResults = false;
+            this.statusText = 'Siap dijalankan — atur jeda dan urutan tampil, lalu tekan Play';
+          },
+
+          abortAnimation() {
+            this.abortFlag = true;
+            this.skipNow();
+            this.cleanupOverlay();
+          }
+        }"
+      >
+        {{-- Panel Pengaturan Sekuensial Mode Animasi (100% Client-Side, Tanpa Reveal Suara) --}}
+        <section class="panel" aria-label="Pengaturan Mode Animasi Reveal">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title">
+                <svg class="icon"><use href="#i-sparkles"></use></svg>
+                <span>Pengaturan Animasi Perolehan Suara</span>
+              </h2>
+              <p class="panel-sub">
+                Data suara sudah dimuat ke perangkat Anda. Atur jeda, susun urutan tampil (suara tetap tersembunyi), lalu tekan <strong>Play</strong> — seluruh pengaturan dan animasi berjalan instan tanpa jeda server.
+              </p>
+            </div>
+            <span class="status-badge" :class="running ? 'is-sedang' : 'is-sudah'">
+              <span class="status-dot"></span>
+              <span x-text="running ? 'Animasi Sedang Berjalan' : 'Siap Diputar (Client-Side)'">Siap Diputar (Client-Side)</span>
+            </span>
+          </div>
+
+          <div class="sim-setup-body">
+            {{-- Langkah 4.1: Pilih jeda antar angka suara --}}
+            <div class="sim-step-block">
+              <div class="sim-step-head">
+                <div class="sim-step-title">
+                  <span class="section-num-badge">1</span>
                   <div>
-                    <h2 class="panel-title">
-                      <svg class="icon"><use href="#i-trophy"></use></svg>
-                      <span>Daftar Peringkat Perolehan Suara</span>
-                    </h2>
-                    <p class="panel-sub" x-text="isFinished ? 'Seluruh pasangan calon telah ditampilkan. Peringkat tersusun otomatis dari suara terbanyak.' : 'Pasangan calon yang selesai dihitung otomatis masuk dan menempati peringkat sesuai perolehan suaranya.'"></p>
+                    <h3>Pilih Jeda Antar Angka Suara</h3>
+                    <p>Tentukan jeda waktu (dalam milidetik) untuk setiap penambahan angka saat menghitung naik (20 – 10.000 ms).</p>
                   </div>
-                  <span class="result-total-chip">
-                    <svg class="icon"><use href="#i-check-circle"></use></svg>
-                    <span x-text="rankedList.length + ' / ' + candidates.length + ' Paslon · Total ' + formatVotes(totalVotes) + ' Suara'"></span>
-                  </span>
+                </div>
+              </div>
+
+              <div class="sim-delay-row">
+                <div class="sim-delay-input-group">
+                  <input
+                    id="sim-delay-input"
+                    type="number"
+                    min="20"
+                    max="10000"
+                    step="10"
+                    x-model.number="delayMs"
+                    x-on:input="validateDelay()"
+                    :disabled="running"
+                    class="field-input"
+                    :class="{ 'is-invalid': delayError !== '' }"
+                    aria-label="Jeda antar angka suara dalam milidetik"
+                  />
+                  <span class="field-hint" style="margin: 0;">ms per angka</span>
                 </div>
 
-                <div class="reveal-ranking-list" x-show="rankedList.length > 0">
-                  <template x-for="(item, idx) in rankedList" :key="item.id">
-                    <div
-                      class="reveal-rank-row"
-                      :class="{
-                        'is-rank-1': idx === 0,
-                        'is-newly-landed': newlyLandedIds.includes(String(item.id)),
-                        'is-shifted-down': shiftedDownIds.includes(String(item.id))
-                      }"
-                    >
-                      <span class="reveal-rank-badge" x-text="idx + 1"></span>
-
-                      <div class="reveal-rank-main">
-                        <div class="reveal-rank-title-line">
-                          <span class="reveal-rank-cand-num" x-text="'NO. ' + item.formatted_number"></span>
-                          <strong class="reveal-rank-name" x-text="item.name"></strong>
-                          <span class="reveal-top-badge" x-show="idx === 0">TERATAS</span>
-                        </div>
-                        <div class="reveal-rank-bar-track">
-                          <span class="reveal-rank-bar-fill" :style="'width:' + barWidth(item)"></span>
-                        </div>
-                      </div>
-
-                      <div class="reveal-rank-stats">
-                        <strong class="reveal-rank-votes" x-text="formatVotes(item.vote_count)"></strong>
-                        <span class="reveal-rank-share" x-text="formatShare(item)"></span>
-                      </div>
-                    </div>
-                  </template>
+                <div class="sim-preset-row" aria-label="Pilihan cepat jeda">
+                  <button type="button" class="sim-preset-btn" :class="{ 'is-active': delayMs === 25 }" :disabled="running" x-on:click="setDelayPreset(25)">Cepat (25 ms)</button>
+                  <button type="button" class="sim-preset-btn" :class="{ 'is-active': delayMs === 50 }" :disabled="running" x-on:click="setDelayPreset(50)">Sedang (50 ms)</button>
+                  <button type="button" class="sim-preset-btn" :class="{ 'is-active': delayMs === 150 }" :disabled="running" x-on:click="setDelayPreset(150)">Normal (150 ms)</button>
+                  <button type="button" class="sim-preset-btn" :class="{ 'is-active': delayMs === 300 }" :disabled="running" x-on:click="setDelayPreset(300)">Dramatis (300 ms)</button>
                 </div>
+              </div>
 
-                <div class="empty-state" x-show="rankedList.length === 0" style="padding: 36px 20px;">
-                  <div class="empty-icon"><svg class="icon"><use href="#i-sparkles"></use></svg></div>
-                  <h3>Menunggu hasil paslon pertama</h3>
-                  <p>Pasangan calon akan segera masuk ke daftar peringkat setelah animasi hitung-naik selesai.</p>
-                </div>
-              </section>
+              <div class="field-error" role="alert" x-show="delayError !== ''" x-cloak>
+                <svg class="icon"><use href="#i-alert"></use></svg>
+                <span x-text="delayError"></span>
+              </div>
+            </div>
 
-              {{-- Area Kanan: Panggung Hitung-Naik (TANPA Progress Bar saat menghitung + Kontrol Kecepatan Lokal 1x/2x/4x) --}}
-              <section class="reveal-stage-panel" x-show="!isFinished" aria-label="Panggung Hitung Suara">
-                <div class="reveal-stage-top">
-                  <span class="reveal-stage-kicker">
-                    <svg class="icon" style="width: 14px; height: 14px;"><use href="#i-sparkles"></use></svg>
-                    <span x-text="mode === 'semua' ? 'HITUNG SERENTAK' : 'PANGGUNG REVEAL'"></span>
-                  </span>
-
-                  {{-- Update v5 B.8: Kontrol kecepatan lokal (1x / 2x / 4x) hanya saat reveal berjalan di halaman ini --}}
-                  <div class="reveal-speed-controls" x-show="isAnimating" aria-label="Kontrol Kecepatan Animasi">
-                    <span class="reveal-speed-label">Kecepatan</span>
-                    <button type="button" class="reveal-speed-btn" :class="{ 'is-active': speed === 1 }" x-on:click="setSpeed(1)">1x</button>
-                    <button type="button" class="reveal-speed-btn" :class="{ 'is-active': speed === 2 }" x-on:click="setSpeed(2)">2x</button>
-                    <button type="button" class="reveal-speed-btn" :class="{ 'is-active': speed === 4 }" x-on:click="setSpeed(4)">4x</button>
+            {{-- Langkah 4.2: Pilih urutan tampil (tanpa mereveal suaranya) --}}
+            <div class="sim-step-block">
+              <div class="sim-step-head">
+                <div class="sim-step-title">
+                  <span class="section-num-badge">2</span>
+                  <div>
+                    <h3>Pilih Urutan Tampil Paslon</h3>
+                    <p>Geser pegangan <code>⋮⋮</code> atau gunakan tombol panah untuk mengatur urutan tampil. Perolehan suara disembunyikan hingga tombol <strong>Play</strong> ditekan.</p>
                   </div>
                 </div>
 
-                <div class="reveal-stage-cards">
-                  <template x-for="card in stageCards" :key="card.id">
-                    <div class="reveal-stage-card" :class="{ 'is-flying-to-rank': card.flying }">
-                      <img :src="card.photo_url" :alt="card.name" class="reveal-stage-photo" />
-                      <span class="reveal-stage-num" x-text="'PASLON NO. ' + card.formatted_number"></span>
-                      <h3 class="reveal-stage-name" x-text="card.name"></h3>
-                      <div class="reveal-stage-counter" x-text="formatVotes(card.displayCount)"></div>
-                      <div class="reveal-stage-unit">SUARA SAH</div>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-soft"
+                  x-on:click="shuffleOrder()"
+                  :disabled="running"
+                >
+                  <svg class="icon"><use href="#i-sparkles"></use></svg>
+                  <span>Acak Urutan</span>
+                </button>
+              </div>
+
+              <ul
+                class="sim-setup"
+                :class="{ 'locked': running }"
+                x-on:pointermove="onSetupMove($event)"
+                x-on:pointerup="onSetupUp()"
+                x-on:pointercancel="onSetupUp()"
+              >
+                <template x-for="(cand, idx) in orderedCandidates" :key="cand.id">
+                  <li
+                    :data-setup-id="cand.id"
+                    :class="{ 'dragging': dragId === String(cand.id) }"
+                  >
+                    <button
+                      type="button"
+                      class="sim-handle"
+                      :disabled="running"
+                      x-on:pointerdown="onHandleDown($event, cand.id)"
+                      :aria-label="'Geser urutan ' + cand.name"
+                      title="Tahan dan geser untuk mengubah urutan"
+                    >⋮⋮</button>
+                    <span class="sim-seq" x-text="idx + 1"></span>
+                    <img class="sim-photo" :src="cand.photo_url" :alt="cand.name" />
+                    <div class="sim-who">
+                      <div class="name" x-text="cand.name"></div>
+                      <div class="meta" x-text="'Paslon No. ' + cand.formatted_number"></div>
                     </div>
-                  </template>
+                    <div class="sim-move-btns">
+                      <button
+                        type="button"
+                        class="sim-move-btn"
+                        :disabled="running || idx === 0"
+                        x-on:click="moveOrder(idx, -1)"
+                        title="Naikkan urutan"
+                        aria-label="Naikkan urutan"
+                      >&uarr;</button>
+                      <button
+                        type="button"
+                        class="sim-move-btn"
+                        :disabled="running || idx === orderedCandidates.length - 1"
+                        x-on:click="moveOrder(idx, 1)"
+                        title="Turunkan urutan"
+                        aria-label="Turunkan urutan"
+                      >&darr;</button>
+                    </div>
+                  </li>
+                </template>
+              </ul>
+            </div>
+
+            {{-- Langkah 4.3: Play --}}
+            <div class="sim-step-block">
+              <div class="sim-play-toolbar">
+                <div class="sim-step-title">
+                  <span class="section-num-badge">3</span>
+                  <div>
+                    <h3>Mulai Pemutaran Animasi</h3>
+                    <p>Tekan <strong>Play</strong> untuk memulai hitung-naik satu per satu. Tekan <code>&times;</code> atau <code>Esc</code> di popup untuk melompati paslon yang sedang dihitung.</p>
+                  </div>
                 </div>
-              </section>
+
+                <div class="sim-play-actions">
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    x-on:click="playAnimation()"
+                    :disabled="running || orderedCandidates.length === 0"
+                  >
+                    <svg class="icon"><use href="#i-sparkles"></use></svg>
+                    <span>Play (Mulai Animasi)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    x-on:click="resetResults()"
+                    :disabled="running || !hasResults"
+                  >
+                    <svg class="icon"><use href="#i-rotate"></use></svg>
+                    <span>Reset Hasil</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="btn btn-danger-ghost"
+                    x-show="running"
+                    x-cloak
+                    x-on:click="abortAnimation()"
+                  >
+                    <svg class="icon"><use href="#i-x"></use></svg>
+                    <span>Hentikan</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-        @else
-          {{-- Tampilan Operator Lain (Sinkron Progres Reveal tanpa Kontrol Kecepatan Lokal) --}}
-          @php
-            $revealedSet = array_flip($revealedIds);
-            $viewerRanked = collect($revealCandidates)
-              ->filter(fn ($c) => isset($revealedSet[(string) $c['id']]))
-              ->sort(fn ($a, $b) => ($b['vote_count'] <=> $a['vote_count']) ?: ($a['number'] <=> $b['number']))
-              ->values();
-            $viewerFinished = $viewerRanked->count() >= count($revealCandidates) && count($revealCandidates) > 0;
-          @endphp
-          <section class="panel" aria-label="Daftar Peringkat Perolehan Suara (Sinkron)">
-            <div class="panel-head">
-              <div>
-                <h2 class="panel-title">
-                  <svg class="icon"><use href="#i-trophy"></use></svg>
-                  <span>Daftar Peringkat Perolehan Suara</span>
-                </h2>
-                <p class="panel-sub">
-                  {{ $viewerFinished ? 'Reveal selesai. Seluruh pasangan calon telah ditampilkan sesuai peringkat suara terbanyak.' : 'Reveal sedang dijalankan oleh operator lain. Daftar peringkat diperbarui otomatis mengikuti progres.' }}
-                </p>
-              </div>
-              <span class="result-total-chip">
-                <svg class="icon"><use href="#i-check-circle"></use></svg>
-                <span>{{ $viewerRanked->count() }} / {{ count($revealCandidates) }} Paslon · Total {{ number_format($totalVotesCast, 0, ',', '.') }} Suara</span>
-              </span>
-            </div>
+        </section>
 
-            @if($viewerRanked->isEmpty())
-              <div class="empty-state" style="padding: 36px 20px;">
-                <div class="empty-icon"><svg class="icon"><use href="#i-sparkles"></use></svg></div>
-                <h3>Reveal sedang berlangsung</h3>
-                <p>Menunggu pasangan calon pertama selesai dihitung oleh operator yang menjalankan animasi.</p>
-              </div>
-            @else
-              <div class="reveal-ranking-list">
-                @foreach($viewerRanked as $rIdx => $rItem)
-                  <div class="reveal-rank-row {{ $rIdx === 0 ? 'is-rank-1' : '' }}">
-                    <span class="reveal-rank-badge">{{ $rIdx + 1 }}</span>
-                    <div class="reveal-rank-main">
-                      <div class="reveal-rank-title-line">
-                        <span class="reveal-rank-cand-num">NO. {{ $rItem['formatted_number'] }}</span>
-                        <strong class="reveal-rank-name">{{ $rItem['name'] }}</strong>
-                        @if($rIdx === 0)
-                          <span class="reveal-top-badge">TERATAS</span>
-                        @endif
-                      </div>
-                      <div class="reveal-rank-bar-track">
-                        <span class="reveal-rank-bar-fill" style="width: {{ min(100, max(0, (float) $rItem['share'])) }}%;"></span>
-                      </div>
-                    </div>
-                    <div class="reveal-rank-stats">
-                      <strong class="reveal-rank-votes">{{ number_format((int) $rItem['vote_count'], 0, ',', '.') }}</strong>
-                      <span class="reveal-rank-share">{{ number_format((float) $rItem['share'], 1, ',', '.') }}%</span>
-                    </div>
-                  </div>
-                @endforeach
-              </div>
-            @endif
-          </section>
-        @endif
-      @endif
+        {{-- Kanvas Hasil Perhitungan (Daftar Peringkat Animasi FLIP) --}}
+        <section class="panel" aria-label="Hasil Perhitungan Peringkat">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title">
+                <svg class="icon"><use href="#i-trophy"></use></svg>
+                <span>Hasil Perhitungan &amp; Peringkat</span>
+              </h2>
+              <p class="panel-sub">Setiap paslon yang selesai dihitung otomatis mendarat dan menempati peringkat sesuai jumlah suara terbanyak.</p>
+            </div>
+            <span class="sim-status" x-text="statusText"></span>
+          </div>
+
+          <div class="sim-results-body">
+            <div class="sim-empty" x-show="!hasResults">
+              Hasil perhitungan akan muncul di sini setelah Anda menekan tombol <strong>Play</strong>
+            </div>
+            <ul class="sim-canvas-list" x-ref="simList"></ul>
+          </div>
+        </section>
+      </div>
     @endif
   @endif
 </div>
