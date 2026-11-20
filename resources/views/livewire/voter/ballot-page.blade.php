@@ -1,4 +1,7 @@
 {{-- UI-014 s.d. UI-017, FR-015 s.d. FR-018, BR-028: Alur Bilik Suara 4 Tahap Linear Tanpa Identitas --}}
+@push('styles')
+  <link rel="stylesheet" href="{{ asset('css/voter/ballot.css') }}?v={{ filemtime(public_path('css/voter/ballot.css')) }}" />
+@endpush
 @php
   $candidatesClientMap = $candidates->mapWithKeys(fn ($c) => [
       $c->id => [
@@ -6,16 +9,22 @@
           'number' => $c->formattedNumber(),
           'name' => $c->name,
           'vision' => $c->vision,
+          'missions' => $c->missionItems(),
           'photoUrl' => $c->photoUrl(),
       ],
   ])->all();
+  $allCandidateIdsList = $candidates->pluck('id')->map(fn ($id) => (string) $id)->values()->all();
 @endphp
 <div
+  x-on:close-vm-modal.window="closeVisionMissionModal()"
   x-data="{
     clientStage: $wire.entangle('stage'),
     clientSelectedId: $wire.entangle('selectedCandidateId'),
+    clientReadIds: $wire.entangle('readCandidateIds'),
+    activeVmId: $wire.entangle('activeVisionMissionCandidateId'),
     submittingVote: false,
     candidatesMap: @js($candidatesClientMap),
+    allCandidateIds: @js($allCandidateIdsList),
     get activeStepIndex() {
       if (this.clientStage === 'verifikasi') return 1;
       if (this.clientStage === 'memilih') return 2;
@@ -26,15 +35,47 @@
     get selectedCand() {
       return this.clientSelectedId ? (this.candidatesMap[this.clientSelectedId] || null) : null;
     },
+    get activeVmCand() {
+      return this.activeVmId ? (this.candidatesMap[this.activeVmId] || null) : null;
+    },
+    isCandidateRead(id) {
+      return Array.isArray(this.clientReadIds) && this.clientReadIds.includes(String(id));
+    },
+    get readCandidatesCount() {
+      if (!Array.isArray(this.allCandidateIds)) return 0;
+      return this.allCandidateIds.filter(id => this.isCandidateRead(id)).length;
+    },
+    get hasReadAllCandidates() {
+      if (!Array.isArray(this.allCandidateIds) || this.allCandidateIds.length === 0) return true;
+      return this.allCandidateIds.every(id => this.isCandidateRead(id));
+    },
     chooseCandidate(id) {
       this.clientSelectedId = id;
+    },
+    openVisionMissionModal(id) {
+      const sid = String(id);
+      if (!Array.isArray(this.clientReadIds)) {
+        this.clientReadIds = [];
+      }
+      if (!this.clientReadIds.includes(sid)) {
+        this.clientReadIds = [...this.clientReadIds, sid];
+      }
+      this.activeVmId = sid;
+      $wire.markVisionMissionRead(sid);
+    },
+    closeVisionMissionModal() {
+      this.activeVmId = null;
     },
     goToConfirm() {
       if (!this.clientSelectedId) {
         window.showToast('Pilih satu pasangan calon terlebih dahulu.', 'warning');
         return;
       }
-      this.clientStage = 'konfirmasi';
+      if (!this.hasReadAllCandidates) {
+        window.showToast('Anda belum boleh lanjut sebelum membaca seluruh visi & misi setiap paslon.', 'warning');
+        return;
+      }
+      $wire.proceedToConfirm();
       window.scrollTo({ top: 0, behavior: 'auto' });
     },
     goBackToBallot() {

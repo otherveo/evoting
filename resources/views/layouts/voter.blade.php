@@ -11,7 +11,8 @@
   <meta name="theme-color" content="#132a63" />
   <link rel="icon" type="image/png" href="{{ asset('SMPN7-e-voting_logo.png') }}" />
   <title>{{ isset($title) ? $title . ' — ' . $appName : 'Bilik Suara — ' . $appName }}</title>
-  <link rel="stylesheet" href="{{ asset('css/suarasekolah.css') }}?v=11" />
+  <link rel="stylesheet" href="{{ asset('css/suarasekolah.css') }}?v={{ filemtime(public_path('css/suarasekolah.css')) }}" />
+  @stack('styles')
   @livewireStyles
 </head>
 <body>
@@ -54,9 +55,12 @@
     window.normalizeShortToast = function (message, type = 'info') {
       const text = String(message || '').trim();
       if (!text) return type === 'error' ? 'Gagal' : 'Berhasil';
+      const lower = text.toLowerCase();
+      if (lower.includes('membaca seluruh visi') || lower.includes('pasangan calon terlebih dahulu')) {
+        return text;
+      }
       const words = text.split(/\s+/).length;
       if (words <= 2) return text;
-      const lower = text.toLowerCase();
       if (type === 'error' || type === 'warning' || lower.includes('gagal')) return 'Gagal';
       if (lower.includes('simpan')) return 'Tersimpan';
       if (lower.includes('setuju') || lower.includes('diizinkan')) return 'Diizinkan';

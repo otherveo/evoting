@@ -1,0 +1,265 @@
+/* =========================================================
+   Update v5 (Bagian A & C) — Styles Mandiri Kartu Surat Suara Pemilih
+   Lokasi: public/css/voter/ballot.css
+   ========================================================= */
+
+.candidate-check {
+  position: absolute;
+  top: 11px;
+  right: 11px;
+  z-index: 2;
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgba(9, 22, 49, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 180ms ease, transform 180ms ease, background 180ms ease;
+}
+
+.candidate-check .icon {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.6;
+}
+
+.candidate-card.is-selected .candidate-check {
+  opacity: 1;
+  transform: scale(1);
+  background: #1c8a52;
+  border-color: #1c8a52;
+  box-shadow: 0 4px 12px rgba(13, 86, 47, 0.35);
+}
+
+.candidate-select-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #e2e8f4;
+  color: var(--brand);
+  font-size: 0.66rem;
+  font-weight: 750;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.candidate-card.is-selected .candidate-select-hint {
+  opacity: 1;
+}
+
+.candidate-select-hint .icon {
+  width: 13px;
+  height: 13px;
+}
+
+/* Restructured non-button candidate card with explicit buttons */
+.candidate-card[role="radio"] {
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+}
+
+.candidate-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid #eef2f8;
+}
+
+/* Tombol "Lihat Visi & Misi": beda warna tegas antara belum dibaca vs sudah dibaca */
+.candidate-vm-btn {
+  width: 100%;
+  justify-content: space-between;
+  font-size: 0.76rem;
+  font-weight: 750;
+  border-radius: 11px;
+  padding: 8px 12px;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.candidate-vm-btn.is-unread {
+  background: #f1f5f9;
+  border: 1.5px solid #cbd5e1;
+  color: #334155;
+}
+
+.candidate-vm-btn.is-unread:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.candidate-vm-btn.is-read {
+  background: #dcfce7;
+  border: 1.5px solid #4ade80;
+  color: #166534;
+  box-shadow: 0 4px 12px -6px rgba(22, 101, 52, 0.35);
+}
+
+.candidate-vm-btn.is-read:hover {
+  background: #bbf7d0;
+  border-color: #22c55e;
+  color: #14532d;
+}
+
+.candidate-vm-btn-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.candidate-vm-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.candidate-vm-btn.is-unread .candidate-vm-badge {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.candidate-vm-btn.is-read .candidate-vm-badge {
+  background: #16a34a;
+  color: #ffffff;
+}
+
+/* Tombol eksplisit "Pilih Paslon Ini" */
+.candidate-choose-btn {
+  width: 100%;
+  justify-content: center;
+  font-size: 0.78rem;
+  font-weight: 800;
+  border-radius: 11px;
+  padding: 9px 13px;
+}
+
+.candidate-choose-btn.is-chosen {
+  background: linear-gradient(145deg, #16357d, #2457c5);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 8px 18px -10px rgba(22, 53, 125, 0.75);
+}
+
+/* Indikator ringkas progres baca visi & misi di atas bar konfirmasi */
+.vm-read-progress {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 0.74rem;
+  font-weight: 650;
+  border: 1px solid #f2dfbd;
+  background: #fff9ee;
+  color: #7d4908;
+}
+
+.vm-read-progress.is-complete {
+  border-color: #cceeda;
+  background: #effbf3;
+  color: #14663a;
+}
+
+.vm-read-progress-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.vm-read-progress-left .icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+/* Modal Visi & Misi Paslon */
+.vm-modal-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.vm-modal-photo {
+  width: 78px;
+  height: 62px;
+  flex: none;
+  border-radius: 11px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+}
+
+.vm-modal-kicker {
+  display: block;
+  color: var(--brand-bright);
+  font-size: 0.62rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vm-modal-name {
+  margin-top: 2px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.25;
+}
+
+.vm-modal-section + .vm-modal-section {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #eef2f8;
+}
+
+.vm-modal-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--brand);
+  font-size: 0.66rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vm-modal-vision {
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+.vm-modal-missions {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink-soft);
+  font-size: 0.81rem;
+  line-height: 1.55;
+}
+
+@media (max-width: 980px) and (min-width: 761px) {
+  .candidate-card[role="radio"] {
+    display: grid;
+    grid-template-columns: 190px minmax(0, 1fr);
+  }
+}

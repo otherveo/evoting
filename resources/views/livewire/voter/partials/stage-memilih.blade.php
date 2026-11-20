@@ -17,7 +17,7 @@
       </div>
       <h1>Pilih Satu Pasangan Calon</h1>
       <p class="lede">
-        Ketuk kartu pasangan calon pilihan Anda, lalu tekan tombol <strong>Lanjut ke Konfirmasi</strong> di bagian bawah layar.
+        Baca visi &amp; misi setiap pasangan calon melalui tombol <strong>Lihat Visi &amp; Misi</strong>, pilih satu pasangan calon, lalu tekan <strong>Lanjut ke Konfirmasi</strong>.
       </p>
     </div>
 
@@ -38,15 +38,17 @@
     @foreach($candidates as $cand)
       @php
         $isSelected = $selectedCandidateId === $cand->id;
-        $missions = $cand->missionItems();
+        $isRead = in_array((string) $cand->id, $readCandidateIds ?? [], true);
       @endphp
-      <button
-        type="button"
+      <div
         role="radio"
+        tabindex="0"
         :aria-checked="clientSelectedId === '{{ $cand->id }}' ? 'true' : 'false'"
         class="candidate-card {{ $isSelected ? 'is-selected' : '' }}"
         :class="{ 'is-selected': clientSelectedId === '{{ $cand->id }}' }"
         x-on:click="chooseCandidate('{{ $cand->id }}')"
+        x-on:keydown.enter.self.prevent="chooseCandidate('{{ $cand->id }}')"
+        x-on:keydown.space.self.prevent="chooseCandidate('{{ $cand->id }}')"
         wire:key="ballot-cand-{{ $cand->id }}"
       >
         <div class="candidate-media">
@@ -61,28 +63,53 @@
           <span class="candidate-kicker">PASANGAN CALON {{ $cand->formattedNumber() }}</span>
           <h2 class="candidate-names">{{ $cand->name }}</h2>
 
-          @if($cand->vision)
-            <div class="candidate-vision">
-              <span>VISI</span>
-              <p>{{ $cand->vision }}</p>
-            </div>
-          @endif
+          <div class="candidate-card-actions">
+            <button
+              type="button"
+              class="btn btn-sm candidate-vm-btn {{ $isRead ? 'is-read' : 'is-unread' }}"
+              :class="isCandidateRead('{{ $cand->id }}') ? 'is-read' : 'is-unread'"
+              x-on:click.stop="openVisionMissionModal('{{ $cand->id }}')"
+            >
+              <span class="candidate-vm-btn-main">
+                <svg class="icon" x-show="!isCandidateRead('{{ $cand->id }}')"><use href="#i-eye"></use></svg>
+                <svg class="icon" x-show="isCandidateRead('{{ $cand->id }}')" x-cloak><use href="#i-check-circle"></use></svg>
+                <span>Lihat Visi &amp; Misi</span>
+              </span>
+              <span class="candidate-vm-badge" x-text="isCandidateRead('{{ $cand->id }}') ? 'Sudah Dibaca' : 'Belum Dibaca'">
+                {{ $isRead ? 'Sudah Dibaca' : 'Belum Dibaca' }}
+              </span>
+            </button>
 
-          @if(!empty($missions))
-            <ul class="mission-list">
-              @foreach($missions as $m)
-                <li>{{ $m }}</li>
-              @endforeach
-            </ul>
-          @endif
+            <button
+              type="button"
+              class="btn btn-sm candidate-choose-btn {{ $isSelected ? 'btn-primary is-chosen' : 'btn-secondary' }}"
+              :class="clientSelectedId === '{{ $cand->id }}' ? 'btn-primary is-chosen' : 'btn-secondary'"
+              x-on:click.stop="chooseCandidate('{{ $cand->id }}')"
+            >
+              <svg class="icon"><use href="#i-check-circle"></use></svg>
+              <span>Pilih Paslon Ini</span>
+            </button>
+          </div>
 
           <div class="candidate-select-hint">
             <svg class="icon"><use href="#i-check-circle"></use></svg>
             <span>Dipilih untuk dikonfirmasi</span>
           </div>
         </div>
-      </button>
+      </div>
     @endforeach
+  </div>
+
+  {{-- Indikator status baca visi & misi seluruh paslon --}}
+  <div class="vm-read-progress" :class="{ 'is-complete': hasReadAllCandidates }">
+    <div class="vm-read-progress-left">
+      <svg class="icon" x-show="!hasReadAllCandidates"><use href="#i-info"></use></svg>
+      <svg class="icon" x-show="hasReadAllCandidates" x-cloak><use href="#i-check-circle"></use></svg>
+      <span x-text="hasReadAllCandidates ? 'Seluruh visi & misi pasangan calon telah Anda baca. Silakan lanjut ke konfirmasi.' : 'Wajib membaca visi & misi seluruh pasangan calon sebelum melanjutkan ke tahap konfirmasi.'">
+        Wajib membaca visi &amp; misi seluruh pasangan calon sebelum melanjutkan ke tahap konfirmasi.
+      </span>
+    </div>
+    <strong x-text="readCandidatesCount + ' / ' + allCandidateIds.length + ' Paslon Dibaca'"></strong>
   </div>
 
   <div class="ballot-bar">
@@ -115,4 +142,54 @@
     <svg class="icon"><use href="#i-lock"></use></svg>
     <span>Pilihan Anda belum disimpan ke basis data sampai Anda menekan tombol <strong>Konfirmasi pilihan</strong> pada langkah berikutnya.</span>
   </p>
+
+  {{-- Update v5 Bagian A: Popup (Modal) Visi & Misi Pasangan Calon --}}
+  <x-modal
+    title="Visi & Misi Pasangan Calon"
+    subtitle="Pelajari gagasan pasangan calon sebelum menentukan pilihan Anda."
+    icon="#i-ballot"
+    maxWidth="580px"
+    alpineShow="activeVmCand !== null"
+    alpineClose="closeVisionMissionModal()"
+  >
+    <div class="modal-body" x-show="activeVmCand !== null">
+      <div class="vm-modal-hero">
+        <img
+          :src="activeVmCand ? activeVmCand.photoUrl : ''"
+          :alt="activeVmCand ? ('Foto Paslon ' + activeVmCand.number) : ''"
+          class="vm-modal-photo"
+        />
+        <div>
+          <span class="vm-modal-kicker" x-text="activeVmCand ? ('PASANGAN CALON NO. ' + activeVmCand.number) : ''"></span>
+          <h3 class="vm-modal-name" x-text="activeVmCand ? activeVmCand.name : ''"></h3>
+        </div>
+      </div>
+
+      <div class="vm-modal-section">
+        <span class="vm-modal-label">Visi</span>
+        <p class="vm-modal-vision" x-text="(activeVmCand && activeVmCand.vision) ? activeVmCand.vision : 'Belum ada visi yang dicantumkan.'"></p>
+      </div>
+
+      <div class="vm-modal-section">
+        <span class="vm-modal-label">Daftar Misi</span>
+        <template x-if="activeVmCand && Array.isArray(activeVmCand.missions) && activeVmCand.missions.length > 0">
+          <ol class="vm-modal-missions">
+            <template x-for="(mItem, mIdx) in activeVmCand.missions" :key="mIdx">
+              <li x-text="mItem"></li>
+            </template>
+          </ol>
+        </template>
+        <template x-if="!activeVmCand || !Array.isArray(activeVmCand.missions) || activeVmCand.missions.length === 0">
+          <p class="vm-modal-vision">Belum ada misi yang dicantumkan.</p>
+        </template>
+      </div>
+    </div>
+
+    <x-slot:footer>
+      <button type="button" class="btn btn-primary" x-on:click="closeVisionMissionModal()">
+        <svg class="icon"><use href="#i-check"></use></svg>
+        <span>Selesai Membaca</span>
+      </button>
+    </x-slot:footer>
+  </x-modal>
 </div>

@@ -2728,38 +2728,6 @@ ol {
   letter-spacing: 0.03em;
 }
 
-.candidate-check {
-  position: absolute;
-  top: 11px;
-  right: 11px;
-  z-index: 2;
-  width: 27px;
-  height: 27px;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  background: rgba(9, 22, 49, 0.32);
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  border-radius: 50%;
-  opacity: 0;
-  transform: scale(0.8);
-  transition: opacity 180ms ease, transform 180ms ease, background 180ms ease;
-}
-
-.candidate-check .icon {
-  width: 14px;
-  height: 14px;
-  stroke-width: 2.6;
-}
-
-.candidate-card.is-selected .candidate-check {
-  opacity: 1;
-  transform: scale(1);
-  background: #1c8a52;
-  border-color: #1c8a52;
-  box-shadow: 0 4px 12px rgba(13, 86, 47, 0.35);
-}
-
 .candidate-body {
   display: flex;
   flex: 1;
@@ -2837,28 +2805,6 @@ ol {
   height: 4px;
   border-radius: 50%;
   background: #a8b5c9;
-}
-
-.candidate-select-hint {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: auto;
-  padding-top: 13px;
-  color: var(--brand);
-  font-size: 0.64rem;
-  font-weight: 750;
-  opacity: 0;
-  transition: opacity 160ms ease;
-}
-
-.candidate-card.is-selected .candidate-select-hint {
-  opacity: 1;
-}
-
-.candidate-select-hint .icon {
-  width: 13px;
-  height: 13px;
 }
 
 .ballot-bar {

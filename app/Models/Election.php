@@ -25,6 +25,14 @@ class Election extends Model
         'max_voter_rights',
         'starts_at',
         'ends_at',
+        'recap_open',
+        'recap_mode',
+        'reveal_order',
+        'reveal_mode',
+        'reveal_delay_ms',
+        'reveal_locked',
+        'revealed_ids',
+        'reveal_locked_by',
     ];
 
     protected $hidden = [
@@ -38,6 +46,11 @@ class Election extends Model
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
             'access_key_created_at' => 'datetime',
+            'recap_open' => 'boolean',
+            'reveal_order' => 'array',
+            'reveal_delay_ms' => 'integer',
+            'reveal_locked' => 'boolean',
+            'revealed_ids' => 'array',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];

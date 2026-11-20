@@ -8,8 +8,10 @@ use App\Livewire\Auth\LoginPage;
 use App\Livewire\Auth\VerifyTwoFactorPage;
 use App\Livewire\Operator\ElectionDetailPage;
 use App\Livewire\Operator\ElectionIndexPage;
+use App\Livewire\Operator\ElectionRecapPage;
 use App\Livewire\Operator\VoterMonitorPage;
 use App\Livewire\Public\LiveRecapPage;
+use App\Livewire\Voter\BallotPage;
 use App\Models\Candidate;
 use App\Models\Election;
 use App\Models\StaffAccount;
@@ -743,5 +745,219 @@ class EvotingSystemTest extends TestCase
         $delOk = $voting->deleteElection($election->id, $operator->id, $renamedC, $storage);
         $this->assertTrue($delOk['ok']);
         $this->assertNull(Election::find($election->id));
+    }
+
+    public function test_update_v5_ballot_gate_recap_reveal_and_css(): void
+    {
+        $voting = app(VotingService::class);
+        $dbNow = $voting->databaseNow();
+
+        $operatorA = StaffAccount::create([
+            'username' => 'op_a_v5_'.uniqid(),
+            'full_name' => 'Operator A V5',
+            'password_hash' => Hash::make('SandiOperator123!'),
+            'role' => 'operator',
+            'is_active' => true,
+            'totp_enabled' => false,
+        ]);
+
+        $operatorB = StaffAccount::create([
+            'username' => 'op_b_v5_'.uniqid(),
+            'full_name' => 'Operator B V5',
+            'password_hash' => Hash::make('SandiOperator123!'),
+            'role' => 'operator',
+            'is_active' => true,
+            'totp_enabled' => false,
+        ]);
+
+        $election = Election::create([
+            'name' => 'Pemilihan Uji Update V5 '.uniqid(),
+            'max_voter_rights' => 3,
+        ]);
+
+        $c1 = Candidate::create([
+            'election_id' => $election->id,
+            'number' => 1,
+            'name' => 'Paslon Satu V5',
+            'vision' => 'Visi Paslon Satu',
+            'missions' => ['Misi 1A', 'Misi 1B'],
+        ]);
+
+        $c2 = Candidate::create([
+            'election_id' => $election->id,
+            'number' => 2,
+            'name' => 'Paslon Dua V5',
+            'vision' => 'Visi Paslon Dua',
+            'missions' => ['Misi 2A'],
+        ]);
+
+        $c3 = Candidate::create([
+            'election_id' => $election->id,
+            'number' => 3,
+            'name' => 'Paslon Nol Suara V5',
+            'vision' => 'Visi Paslon Tiga',
+            'missions' => ['Misi 3A'],
+        ]);
+
+        $sched = $voting->setElectionSchedule($election->id, $dbNow->subMinute(), $dbNow->addHours(3), $operatorA->id);
+        $this->assertTrue($sched['ok']);
+
+        // --- BAGIAN A: Kartu paslon, tombol eksplisit, popup visi/misi, dan gate baca di server ---
+        $vr1 = $voting->createVoterRight($election->id, 'Pemilih Satu V5', $operatorA->id);
+        $vr2 = $voting->createVoterRight($election->id, 'Pemilih Dua V5', $operatorA->id);
+        $vr3 = $voting->createVoterRight($election->id, 'Pemilih Tiga V5', $operatorA->id);
+
+        // Verifikasi route bilik suara memuat CSS mandiri public/css/voter/ballot.css?v=
+        $this->get(route('voter.ballot', ['token' => $vr1['raw_token']]))
+            ->assertStatus(200)
+            ->assertSee('css/voter/ballot.css?v=', false);
+
+        $ballot = Livewire::test(BallotPage::class, ['token' => $vr1['raw_token']])
+            ->call('startVoting')
+            ->assertSet('stage', 'memilih')
+            ->assertSee('Pilih Paslon Ini')
+            ->assertSee('Lihat Visi & Misi')
+            ->assertDontSeeHtml('<div class="candidate-vision">')
+            ->assertSeeHtml('role="radio"');
+
+        // Pilih paslon tanpa membaca visi & misi satu pun -> DITOLAK di server dengan pesan persis
+        $ballot->call('selectCandidate', $c1->id)
+            ->call('proceedToConfirm')
+            ->assertSet('stage', 'memilih')
+            ->assertDispatched(
+                'toast',
+                message: 'Anda belum boleh lanjut sebelum membaca seluruh visi & misi setiap paslon.',
+                type: 'warning'
+            );
+
+        // Baru baca 2 dari 3 paslon -> MASIH DITOLAK
+        $ballot->call('markVisionMissionRead', $c1->id)
+            ->call('markVisionMissionRead', $c2->id)
+            ->call('proceedToConfirm')
+            ->assertSet('stage', 'memilih')
+            ->assertDispatched(
+                'toast',
+                message: 'Anda belum boleh lanjut sebelum membaca seluruh visi & misi setiap paslon.',
+                type: 'warning'
+            );
+
+        // Setelah membaca SELURUH paslon (termasuk paslon ke-3) -> DIIZINKAN lanjut ke konfirmasi & simpan suara
+        $ballot->call('markVisionMissionRead', $c3->id)
+            ->call('proceedToConfirm')
+            ->assertSet('stage', 'konfirmasi')
+            ->call('confirmVote', $c1->id)
+            ->assertSet('stage', 'selesai');
+
+        // --- BAGIAN B.1: Default terkunci, tidak bisa dibuka saat kuota belum penuh (1/3) & masih berlangsung ---
+        $this->actingAs($operatorA, 'staff')
+            ->get(route('operator.elections.recap', $election))
+            ->assertStatus(200)
+            ->assertSee('css/operator/recap-reveal.css?v=', false)
+            ->assertSee('1 / 3 suara terpakai');
+
+        $recapA = Livewire::actingAs($operatorA, 'staff')
+            ->test(ElectionRecapPage::class, ['election' => $election->fresh()]);
+
+        $recapA->call('openRecap')
+            ->assertHasErrors(['recapLock']);
+        $this->assertFalse($election->fresh()->recap_open);
+
+        // Selesaikan sisa 2 suara (total 3/3 = penuh) saat pemilihan MASIH berlangsung
+        $this->assertTrue($voting->startVoting($vr2['raw_token'], 'br_v5_2', 'UA', '10.0.0.2')['ok']);
+        $this->assertTrue($voting->confirmVote($vr2['raw_token'], 'br_v5_2', $c2->id, 'UA', '10.0.0.2')['ok']);
+        $this->assertTrue($voting->startVoting($vr3['raw_token'], 'br_v5_3', 'UA', '10.0.0.3')['ok']);
+        $this->assertTrue($voting->confirmVote($vr3['raw_token'], 'br_v5_3', $c2->id, 'UA', '10.0.0.3')['ok']);
+
+        // Syarat kuota penuh (3/3) terpenuhi meski fase masih berlangsung -> Operator A bisa buka & tutup bebas
+        $recapA->call('openRecap')
+            ->assertHasNoErrors();
+        $this->assertTrue($election->fresh()->recap_open);
+
+        // Operator B melihat state terbuka yang sama dan dapat melihat Mode Biasa (live results)
+        $recapB = Livewire::actingAs($operatorB, 'staff')
+            ->test(ElectionRecapPage::class, ['election' => $election->fresh()])
+            ->assertSee('Rekapitulasi Terbuka')
+            ->assertSee('Paslon Dua V5');
+
+        // Tutup & buka kembali secara bebas oleh Operator A
+        $this->actingAs($operatorA, 'staff');
+        $recapA->call('closeRecap');
+        $this->assertFalse($election->fresh()->recap_open);
+        $recapA->call('openRecap');
+        $this->assertTrue($election->fresh()->recap_open);
+
+        // --- BAGIAN B.2 & B.3: Mode Animasi (Reveal), urutan, delay validation 20..10000, lock & reset ---
+        $recapA->call('setRecapMode', 'animasi');
+        $this->assertSame('animasi', $election->fresh()->recap_mode);
+
+        // Validasi delay di luar rentang 20..10000 ditolak
+        $recapA->call('saveRevealDelay', 19)->assertHasErrors(['revealDelayInput']);
+        $recapA->call('saveRevealDelay', 10001)->assertHasErrors(['revealDelayInput']);
+        $recapA->call('saveRevealDelay', 650)->assertHasNoErrors();
+        $this->assertSame(650, $election->fresh()->reveal_delay_ms);
+
+        // Susun urutan manual & acak urutan
+        $recapA->call('toggleCandidateOrder', $c3->id)
+            ->call('toggleCandidateOrder', $c1->id);
+        $this->assertSame([$c3->id, $c1->id], $election->fresh()->reveal_order);
+
+        $recapA->call('shuffleRevealOrder');
+        $this->assertCount(3, $election->fresh()->reveal_order);
+
+        $recapA->call('setRevealMode', 'satu');
+        $this->assertSame('satu', $election->fresh()->reveal_mode);
+
+        // Mulai Animasi -> mengunci konfigurasi untuk operator lain & memuat data sekali
+        $recapA->call('startReveal');
+        $elAfterStart = $election->fresh();
+        $this->assertTrue($elAfterStart->reveal_locked);
+        $this->assertSame($operatorA->id, (string) $elAfterStart->reveal_locked_by);
+        $this->assertSame([], $elAfterStart->revealed_ids);
+
+        // Operator A (runner) melihat kontrol kecepatan lokal 1x/2x/4x
+        $recapA->assertSeeHtml('reveal-speed-controls');
+
+        // Operator B tidak bisa mengubah konfigurasi selama terkunci & TIDAK melihat kontrol kecepatan lokal
+        $recapB = Livewire::actingAs($operatorB, 'staff')
+            ->test(ElectionRecapPage::class, ['election' => $election->fresh()])
+            ->assertDontSeeHtml('reveal-speed-controls')
+            ->call('setRevealMode', 'semua')
+            ->call('saveRevealDelay', 5000);
+        $this->assertSame('satu', $election->fresh()->reveal_mode);
+        $this->assertSame(650, $election->fresh()->reveal_delay_ms);
+
+        // Persistensi progres reveal (reload melanjutkan dari posisi terakhir)
+        $this->actingAs($operatorA, 'staff');
+        $recapA->call('markCandidatesRevealed', [$c1->id]);
+        $this->assertSame([$c1->id], $election->fresh()->revealed_ids);
+
+        // Reset membuka kunci dan mengosongkan progres
+        $recapA->call('resetReveal');
+        $elAfterReset = $election->fresh();
+        $this->assertFalse($elAfterReset->reveal_locked);
+        $this->assertSame([], $elAfterReset->revealed_ids);
+        $this->assertNull($elAfterReset->reveal_locked_by);
+
+        // Shortcut fase Ditutup: pemilihan baru dengan 0 suara yang diakhiri lebih awal tetap bisa dibuka
+        $electionShortcut = Election::create([
+            'name' => 'Pemilihan Shortcut Ditutup V5 '.uniqid(),
+            'max_voter_rights' => 100,
+        ]);
+        Candidate::create(['election_id' => $electionShortcut->id, 'number' => 1, 'name' => 'Paslon X']);
+        Candidate::create(['election_id' => $electionShortcut->id, 'number' => 2, 'name' => 'Paslon Y']);
+        $this->assertTrue($voting->setElectionSchedule($electionShortcut->id, $dbNow->subMinute(), $dbNow->addHours(2), $operatorA->id)['ok']);
+        $electionShortcut->refresh();
+        $this->assertTrue($voting->setElectionSchedule(
+            $electionShortcut->id,
+            CarbonImmutable::instance($electionShortcut->starts_at),
+            $voting->databaseNow()->subSecond(),
+            $operatorA->id
+        )['ok']);
+
+        Livewire::actingAs($operatorA, 'staff')
+            ->test(ElectionRecapPage::class, ['election' => $electionShortcut->fresh()])
+            ->call('openRecap')
+            ->assertHasNoErrors();
+        $this->assertTrue($electionShortcut->fresh()->recap_open);
     }
 }

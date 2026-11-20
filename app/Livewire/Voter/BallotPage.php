@@ -34,6 +34,15 @@ class BallotPage extends Component
 
     public ?string $selectedCandidateId = null;
 
+    /**
+     * Update v5 Bagian A: Daftar ID paslon yang sudah ditekan tombol "Lihat Visi & Misi"-nya.
+     *
+     * @var list<string>
+     */
+    public array $readCandidateIds = [];
+
+    public ?string $activeVisionMissionCandidateId = null;
+
     public bool $isResumedSession = false;
 
     public ?string $sessionExpiresAtIso = null;
@@ -285,6 +294,33 @@ class BallotPage extends Component
         }
     }
 
+    public function openVisionMission(string $candidateId): void
+    {
+        $this->markVisionMissionRead($candidateId);
+        $this->activeVisionMissionCandidateId = $candidateId;
+    }
+
+    public function closeVisionMission(): void
+    {
+        $this->activeVisionMissionCandidateId = null;
+    }
+
+    public function markVisionMissionRead(string $candidateId): void
+    {
+        if (! $this->electionId) {
+            return;
+        }
+
+        $exists = Candidate::query()
+            ->where('election_id', $this->electionId)
+            ->where('id', $candidateId)
+            ->exists();
+
+        if ($exists && ! in_array($candidateId, $this->readCandidateIds, true)) {
+            $this->readCandidateIds[] = $candidateId;
+        }
+    }
+
     public function proceedToConfirm(): void
     {
         if ($this->stage !== 'memilih') {
@@ -295,6 +331,25 @@ class BallotPage extends Component
             $this->dispatch('toast', message: 'Pilih satu pasangan calon terlebih dahulu.', type: 'warning');
 
             return;
+        }
+
+        $allCandidateIds = Candidate::query()
+            ->where('election_id', $this->electionId)
+            ->pluck('id')
+            ->map(static fn ($id) => (string) $id)
+            ->all();
+
+        $readSet = array_flip(array_map('strval', $this->readCandidateIds));
+        foreach ($allCandidateIds as $candId) {
+            if (! isset($readSet[$candId])) {
+                $this->dispatch(
+                    'toast',
+                    message: 'Anda belum boleh lanjut sebelum membaca seluruh visi & misi setiap paslon.',
+                    type: 'warning'
+                );
+
+                return;
+            }
         }
 
         $this->stage = 'konfirmasi';

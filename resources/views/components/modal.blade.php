@@ -6,6 +6,7 @@
     'maxWidth' => '560px',
     'closeAction' => null,
     'alpineClose' => null,
+    'alpineShow' => null,
 ])
 
 @php
@@ -23,7 +24,12 @@
     role="dialog"
     aria-modal="true"
     aria-label="{{ $title }}"
-    x-data
+    @if($alpineShow)
+      x-show="{{ $alpineShow }}"
+      x-cloak
+    @else
+      x-data
+    @endif
     @if($alpineClose)
       x-on:click.self="{{ $alpineClose }}"
       x-on:keydown.escape.window="{{ $alpineClose }}"

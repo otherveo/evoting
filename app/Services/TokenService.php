@@ -221,15 +221,19 @@ SVG;
             return $existing;
         }
 
-        $sessionCached = $request->session()->get('_evoting_browser_id');
-        if (is_string($sessionCached) && preg_match('/^[A-Za-z0-9_-]{24,64}$/', $sessionCached)) {
-            $this->queueBrowserCookie($sessionCached, $request->isSecure());
+        if ($request->hasSession()) {
+            $sessionCached = $request->session()->get('_evoting_browser_id');
+            if (is_string($sessionCached) && preg_match('/^[A-Za-z0-9_-]{24,64}$/', $sessionCached)) {
+                $this->queueBrowserCookie($sessionCached, $request->isSecure());
 
-            return $sessionCached;
+                return $sessionCached;
+            }
         }
 
         $browserId = rtrim(strtr(base64_encode(random_bytes(24)), '+/', '-_'), '=');
-        $request->session()->put('_evoting_browser_id', $browserId);
+        if ($request->hasSession()) {
+            $request->session()->put('_evoting_browser_id', $browserId);
+        }
         $this->queueBrowserCookie($browserId, $request->isSecure());
 
         return $browserId;
