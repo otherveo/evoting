@@ -46,7 +46,7 @@ begin
   if not exists (select 1 from pg_roles where rolname = 'evoting_app') then
     create role evoting_app with login nosuperuser nobypassrls
       nocreaterole nocreatedb noinherit
-      password 'my_PW.019-DB_Init192';
+      password 'GANTI_DENGAN_PASSWORD_KUAT';
   end if;
 end
 $$;
