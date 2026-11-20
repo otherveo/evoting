@@ -281,14 +281,16 @@
           </button>
         </div>
 
-        {{-- Popup Loading Instan Saat Memproses Pilihan Mode --}}
-        <div class="recap-loading-backdrop" x-show="choosingMode !== null" x-cloak role="status" aria-live="polite">
-          <div class="recap-loading-popup">
-            <span class="recap-loading-ring" aria-hidden="true"></span>
-            <strong x-text="choosingMode === 'animasi' ? 'Menyiapkan Mode Animasi...' : 'Memuat Rekapitulasi Mode Biasa...'">Memproses...</strong>
-            <p x-text="choosingMode === 'animasi' ? 'Mengambil daftar pasangan calon (tanpa angka suara) dan menyiapkan panel pengaturan animasi.' : 'Menghitung perolehan suara anonim dan menyusun tabel rekapitulasi lengkap.'"></p>
+        {{-- Popup Loading Instan Saat Memproses Pilihan Mode (Teleport ke body agar blur penuh 100% layar) --}}
+        <template x-teleport="body">
+          <div class="recap-loading-backdrop" x-show="choosingMode !== null" x-cloak role="status" aria-live="polite">
+            <div class="recap-loading-popup">
+              <span class="recap-loading-ring" aria-hidden="true"></span>
+              <strong x-text="choosingMode === 'animasi' ? 'Menyiapkan Mode Animasi...' : 'Memuat Rekapitulasi Mode Biasa...'">Memproses...</strong>
+              <p x-text="choosingMode === 'animasi' ? 'Mengambil daftar pasangan calon (tanpa angka suara) dan menyiapkan panel pengaturan animasi.' : 'Menghitung perolehan suara anonim dan menyusun tabel rekapitulasi lengkap.'"></p>
+            </div>
           </div>
-        </div>
+        </template>
       </section>
     @elseif($activeViewMode === 'biasa')
       {{-- LANGKAH 4a: Mode Biasa (Tabel Rekap Langsung) --}}
