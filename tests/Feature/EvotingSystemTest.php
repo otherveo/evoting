@@ -863,6 +863,13 @@ class EvotingSystemTest extends TestCase
             ->assertHasErrors(['recapLock']);
         $this->assertFalse($election->fresh()->recap_open);
 
+        // Keamanan: saat terkunci, tidak bisa memanggil setRecapMode atau fetchRevealResults secara paksa
+        $recapA->call('setRecapMode', 'biasa')
+            ->assertSet('activeViewMode', null);
+        $lockedFetch = $recapA->instance()->fetchRevealResults($voting);
+        $this->assertFalse($lockedFetch['ok']);
+        $this->assertSame([], $lockedFetch['votes_by_id']);
+
         // Selesaikan sisa 2 suara (total 3/3 = penuh) saat pemilihan MASIH berlangsung
         $this->assertTrue($voting->startVoting($vr2['raw_token'], 'br_v5_2', 'UA', '10.0.0.2')['ok']);
         $this->assertTrue($voting->confirmVote($vr2['raw_token'], 'br_v5_2', $c2->id, 'UA', '10.0.0.2')['ok']);
@@ -898,7 +905,7 @@ class EvotingSystemTest extends TestCase
         $recapA->call('openRecap');
         $this->assertTrue($election->fresh()->recap_open);
 
-        // --- BAGIAN B.2 & B.3: Mode Animasi (100% client-side sekali muat, referensi vote-simulation.html) ---
+        // --- BAGIAN B.2 & B.3: Mode Animasi (metadata paslon saja di awal; suara baru ditarik saat Play) ---
         $recapA->call('setRecapMode', 'animasi')
             ->assertSet('activeViewMode', 'animasi')
             ->assertSee('Pilih Jeda Antar Angka Suara')
@@ -906,13 +913,22 @@ class EvotingSystemTest extends TestCase
             ->assertSee('Acak Urutan')
             ->assertSee('Play (Mulai Animasi)')
             ->assertDontSee('buildResultRow')
-            ->assertSeeHtml('window.createRecapSim(');
+            ->assertDontSee('vote_count')
+            ->assertSeeHtml('window.createRecapSim($el, $wire)');
         $this->assertSame('animasi', $election->fresh()->recap_mode);
 
-        // Pastikan data snapshot suara sudah dimuat ke klien sekali saat opsi animasi ditekan
-        $animCandidates = $recapA->viewData('revealCandidates');
-        $this->assertCount(3, $animCandidates);
-        $this->assertSame(3, $recapA->viewData('totalVotesCast'));
+        // Pastikan sebelum Play ditekan, klien HANYA menerima metadata paslon (tanpa angka suara)
+        $animMeta = $recapA->viewData('revealCandidatesMeta');
+        $this->assertCount(3, $animMeta);
+        $this->assertArrayNotHasKey('vote_count', $animMeta[0]);
+
+        // Saat tombol Play ditekan -> fetchRevealResults() menarik data suara sekali dari server
+        $fetched = $recapA->instance()->fetchRevealResults($voting);
+        $this->assertTrue($fetched['ok']);
+        $this->assertSame(3, $fetched['total_votes']);
+        $this->assertSame(1, $fetched['votes_by_id'][$c1->id]['vote_count']);
+        $this->assertSame(2, $fetched['votes_by_id'][$c2->id]['vote_count']);
+        $this->assertSame(0, $fetched['votes_by_id'][$c3->id]['vote_count']);
 
         // Validasi delay di server tetap terjaga di rentang 20..10000
         $recapA->call('saveRevealDelay', 19)->assertHasErrors(['revealDelayInput']);

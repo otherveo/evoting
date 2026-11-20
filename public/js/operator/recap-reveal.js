@@ -1,12 +1,37 @@
 /**
  * Update v5 (Bagian B) — Animasi Reveal Perolehan Suara 100% Client-Side
  * Referensi koreografi: public/tmp/vote-simulation.html
+ *
+ * Keamanan:
+ * - Saat Mode Animasi dibuka, klien HANYA menerima metadata paslon (id, nomor, nama, foto).
+ * - Perolehan suara baru ditarik sekali lewat $wire.fetchRevealResults() tepat ketika tombol "Play" ditekan.
  */
-window.createRecapSim = function (candidates, totalVotes) {
+window.createRecapSim = function (el, wire) {
+  let initialCandidates = [];
+  try {
+    const raw = el && el.dataset ? el.dataset.candidates : '[]';
+    const parsed = JSON.parse(raw || '[]');
+    if (Array.isArray(parsed)) {
+      initialCandidates = parsed.map((c) => ({
+        id: String(c.id),
+        number: Number(c.number) || 0,
+        formatted_number: String(c.formatted_number || ''),
+        name: String(c.name || ''),
+        photo_url: String(c.photo_url || ''),
+        vote_count: null,
+        share: null,
+      }));
+    }
+  } catch (e) {
+    initialCandidates = [];
+  }
+
   return {
-    candidates: Array.isArray(candidates) ? candidates : [],
-    totalVotes: Number(totalVotes) || 0,
-    orderIds: [],
+    candidates: initialCandidates,
+    totalVotes: 0,
+    votesLoaded: false,
+    loadingVotes: false,
+    orderIds: initialCandidates.map((c) => String(c.id)),
     delayMs: 150,
     delayError: '',
     running: false,
@@ -31,7 +56,9 @@ window.createRecapSim = function (candidates, totalVotes) {
     SHIFT_MS: 560,
 
     init() {
-      this.orderIds = this.candidates.map((c) => String(c.id));
+      if (this.orderIds.length === 0 && this.candidates.length > 0) {
+        this.orderIds = this.candidates.map((c) => String(c.id));
+      }
 
       this._scrimEl = document.createElement('div');
       this._scrimEl.className = 'sim-scrim';
@@ -98,7 +125,7 @@ window.createRecapSim = function (candidates, totalVotes) {
     },
 
     setDelayPreset(val) {
-      if (this.running) return;
+      if (this.running || this.loadingVotes) return;
       this.delayMs = val;
       this.delayError = '';
     },
@@ -114,7 +141,7 @@ window.createRecapSim = function (candidates, totalVotes) {
     },
 
     shuffleOrder() {
-      if (this.running) return;
+      if (this.running || this.loadingVotes) return;
       const arr = [...this.orderIds];
       for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -124,7 +151,7 @@ window.createRecapSim = function (candidates, totalVotes) {
     },
 
     moveOrder(index, delta) {
-      if (this.running) return;
+      if (this.running || this.loadingVotes) return;
       const target = index + delta;
       if (target < 0 || target >= this.orderIds.length) return;
       const arr = [...this.orderIds];
@@ -134,14 +161,14 @@ window.createRecapSim = function (candidates, totalVotes) {
 
     // Pointer-event Drag & Drop (mouse & sentuh)
     onHandleDown(e, id) {
-      if (this.running) return;
+      if (this.running || this.loadingVotes) return;
       e.preventDefault();
       this.dragId = String(id);
       e.currentTarget.setPointerCapture(e.pointerId);
     },
 
     onSetupMove(e) {
-      if (!this.dragId || this.running) return;
+      if (!this.dragId || this.running || this.loadingVotes) return;
       const overEl = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-setup-id]');
       if (!overEl) return;
       const overId = String(overEl.dataset.setupId);
@@ -414,7 +441,7 @@ window.createRecapSim = function (candidates, totalVotes) {
     },
 
     async playAnimation() {
-      if (this.running) return;
+      if (this.running || this.loadingVotes) return;
       if (!this.validateDelay()) {
         if (typeof window.showToast === 'function') {
           window.showToast('Gagal', 'error');
@@ -422,6 +449,42 @@ window.createRecapSim = function (candidates, totalVotes) {
         return;
       }
       if (this.orderedCandidates.length === 0) return;
+
+      // Tarik data perolehan suara dari server HANYA SEKALI saat tombol "Play" ditekan
+      if (!this.votesLoaded) {
+        this.loadingVotes = true;
+        this.statusText = 'Mengambil data perolehan suara dari server...';
+        try {
+          const res = await wire.fetchRevealResults();
+          if (!res || !res.ok) {
+            this.statusText = (res && res.message) ? res.message : 'Rekapitulasi terkunci atau gagal memuat data.';
+            if (typeof window.showToast === 'function') {
+              window.showToast('Gagal', 'error');
+            }
+            return;
+          }
+
+          this.totalVotes = Number(res.total_votes) || 0;
+          const votesMap = res.votes_by_id || {};
+          this.candidates = this.candidates.map((c) => {
+            const entry = votesMap[String(c.id)] || { vote_count: 0, share: 0 };
+            return {
+              ...c,
+              vote_count: Number(entry.vote_count) || 0,
+              share: Number(entry.share) || 0,
+            };
+          });
+          this.votesLoaded = true;
+        } catch (err) {
+          this.statusText = 'Gagal menghubungi server saat memuat data suara.';
+          if (typeof window.showToast === 'function') {
+            window.showToast('Gagal', 'error');
+          }
+          return;
+        } finally {
+          this.loadingVotes = false;
+        }
+      }
 
       this.running = true;
       this.abortFlag = false;
@@ -450,7 +513,7 @@ window.createRecapSim = function (candidates, totalVotes) {
     },
 
     resetResults() {
-      if (this.running) return;
+      if (this.running || this.loadingVotes) return;
       if (this.$refs.simList) {
         this.$refs.simList.innerHTML = '';
       }

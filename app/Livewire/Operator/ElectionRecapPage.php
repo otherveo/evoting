@@ -4,6 +4,7 @@ namespace App\Livewire\Operator;
 
 use App\Livewire\Concerns\HandlesSafeErrors;
 use App\Models\Election;
+use App\Models\StaffAccount;
 use App\Services\VotingService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\View;
@@ -35,6 +36,14 @@ class ElectionRecapPage extends Component
         $this->activeViewMode = null;
     }
 
+    private function ensureActiveOperator(): bool
+    {
+        /** @var StaffAccount|null $staff */
+        $staff = Auth::guard('staff')->user();
+
+        return $staff !== null && $staff->is_active && $staff->isOperator();
+    }
+
     private function canUnlockRecap(array $integrity, string $phase): bool
     {
         if ($phase === 'ditutup') {
@@ -49,9 +58,13 @@ class ElectionRecapPage extends Component
 
     public function refreshData(): void
     {
+        if (! $this->ensureActiveOperator()) {
+            abort(403);
+        }
+
         try {
             $this->election->refresh();
-            $this->revealDelayInput = (int) ($this->election->reveal_delay_ms ?: 1000);
+            $this->revealDelayInput = (int) ($this->election->reveal_delay_ms ?: 150);
             $this->dispatch('toast', message: 'Diperbarui', type: 'info');
         } catch (Throwable $e) {
             $this->reportSafeError($e, 'Gagal memuat ulang data rekapitulasi.');
@@ -60,6 +73,10 @@ class ElectionRecapPage extends Component
 
     public function openRecap(VotingService $voting): void
     {
+        if (! $this->ensureActiveOperator()) {
+            abort(403);
+        }
+
         try {
             $this->election->refresh();
             $phase = $this->election->currentPhase();
@@ -88,6 +105,10 @@ class ElectionRecapPage extends Component
 
     public function closeRecap(): void
     {
+        if (! $this->ensureActiveOperator()) {
+            abort(403);
+        }
+
         try {
             $this->election->refresh();
             $this->election->update([
@@ -102,17 +123,35 @@ class ElectionRecapPage extends Component
 
     public function backToModeChoice(): void
     {
+        if (! $this->ensureActiveOperator()) {
+            abort(403);
+        }
+
         $this->activeViewMode = null;
     }
 
-    public function setRecapMode(string $mode): void
+    public function setRecapMode(string $mode, VotingService $voting): void
     {
+        if (! $this->ensureActiveOperator()) {
+            abort(403);
+        }
+
         if (! in_array($mode, ['biasa', 'animasi'], true)) {
             return;
         }
 
         try {
             $this->election->refresh();
+            $phase = $this->election->currentPhase();
+            $integrity = $voting->integrityReport($this->election->id);
+
+            if (! $this->election->recap_open || ! $this->canUnlockRecap($integrity, $phase)) {
+                $this->activeViewMode = null;
+                $this->dispatch('toast', message: 'Terkunci', type: 'error');
+
+                return;
+            }
+
             $this->election->update([
                 'recap_mode' => $mode,
             ]);
@@ -120,6 +159,64 @@ class ElectionRecapPage extends Component
             $this->dispatch('toast', message: $mode === 'animasi' ? 'Mode animasi' : 'Mode biasa', type: 'success');
         } catch (Throwable $e) {
             $this->reportSafeError($e, 'Gagal mengubah mode tampilan rekapitulasi.');
+        }
+    }
+
+    /**
+     * Menarik data perolehan suara dari server HANYA ketika tombol "Play" ditekan oleh operator
+     * yang terautentikasi, aktif, dan saat rekapitulasi benar-benar terbuka + memenuhi syarat.
+     *
+     * @return array{ok: bool, message: string, total_votes: int, votes_by_id: array<string, array{vote_count: int, share: float}>}
+     */
+    public function fetchRevealResults(VotingService $voting): array
+    {
+        if (! $this->ensureActiveOperator()) {
+            return [
+                'ok' => false,
+                'message' => 'Akses ditolak.',
+                'total_votes' => 0,
+                'votes_by_id' => [],
+            ];
+        }
+
+        try {
+            $this->election->refresh();
+            $phase = $this->election->currentPhase();
+            $integrity = $voting->integrityReport($this->election->id);
+
+            if (! $this->election->recap_open || ! $this->canUnlockRecap($integrity, $phase)) {
+                return [
+                    'ok' => false,
+                    'message' => 'Halaman rekapitulasi masih terkunci.',
+                    'total_votes' => 0,
+                    'votes_by_id' => [],
+                ];
+            }
+
+            $snapshot = $this->buildResultsSnapshot($voting);
+            $votesById = [];
+            foreach ($snapshot['reveal_candidates'] as $row) {
+                $votesById[(string) $row['id']] = [
+                    'vote_count' => (int) $row['vote_count'],
+                    'share' => (float) $row['share'],
+                ];
+            }
+
+            return [
+                'ok' => true,
+                'message' => 'Berhasil',
+                'total_votes' => (int) $snapshot['total_votes'],
+                'votes_by_id' => $votesById,
+            ];
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal mengambil data perolehan suara.');
+
+            return [
+                'ok' => false,
+                'message' => 'Gagal mengambil data perolehan suara.',
+                'total_votes' => 0,
+                'votes_by_id' => [],
+            ];
         }
     }
 
@@ -466,24 +563,23 @@ class ElectionRecapPage extends Component
 
         $resultsData = null;
         $leadingCandidates = [];
-        $revealCandidates = [];
 
-        if ($isRecapOpen && $this->activeViewMode !== null) {
+        // Metadata paslon TANPA angka suara (dikirim ke klien saat Mode Animasi sebelum tombol Play ditekan)
+        $revealCandidatesMeta = $candidates->map(static fn ($c) => [
+            'id' => (string) $c->id,
+            'number' => (int) $c->number,
+            'formatted_number' => $c->formattedNumber(),
+            'name' => (string) $c->name,
+            'photo_url' => $c->photoUrl(),
+        ])->values()->all();
+
+        // Data suara HANYA dimuat saat render jika Mode Biasa aktif.
+        // Untuk Mode Animasi, data suara baru ditarik lewat fetchRevealResults() setelah tombol "Play" ditekan!
+        if ($isRecapOpen && $this->activeViewMode === 'biasa') {
             $snapshot = $this->buildResultsSnapshot($voting);
             $resultsData = $snapshot['results_data'];
             $leadingCandidates = $snapshot['leading_candidates'];
-            $revealCandidates = $snapshot['reveal_candidates'];
             $totalVotesCast = $snapshot['total_votes'];
-        } else {
-            $revealCandidates = $candidates->map(static fn ($c) => [
-                'id' => (string) $c->id,
-                'number' => (int) $c->number,
-                'formatted_number' => $c->formattedNumber(),
-                'name' => (string) $c->name,
-                'photo_url' => $c->photoUrl(),
-                'vote_count' => 0,
-                'share' => 0.0,
-            ])->values()->all();
         }
 
         $currentOperatorId = Auth::guard('staff')->id();
@@ -507,7 +603,7 @@ class ElectionRecapPage extends Component
             'candidatesList' => $candidates,
             'resultsData' => $resultsData,
             'leadingCandidates' => $leadingCandidates,
-            'revealCandidates' => $revealCandidates,
+            'revealCandidatesMeta' => $revealCandidatesMeta,
             'totalVotesCast' => $totalVotesCast,
         ]);
     }

@@ -1,8 +1,12 @@
 {{-- UI-013, FR-020, FR-032, BR-017, BR-019, Update v5 Bagian B: Halaman Rekapitulasi & Integritas Operator --}}
 @push('styles')
   <link rel="stylesheet" href="{{ asset('css/operator/recap-reveal.css') }}?v={{ filemtime(public_path('css/operator/recap-reveal.css')) }}" />
-  <script src="{{ asset('js/operator/recap-reveal.js') }}?v={{ filemtime(public_path('js/operator/recap-reveal.js')) }}"></script>
 @endpush
+
+@assets
+  <link rel="stylesheet" href="{{ asset('css/operator/recap-reveal.css') }}?v={{ filemtime(public_path('css/operator/recap-reveal.css')) }}" />
+  <script src="{{ asset('js/operator/recap-reveal.js') }}?v={{ filemtime(public_path('js/operator/recap-reveal.js')) }}"></script>
+@endassets
 
 <div
   class="container page view-enter"
@@ -267,14 +271,15 @@
         winnerNote="Dihitung otomatis dari tabel suara anonim."
       />
     @else
-      {{-- LANGKAH 4b: Mode Animasi (Data Diambil SEKALI, 100% Murni Client-Side Mengikuti Referensi vote-simulation.html) --}}
+      {{-- LANGKAH 4b: Mode Animasi (Hanya metadata paslon dikirim awal; angka suara baru ditarik saat tombol Play ditekan) --}}
       <div
         class="sim-wrap"
         wire:key="sim-anim-root-{{ $election->id }}"
         wire:ignore
-        x-data="window.createRecapSim(@js($revealCandidates), @js($totalVotesCast))"
+        data-candidates="{{ json_encode($revealCandidatesMeta, JSON_UNESCAPED_UNICODE) }}"
+        x-data="window.createRecapSim($el, $wire)"
       >
-        {{-- Panel Pengaturan Sekuensial Mode Animasi (100% Client-Side, Tanpa Reveal Suara) --}}
+        {{-- Panel Pengaturan Sekuensial Mode Animasi (100% Client-Side, Tanpa Data Suara Sebelum Play) --}}
         <section class="panel" aria-label="Pengaturan Mode Animasi Reveal">
           <div class="panel-head">
             <div>
@@ -283,12 +288,12 @@
                 <span>Pengaturan Animasi Perolehan Suara</span>
               </h2>
               <p class="panel-sub">
-                Data suara sudah dimuat ke perangkat Anda. Atur jeda, susun urutan tampil (suara tetap tersembunyi), lalu tekan <strong>Play</strong> — seluruh pengaturan dan animasi berjalan instan tanpa jeda server.
+                Atur jeda dan susun urutan tampil paslon secara instan di perangkat Anda. Demi keamanan, data perolehan suara <strong>belum dikirim ke browser</strong> dan baru ditarik sekali saat tombol <strong>Play</strong> ditekan.
               </p>
             </div>
-            <span class="status-badge" :class="running ? 'is-sedang' : 'is-sudah'">
+            <span class="status-badge" :class="(running || loadingVotes) ? 'is-sedang' : 'is-sudah'">
               <span class="status-dot"></span>
-              <span x-text="running ? 'Animasi Sedang Berjalan' : 'Siap Diputar (Client-Side)'">Siap Diputar (Client-Side)</span>
+              <span x-text="loadingVotes ? 'Memuat Data Suara...' : (running ? 'Animasi Sedang Berjalan' : 'Siap Diputar')">Siap Diputar</span>
             </span>
           </div>
 
@@ -424,17 +429,24 @@
                     type="button"
                     class="btn btn-primary"
                     x-on:click="playAnimation()"
-                    :disabled="running || orderedCandidates.length === 0"
+                    :disabled="running || loadingVotes || orderedCandidates.length === 0"
+                    :data-loading="loadingVotes ? 'true' : null"
                   >
-                    <svg class="icon"><use href="#i-sparkles"></use></svg>
-                    <span>Play (Mulai Animasi)</span>
+                    <span class="btn-label-idle" x-show="!loadingVotes" style="display: inline-flex; align-items: center; gap: 6px;">
+                      <svg class="icon"><use href="#i-sparkles"></use></svg>
+                      <span>Play (Mulai Animasi)</span>
+                    </span>
+                    <span class="btn-label-loading" x-show="loadingVotes" x-cloak style="display: inline-flex; align-items: center; gap: 6px;">
+                      <span class="spinner" aria-hidden="true"></span>
+                      <span>Memuat Suara...</span>
+                    </span>
                   </button>
 
                   <button
                     type="button"
                     class="btn btn-secondary"
                     x-on:click="resetResults()"
-                    :disabled="running || !hasResults"
+                    :disabled="running || loadingVotes || !hasResults"
                   >
                     <svg class="icon"><use href="#i-rotate"></use></svg>
                     <span>Reset Hasil</span>
