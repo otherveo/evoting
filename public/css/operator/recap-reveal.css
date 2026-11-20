@@ -155,6 +155,75 @@
   height: 15px;
 }
 
+.mode-choice-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.mode-choice-card.is-loading-card {
+  opacity: 1;
+  border-color: var(--brand-bright);
+  box-shadow: 0 0 0 3px rgba(36, 87, 197, 0.14);
+}
+
+.mode-choice-spinner {
+  width: 15px;
+  height: 15px;
+  border-color: rgba(29, 78, 216, 0.22);
+  border-top-color: var(--brand);
+}
+
+/* Popup Loading Instan Saat Memilih Mode Rekapitulasi */
+.recap-loading-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(11, 23, 52, 0.42);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.recap-loading-popup {
+  width: min(360px, 100%);
+  padding: 26px 24px;
+  border-radius: 20px;
+  background: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 26px 64px -20px rgba(11, 23, 52, 0.52);
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+  animation: fadeUp 160ms ease both;
+}
+
+.recap-loading-ring {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 3.5px solid rgba(36, 87, 197, 0.16);
+  border-top-color: var(--brand);
+  animation: spin 720ms linear infinite;
+}
+
+.recap-loading-popup strong {
+  font-size: 0.96rem;
+  font-weight: 850;
+  color: var(--ink);
+}
+
+.recap-loading-popup p {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 /* =========================================================
    Mode Animasi (100% Client-Side, Referensi vote-simulation.html)
    ========================================================= */

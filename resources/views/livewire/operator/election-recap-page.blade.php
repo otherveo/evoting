@@ -206,7 +206,20 @@
 
     @if($activeViewMode === null)
       {{-- LANGKAH 3: Pilih Mode Tampilan (Biasa vs Animasi) — Hasil BELUM Ditampilkan (Tanpa Spoiler) --}}
-      <section class="panel mode-choice-panel" aria-label="Pilih Mode Tampilan Rekapitulasi">
+      <section
+        class="panel mode-choice-panel"
+        aria-label="Pilih Mode Tampilan Rekapitulasi"
+        x-data="{
+          choosingMode: null,
+          selectMode(mode) {
+            if (this.choosingMode !== null) return;
+            this.choosingMode = mode;
+            $wire.setRecapMode(mode).catch(() => {
+              this.choosingMode = null;
+            });
+          }
+        }"
+      >
         <div class="mode-choice-head">
           <div class="eyebrow" style="justify-content: center;">
             <svg class="icon"><use href="#i-sparkles"></use></svg>
@@ -222,7 +235,9 @@
           <button
             type="button"
             class="mode-choice-card"
-            wire:click="setRecapMode('biasa')"
+            :class="{ 'is-loading-card': choosingMode === 'biasa' }"
+            :disabled="choosingMode !== null"
+            x-on:click="selectMode('biasa')"
           >
             <span class="mode-choice-icon">
               <svg class="icon"><use href="#i-chart"></use></svg>
@@ -231,16 +246,22 @@
             <p>
               Langsung menampilkan ringkasan pemenang, tabel perolehan suara setiap pasangan calon, dan persentase secara penuh dalam satu halaman.
             </p>
-            <span class="mode-choice-cta">
+            <span class="mode-choice-cta" x-show="choosingMode !== 'biasa'">
               <span>Tampilkan Mode Biasa</span>
               <svg class="icon"><use href="#i-arrow-right"></use></svg>
+            </span>
+            <span class="mode-choice-cta" x-show="choosingMode === 'biasa'" x-cloak>
+              <span class="spinner mode-choice-spinner" aria-hidden="true"></span>
+              <span>Memuat Mode Biasa...</span>
             </span>
           </button>
 
           <button
             type="button"
             class="mode-choice-card is-animasi"
-            wire:click="setRecapMode('animasi')"
+            :class="{ 'is-loading-card': choosingMode === 'animasi' }"
+            :disabled="choosingMode !== null"
+            x-on:click="selectMode('animasi')"
           >
             <span class="mode-choice-icon">
               <svg class="icon"><use href="#i-sparkles"></use></svg>
@@ -249,11 +270,24 @@
             <p>
               Atur jeda antar angka suara, susun urutan tampil paslon tanpa membocorkan jumlah suara, lalu jalankan animasi hitung-naik dan papan peringkat langsung di browser.
             </p>
-            <span class="mode-choice-cta">
+            <span class="mode-choice-cta" x-show="choosingMode !== 'animasi'">
               <span>Siapkan Mode Animasi</span>
               <svg class="icon"><use href="#i-arrow-right"></use></svg>
             </span>
+            <span class="mode-choice-cta" x-show="choosingMode === 'animasi'" x-cloak>
+              <span class="spinner mode-choice-spinner" aria-hidden="true"></span>
+              <span>Menyiapkan Mode Animasi...</span>
+            </span>
           </button>
+        </div>
+
+        {{-- Popup Loading Instan Saat Memproses Pilihan Mode --}}
+        <div class="recap-loading-backdrop" x-show="choosingMode !== null" x-cloak role="status" aria-live="polite">
+          <div class="recap-loading-popup">
+            <span class="recap-loading-ring" aria-hidden="true"></span>
+            <strong x-text="choosingMode === 'animasi' ? 'Menyiapkan Mode Animasi...' : 'Memuat Rekapitulasi Mode Biasa...'">Memproses...</strong>
+            <p x-text="choosingMode === 'animasi' ? 'Mengambil daftar pasangan calon (tanpa angka suara) dan menyiapkan panel pengaturan animasi.' : 'Menghitung perolehan suara anonim dan menyusun tabel rekapitulasi lengkap.'"></p>
+          </div>
         </div>
       </section>
     @elseif($activeViewMode === 'biasa')
