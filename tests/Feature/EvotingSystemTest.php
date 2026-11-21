@@ -26,6 +26,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Js;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -906,7 +907,9 @@ class EvotingSystemTest extends TestCase
             ->assertSee('Pilih Jeda Antar Angka Suara')
             ->assertSee('Pilih Urutan Tampil Paslon')
             ->assertSee('Acak Urutan')
-            ->assertSee('Play (Mulai Animasi)')
+            ->assertSee('Simpan')
+            ->assertDontSee('Play (Mulai Animasi)')
+            ->assertDontSee('Hasil Perhitungan & Peringkat')
             ->assertDontSee('buildResultRow')
             ->assertDontSee('vote_count')
             ->assertSeeHtml('window.createRecapSim($el, $wire)');
@@ -916,6 +919,24 @@ class EvotingSystemTest extends TestCase
         $animMeta = $recapA->viewData('revealCandidatesMeta');
         $this->assertCount(3, $animMeta);
         $this->assertArrayNotHasKey('vote_count', $animMeta[0]);
+
+        $setupUrl = route('operator.elections.recap', $election);
+        $revealUrl = route('operator.elections.recap.reveal', $election);
+        $this->get($revealUrl)->assertRedirect($setupUrl);
+
+        $order = [$c3->id, $c2->id, $c1->id];
+        $recapA->call('saveRevealSetup', 19, $order)->assertNoRedirect();
+        $recapA->call('saveRevealSetup', 50, [$c3->id, $c3->id, $c1->id])->assertNoRedirect();
+        $recapA->call('saveRevealSetup', 50, $order)->assertRedirect($revealUrl);
+
+        $this->get($revealUrl)
+            ->assertOk()
+            ->assertSee('Hasil Perhitungan & Peringkat')
+            ->assertSee('Play (Mulai Animasi)')
+            ->assertDontSee('Pilih Jeda Antar Angka Suara')
+            ->assertDontSee('Pilih Urutan Tampil Paslon')
+            ->assertDontSee('vote_count')
+            ->assertSeeHtml(Js::from(['delayMs' => 50, 'orderIds' => $order])->toHtml());
 
         // Saat tombol Play ditekan -> fetchRevealResults() menarik data suara sekali dari server
         $fetched = $recapA->instance()->fetchRevealResults($voting);

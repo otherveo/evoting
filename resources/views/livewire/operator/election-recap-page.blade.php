@@ -313,7 +313,7 @@
         wire:key="sim-anim-root-{{ $election->id }}"
         wire:ignore
         data-candidates="{{ json_encode($revealCandidatesMeta, JSON_UNESCAPED_UNICODE) }}"
-        x-data="window.createRecapSim($el, $wire)"
+        x-data="Object.assign(window.createRecapSim($el, $wire), @js($revealSetup), { savingSetup: false })"
       >
         {{-- Panel Pengaturan Sekuensial Mode Animasi (100% Client-Side, Tanpa Data Suara Sebelum Play) --}}
         <section class="panel" aria-label="Pengaturan Mode Animasi Reveal">
@@ -449,79 +449,21 @@
               </ul>
             </div>
 
-            {{-- Langkah 4.3: Play --}}
             <div class="sim-step-block">
-              <div class="sim-play-toolbar">
-                <div class="sim-step-title">
-                  <span class="section-num-badge">3</span>
-                  <div>
-                    <h3>Mulai Pemutaran Animasi</h3>
-                    <p>Tekan <strong>Play</strong> untuk memulai hitung-naik satu per satu. Tekan <code>&times;</code> atau <code>Esc</code> di popup untuk melompati paslon yang sedang dihitung.</p>
-                  </div>
-                </div>
-
-                <div class="sim-play-actions">
-                  <button
-                    type="button"
-                    class="btn btn-primary"
-                    x-on:click="playAnimation()"
-                    :disabled="running || loadingVotes || orderedCandidates.length === 0"
-                    :data-loading="loadingVotes ? 'true' : null"
-                  >
-                    <span class="btn-label-idle" x-show="!loadingVotes" style="display: inline-flex; align-items: center; gap: 6px;">
-                      <svg class="icon"><use href="#i-sparkles"></use></svg>
-                      <span>Play (Mulai Animasi)</span>
-                    </span>
-                    <span class="btn-label-loading" x-show="loadingVotes" x-cloak style="display: inline-flex; align-items: center; gap: 6px;">
-                      <span class="spinner" aria-hidden="true"></span>
-                      <span>Memuat Suara...</span>
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    class="btn btn-secondary"
-                    x-on:click="resetResults()"
-                    :disabled="running || loadingVotes || !hasResults"
-                  >
-                    <svg class="icon"><use href="#i-rotate"></use></svg>
-                    <span>Reset Hasil</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    class="btn btn-danger-ghost"
-                    x-show="running"
-                    x-cloak
-                    x-on:click="abortAnimation()"
-                  >
-                    <svg class="icon"><use href="#i-x"></use></svg>
-                    <span>Hentikan</span>
-                  </button>
-                </div>
+              <div class="sim-play-actions">
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  x-on:click="if (validateDelay()) {
+                    savingSetup = true;
+                    $wire.saveRevealSetup(delayMs, orderIds).finally(() => { savingSetup = false; });
+                  }"
+                  :disabled="savingSetup || orderedCandidates.length === 0"
+                >
+                  <span x-text="savingSetup ? 'Menyimpan...' : 'Simpan'">Simpan</span>
+                </button>
               </div>
             </div>
-          </div>
-        </section>
-
-        {{-- Kanvas Hasil Perhitungan (Daftar Peringkat Animasi FLIP) --}}
-        <section class="panel" aria-label="Hasil Perhitungan Peringkat">
-          <div class="panel-head">
-            <div>
-              <h2 class="panel-title">
-                <svg class="icon"><use href="#i-trophy"></use></svg>
-                <span>Hasil Perhitungan &amp; Peringkat</span>
-              </h2>
-              <p class="panel-sub">Setiap paslon yang selesai dihitung otomatis mendarat dan menempati peringkat sesuai jumlah suara terbanyak.</p>
-            </div>
-            <span class="sim-status" x-text="statusText"></span>
-          </div>
-
-          <div class="sim-results-body">
-            <div class="sim-empty" x-show="!hasResults">
-              Hasil perhitungan akan muncul di sini setelah Anda menekan tombol <strong>Play</strong>
-            </div>
-            <ul class="sim-canvas-list" x-ref="simList"></ul>
           </div>
         </section>
       </div>

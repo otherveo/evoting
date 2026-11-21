@@ -10,6 +10,7 @@ use App\Services\VotingService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\View;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Title;
 use Throwable;
 
@@ -31,11 +32,43 @@ class ElectionRecapPage extends StaffPage
      */
     public ?string $activeViewMode = null;
 
-    public function mount(Election $election): void
+    #[Locked]
+    public bool $showRevealScreen = false;
+
+    public function mount(Election $election, VotingService $voting): void
     {
         $this->election = $election;
         $this->revealDelayInput = (int) ($election->reveal_delay_ms ?: 150);
-        $this->activeViewMode = null;
+        $this->showRevealScreen = request()->routeIs('operator.elections.recap.reveal');
+        if ($this->showRevealScreen && (! session()->has($this->revealSetupKey()) || ! $this->recapAvailable($voting))) {
+            $this->redirectRoute('operator.elections.recap', $election);
+        }
+        if (! $this->showRevealScreen && request()->boolean('konfigurasi') && $this->recapAvailable($voting)) {
+            $this->activeViewMode = 'animasi';
+        }
+    }
+
+    private function revealSetupKey(): string
+    {
+        return 'recap_reveal_setup:'.Auth::guard('staff')->id().':'.$this->election->id;
+    }
+
+    public function saveRevealSetup(int $delayMs, array $orderIds, VotingService $voting): void
+    {
+        $this->election->refresh();
+        abort_unless($this->ensureActiveOperator() && $this->recapAvailable($voting), 403);
+
+        $validIds = $this->election->candidates()->pluck('id')->all();
+        if ($delayMs < 20 || $delayMs > 10000
+            || ! $validIds || ! array_is_list($orderIds) || count($orderIds) !== count($validIds)
+            || array_filter($orderIds, 'is_string') !== $orderIds || array_diff($validIds, $orderIds)) {
+            $this->dispatch('toast', message: 'Periksa jeda dan urutan tampil paslon sebelum menyimpan.', type: 'warning');
+
+            return;
+        }
+
+        session([$this->revealSetupKey() => ['delayMs' => $delayMs, 'orderIds' => $orderIds]]);
+        $this->redirectRoute('operator.elections.recap.reveal', $this->election);
     }
 
     private function ensureActiveOperator(): bool
@@ -618,7 +651,15 @@ class ElectionRecapPage extends StaffPage
         $isLocalRevealRunner = (bool) $this->election->reveal_locked
             && ($this->election->reveal_locked_by === null || (string) $this->election->reveal_locked_by === (string) $currentOperatorId);
 
-        return view('livewire.operator.election-recap-page', [
+        $view = $this->showRevealScreen && $isRecapOpen
+            ? 'livewire.operator.election-reveal-page'
+            : 'livewire.operator.election-recap-page';
+        $setup = session($this->revealSetupKey(), []);
+        $orderIds = array_values(array_intersect($setup['orderIds'] ?? [], $validIds));
+        $orderIds = [...$orderIds, ...array_diff($validIds, $orderIds)];
+
+        return view($view, [
+            'revealSetup' => ['delayMs' => $setup['delayMs'] ?? 150, 'orderIds' => $orderIds],
             'phase' => $phase,
             'integrity' => $integrity,
             'canUnlockRecap' => $canUnlockRecap,
