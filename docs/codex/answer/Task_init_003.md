@@ -1,0 +1,11 @@
+Perbaikan High **#1, #2, #3, #4, #5, #7, dan #8** sudah diterapkan di branch lokal `fix/hardening-voting-v1`. Perubahan belum di-commit, di-push, atau di-deploy. Database dan situs produksi tidak diakses.
+
+- **Staf dan TOTP.** Aksi Livewire memeriksa kembali peran, status akun, versi sesi, dan kelulusan 2FA. Reset sandi atau penonaktifan mencabut akses dari halaman yang masih terbuka. Aktivasi TOTP memakai rahasia dari sesi server, memiliki batas waktu dan percobaan, serta hanya bisa diselesaikan sekali.
+- **Pemilih dan QR.** Server menentukan identitas browser pada setiap aksi. Penerbitan hak pilih memeriksa duplikat di dalam transaksi dan mengenali pengiriman ulang. Hanya penerbit QR yang berlaku dapat menyetujui perangkat bersama. QR lama tanpa penerbit memerlukan penerbitan ulang. Konfirmasi suara terikat pada calon yang terakhir ditinjau.
+- **Rekap dan database.** PostgreSQL menegakkan syarat penutupan atau kuota penuh untuk rekap Operator. Role publik/pemilih `evoting_app` dipisahkan dari `evoting_staff`. Jalur kesalahan voting mencatat metadata insiden tanpa parameter suara atau perangkat.
+
+**Verifikasi lokal lulus:** 16 tes, 295 assertion, tanpa kegagalan atau tes yang dilewati. Pengujian mencakup pencabutan akses Livewire, registrasi dengan dua koneksi database, pembatasan rekap, reveal v5, dan penghapusan total pemilihan. Di Chrome, saya juga menguji pemilih yang kembali dari layar konfirmasi, mengganti calon, lalu mengirim suara. Database uji berisi tepat satu suara untuk calon terakhir. Upgrade dari skema lama mempertahankan data pemilih lama dan mencabut grant lama. Laravel Pint dan `git diff --check` juga lulus.
+
+Saat deployment nanti, konfigurasi `STAFF_DB_USERNAME` dan `STAFF_DB_PASSWORD` perlu tersedia bersama skema baru. Staf dengan sesi lama perlu login kembali. Urutan penerapannya ada di [panduan deployment](<C:/Users/Public/Downloads/nmpng/Asobi/project/e-voting/DEPLOY.md>).
+
+Temuan **#6** tetap tercatat sebagai batasan desain yang diterima. Risiko inferensi dari perubahan angka pada rekap langsung berkunci juga masih berlaku. Mengubah frekuensi atau tingkat detail rekap tersebut memerlukan keputusan produk tersendiri.
