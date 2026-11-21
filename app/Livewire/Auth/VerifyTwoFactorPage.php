@@ -57,7 +57,7 @@ class VerifyTwoFactorPage extends Component
 
         /** @var StaffAccount|null $user */
         $user = Auth::guard('staff')->user();
-        if (! $user || ! $user->isAdmin()) {
+        if (! $user || ! $user->isAdmin() || ! $user->is_active || ! $user->hasCurrentSession() || ! $user->totp_enabled) {
             $this->redirectRoute('login');
 
             return;
@@ -71,7 +71,7 @@ class VerifyTwoFactorPage extends Component
         ]);
 
         try {
-            $throttleKey = 'staff_2fa:'.$user->id.'|'.request()->ip();
+            $throttleKey = 'staff_2fa:'.$user->id;
             $maxAttempts = (int) config('evoting.login_max_attempts', 5);
             $decaySeconds = (int) config('evoting.login_decay_seconds', 60);
 

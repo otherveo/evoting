@@ -13,18 +13,20 @@
           'photoUrl' => $c->photoUrl(),
       ],
   ])->all();
-  $allCandidateIdsList = $candidates->pluck('id')->map(fn ($id) => (string) $id)->values()->all();
 @endphp
-<div
-  x-on:close-vm-modal.window="closeVisionMissionModal()"
+<div>
+<div wire:key="ballot-{{ $stage }}-{{ (int) $waitingForDeviceApproval }}-{{ implode('-', array_keys($candidatesClientMap)) }}"
+  x-on:ballot-edit.window="reviewedId = null"
   x-data="{
-    clientStage: $wire.entangle('stage'),
-    clientSelectedId: $wire.entangle('selectedCandidateId'),
-    clientReadIds: $wire.entangle('readCandidateIds'),
-    activeVmId: $wire.entangle('activeVisionMissionCandidateId'),
+    get clientStage() { return this.reviewedId ? 'konfirmasi' : @js($stage); },
+    clientSelectedId: null,
+    clientReadIds: [],
+    activeVmId: null,
+    reviewedId: null,
     submittingVote: false,
     candidatesMap: @js($candidatesClientMap),
-    allCandidateIds: @js($allCandidateIdsList),
+    get allCandidateIds() { return Object.keys(this.candidatesMap); },
+    get reviewedCand() { return this.candidatesMap[this.reviewedId] || null; },
     get activeStepIndex() {
       if (this.clientStage === 'verifikasi') return 1;
       if (this.clientStage === 'memilih') return 2;
@@ -39,29 +41,21 @@
       return this.activeVmId ? (this.candidatesMap[this.activeVmId] || null) : null;
     },
     isCandidateRead(id) {
-      return Array.isArray(this.clientReadIds) && this.clientReadIds.includes(String(id));
+      return this.clientReadIds.includes(id);
     },
     get readCandidatesCount() {
-      if (!Array.isArray(this.allCandidateIds)) return 0;
-      return this.allCandidateIds.filter(id => this.isCandidateRead(id)).length;
+      return this.clientReadIds.length;
     },
     get hasReadAllCandidates() {
-      if (!Array.isArray(this.allCandidateIds) || this.allCandidateIds.length === 0) return true;
-      return this.allCandidateIds.every(id => this.isCandidateRead(id));
+      return this.readCandidatesCount > 0 && this.readCandidatesCount === this.allCandidateIds.length;
     },
     chooseCandidate(id) {
-      this.clientSelectedId = id;
+      if (!this.reviewedId && this.candidatesMap[id]) this.clientSelectedId = id;
     },
     openVisionMissionModal(id) {
-      const sid = String(id);
-      if (!Array.isArray(this.clientReadIds)) {
-        this.clientReadIds = [];
-      }
-      if (!this.clientReadIds.includes(sid)) {
-        this.clientReadIds = [...this.clientReadIds, sid];
-      }
-      this.activeVmId = sid;
-      $wire.markVisionMissionRead(sid);
+      if (!this.candidatesMap[id]) return;
+      this.activeVmId = id;
+      if (!this.isCandidateRead(id)) this.clientReadIds.push(id);
     },
     closeVisionMissionModal() {
       this.activeVmId = null;
@@ -75,18 +69,18 @@
         window.showToast('Anda belum boleh lanjut sebelum membaca seluruh visi & misi setiap paslon.', 'warning');
         return;
       }
-      $wire.proceedToConfirm();
+      this.reviewedId = this.clientSelectedId;
       window.scrollTo({ top: 0, behavior: 'auto' });
     },
     goBackToBallot() {
       if (this.submittingVote) return;
-      this.clientStage = 'memilih';
+      this.reviewedId = null;
       window.scrollTo({ top: 0, behavior: 'auto' });
     },
     submitFinalVote() {
-      if (this.submittingVote || !this.clientSelectedId) return;
+      if (this.submittingVote || !this.reviewedCand) return;
       this.submittingVote = true;
-      $wire.confirmVote(this.clientSelectedId).finally(() => {
+      $wire.confirmVote(this.reviewedId, [...this.clientReadIds]).finally(() => {
         this.submittingVote = false;
       });
     }
@@ -96,7 +90,6 @@
     {{-- UI.md §1.1: Indikator 4 Langkah Linear (Verifikasi -> Memilih -> Konfirmasi -> Selesai) --}}
     <ol class="vote-steps" aria-label="Tahapan Memilih">
       <li
-        class="{{ $stepIndex === 1 ? 'is-active' : ($stepIndex > 1 ? 'is-done' : '') }}"
         :class="{ 'is-active': activeStepIndex === 1, 'is-done': activeStepIndex > 1 }"
       >
         <span class="step-dot">
@@ -110,7 +103,6 @@
         <span class="step-label">Verifikasi</span>
       </li>
       <li
-        class="{{ $stepIndex === 2 ? 'is-active' : ($stepIndex > 2 ? 'is-done' : '') }}"
         :class="{ 'is-active': activeStepIndex === 2, 'is-done': activeStepIndex > 2 }"
       >
         <span class="step-dot">
@@ -124,7 +116,6 @@
         <span class="step-label">Memilih</span>
       </li>
       <li
-        class="{{ $stepIndex === 3 ? 'is-active' : ($stepIndex > 3 ? 'is-done' : '') }}"
         :class="{ 'is-active': activeStepIndex === 3, 'is-done': activeStepIndex > 3 }"
       >
         <span class="step-dot">
@@ -138,7 +129,6 @@
         <span class="step-label">Konfirmasi</span>
       </li>
       <li
-        class="{{ $stepIndex === 4 ? 'is-active' : '' }}"
         :class="{ 'is-active': activeStepIndex === 4 }"
       >
         <span class="step-dot">4</span>
@@ -149,7 +139,7 @@
 
   @if($stage === 'verifikasi')
     @include('livewire.voter.partials.stage-verifikasi')
-  @elseif(in_array($stage, ['memilih', 'konfirmasi'], true))
+  @elseif($stage === 'memilih' && ! $waitingForDeviceApproval)
     <div x-show="clientStage === 'memilih'">
       @include('livewire.voter.partials.stage-memilih')
     </div>
@@ -229,4 +219,5 @@
       </x-modal>
     </div>
   @endif
+</div>
 </div>

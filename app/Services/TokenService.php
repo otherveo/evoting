@@ -107,7 +107,7 @@ class TokenService
         }
 
         try {
-            $row = DB::table('evoting.cache')
+            $row = DB::connection('staff')->table('evoting.cache')
                 ->where('key', self::QR_MODE_CACHE_KEY)
                 ->first();
 
@@ -137,7 +137,7 @@ class TokenService
 
         Cache::forever(self::QR_MODE_CACHE_KEY, $mode);
 
-        DB::table('evoting.cache')->updateOrInsert(
+        DB::connection('staff')->table('evoting.cache')->updateOrInsert(
             ['key' => self::QR_MODE_CACHE_KEY],
             [
                 'value' => $mode,

@@ -7,7 +7,9 @@ use App\Models\StaffAccount;
 use App\Services\AuditService;
 use App\Services\TotpService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -27,15 +29,13 @@ class ActivateAccountPage extends Component
 
     public string $totpCode = '';
 
-    public string $pendingTotpSecret = '';
-
     public ?string $errorMessage = null;
 
     public function mount(TotpService $totp): void
     {
         /** @var StaffAccount|null $user */
         $user = Auth::guard('staff')->user();
-        if (! $user) {
+        if (! $user || ! $user->is_active || ! $user->hasCurrentSession()) {
             $this->redirectRoute('login');
 
             return;
@@ -48,13 +48,23 @@ class ActivateAccountPage extends Component
         }
 
         if ($user->isAdmin() && ! $user->totp_enabled) {
-            $existing = session('pending_totp_secret');
-            if (! is_string($existing) || strlen($existing) < 16) {
-                $existing = $totp->generateSecret();
-                session(['pending_totp_secret' => $existing]);
+            if ($this->pendingSecret($user) === null) {
+                session(['pending_totp_enrollment' => [
+                    'account' => $user->id,
+                    'secret' => $totp->generateSecret(),
+                    'expires_at' => now()->addMinutes(10)->timestamp,
+                ]]);
             }
-            $this->pendingTotpSecret = $existing;
         }
+    }
+
+    private function pendingSecret(StaffAccount $user): ?string
+    {
+        $pending = session('pending_totp_enrollment');
+
+        return ($pending['account'] ?? null) === $user->id && ($pending['expires_at'] ?? 0) > now()->timestamp
+            ? $pending['secret']
+            : null;
     }
 
     public function updatePassword(AuditService $audit): void
@@ -63,11 +73,13 @@ class ActivateAccountPage extends Component
 
         /** @var StaffAccount|null $user */
         $user = Auth::guard('staff')->user();
-        if (! $user) {
+        if (! $user || ! $user->is_active || ! $user->hasCurrentSession()) {
             $this->redirectRoute('login');
 
             return;
         }
+
+        abort_unless($user->must_change_password, 403);
 
         $minLen = (int) config('evoting.min_password_length', 8);
 
@@ -98,10 +110,24 @@ class ActivateAccountPage extends Component
                 return;
             }
 
-            $user->update([
-                'password_hash' => Hash::make($this->newPassword),
-                'must_change_password' => false,
-            ]);
+            $changed = StaffAccount::whereKey($user->id)
+                ->where('session_version', $user->session_version)
+                ->where('must_change_password', true)
+                ->where('is_active', true)
+                ->update([
+                    'password_hash' => Hash::make($this->newPassword),
+                    'must_change_password' => false,
+                    'session_version' => (int) $user->session_version + 1,
+                ]);
+
+            if (! $changed) {
+                $this->redirectRoute('login');
+
+                return;
+            }
+
+            session()->regenerate();
+            session(['staff_session_version' => (int) $user->session_version + 1]);
 
             $audit->log(
                 actorType: $user->role,
@@ -139,7 +165,7 @@ class ActivateAccountPage extends Component
 
         /** @var StaffAccount|null $user */
         $user = Auth::guard('staff')->user();
-        if (! $user || ! $user->isAdmin()) {
+        if (! $user || ! $user->isAdmin() || ! $user->is_active || ! $user->hasCurrentSession() || $user->totp_enabled) {
             $this->redirectRoute('login');
 
             return;
@@ -160,30 +186,39 @@ class ActivateAccountPage extends Component
         ]);
 
         try {
-            if ($this->pendingTotpSecret === '' || ! $totp->verifyCode($this->pendingTotpSecret, $this->totpCode, $user->id)) {
-                $this->errorMessage = 'Kode TOTP tidak sesuai. Pastikan waktu perangkat Anda sinkron dan pindai ulang kode QR.';
-                $this->dispatch('toast', message: $this->errorMessage, type: 'error');
+            $key = 'totp-enroll:'.$user->id;
+            $secret = $this->pendingSecret($user);
+            if ($secret === null || RateLimiter::tooManyAttempts($key, 5)) {
+                $this->addError('totpCode', 'Pendaftaran kedaluwarsa atau percobaan dibatasi. Muat ulang halaman dan coba kembali.');
 
                 return;
             }
 
-            $user->update([
-                'totp_secret' => $this->pendingTotpSecret,
-                'totp_enabled' => true,
-            ]);
+            RateLimiter::hit($key, 60);
+            $enabled = DB::connection('staff')->transaction(function () use ($user, $secret, $totp, $audit) {
+                $staff = StaffAccount::query()->lockForUpdate()->findOrFail($user->id);
+                if (! $staff->isAdmin() || ! $staff->is_active || ! $staff->hasCurrentSession()
+                    || $staff->totp_enabled || $staff->must_change_password
+                    || $this->pendingSecret($staff) !== $secret || ! $totp->verifyCode($secret, $this->totpCode, $staff->id)) {
+                    return false;
+                }
 
-            session()->forget('pending_totp_secret');
+                $staff->update(['totp_secret' => $secret, 'totp_enabled' => true]);
+                $audit->log('admin', $staff->id, 'aktifkan_totp_admin', 'staff_account', $staff->id);
+
+                return true;
+            });
+
+            if (! $enabled) {
+                $this->addError('totpCode', 'Kode atau pendaftaran TOTP tidak berlaku.');
+
+                return;
+            }
+
+            RateLimiter::clear($key);
+            session()->forget('pending_totp_enrollment');
+            session()->regenerate();
             session(['staff_2fa_verified' => true]);
-
-            $audit->log(
-                actorType: 'admin',
-                actorId: $user->id,
-                action: 'aktifkan_totp_admin',
-                objectType: 'staff_account',
-                objectId: $user->id,
-                detail: ['username' => $user->username]
-            );
-
             session()->flash('success', 'Autentikasi dua faktor (TOTP) berhasil diaktifkan.');
             $this->redirectRoute('admin.operators');
         } catch (Throwable $e) {
@@ -196,15 +231,17 @@ class ActivateAccountPage extends Component
     {
         /** @var StaffAccount $user */
         $user = Auth::guard('staff')->user();
+        $pendingTotpSecret = $user ? $this->pendingSecret($user) : null;
         $qrSvg = null;
-        if ($user && $user->isAdmin() && ! $user->totp_enabled && $this->pendingTotpSecret !== '') {
-            $uri = $totp->getProvisioningUri($user->username, $this->pendingTotpSecret);
+        if ($user && $user->isAdmin() && ! $user->totp_enabled && $pendingTotpSecret !== null) {
+            $uri = $totp->getProvisioningUri($user->username, $pendingTotpSecret);
             $qrSvg = $totp->renderQrSvg($uri, 210);
         }
 
         return view('livewire.auth.activate-account-page', [
             'user' => $user,
             'qrSvg' => $qrSvg,
+            'pendingTotpSecret' => $pendingTotpSecret ?? '',
         ]);
     }
 }

@@ -24,13 +24,16 @@ class SupabaseStorageService
             throw new RuntimeException('Konfigurasi penyimpanan foto belum lengkap.');
         }
 
-        $ext = strtolower($file->getClientOriginalExtension() ?: $file->guessExtension() ?: 'jpg');
-        if (! in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true)) {
-            $ext = 'jpg';
+        $image = @getimagesize($file->getRealPath());
+        $extensions = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+        $mimeType = $file->getMimeType();
+        if (! isset($extensions[$mimeType]) || ($image['mime'] ?? null) !== $mimeType
+            || $file->getSize() > 2 * 1024 * 1024 || $image[0] * $image[1] > 16000000) {
+            throw new RuntimeException('Foto harus berupa JPG, PNG, atau WebP maksimal 2 MB dan 16 megapiksel.');
         }
 
+        $ext = $extensions[$mimeType];
         $objectPath = "{$electionId}/{$candidateId}-".substr(bin2hex(random_bytes(4)), 0, 8).".{$ext}";
-        $mimeType = $file->getMimeType() ?: 'image/jpeg';
         $contents = file_get_contents($file->getRealPath());
 
         if ($contents === false) {
@@ -54,7 +57,6 @@ class SupabaseStorageService
                 'election_id' => $electionId,
                 'candidate_id' => $candidateId,
                 'exception_class' => $e::class,
-                'exception_message' => $e->getMessage(),
             ]);
 
             throw new RuntimeException('Gagal mengunggah foto paslon ke server penyimpanan. Periksa koneksi jaringan dan coba kembali.');
@@ -64,7 +66,6 @@ class SupabaseStorageService
             Log::error('Respons Supabase Storage tidak berhasil saat mengunggah foto paslon', [
                 'timestamp' => now()->toIso8601String(),
                 'status' => $response->status(),
-                'body' => $response->body(),
                 'election_id' => $electionId,
                 'candidate_id' => $candidateId,
             ]);
@@ -105,7 +106,6 @@ class SupabaseStorageService
             Log::warning('Gagal menghapus foto lama dari Supabase Storage', [
                 'timestamp' => now()->toIso8601String(),
                 'path' => $cleanPath,
-                'exception_message' => $e->getMessage(),
             ]);
         }
     }

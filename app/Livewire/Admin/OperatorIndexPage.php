@@ -3,6 +3,7 @@
 namespace App\Livewire\Admin;
 
 use App\Livewire\Concerns\HandlesSafeErrors;
+use App\Livewire\StaffPage;
 use App\Models\StaffAccount;
 use App\Services\AuditService;
 use App\Services\StaffAccountService;
@@ -12,13 +13,14 @@ use Illuminate\Support\Facades\Cache;
 use InvalidArgumentException;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
-use Livewire\Component;
 use Throwable;
 
 #[Layout('layouts.app')]
 #[Title('Kelola Akun Operator')]
-class OperatorIndexPage extends Component
+class OperatorIndexPage extends StaffPage
 {
+    protected const ROLE = 'admin';
+
     use HandlesSafeErrors;
 
     public string $search = '';

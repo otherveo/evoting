@@ -2,16 +2,18 @@
 
 namespace App\Livewire\Admin;
 
+use App\Livewire\StaffPage;
 use App\Models\AuditLog;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
-use Livewire\Component;
 use Livewire\WithPagination;
 
 #[Layout('layouts.app')]
 #[Title('Log Audit Sistem')]
-class AuditLogPage extends Component
+class AuditLogPage extends StaffPage
 {
+    protected const ROLE = 'admin';
+
     use WithPagination;
 
     public string $actorType = 'all';
@@ -20,18 +22,11 @@ class AuditLogPage extends Component
 
     public string $search = '';
 
-    public function updatedActorType(): void
+    public function applyFilters(string $actor, string $action, string $search): void
     {
-        $this->resetPage();
-    }
-
-    public function updatedActionFilter(): void
-    {
-        $this->resetPage();
-    }
-
-    public function updatedSearch(): void
-    {
+        $this->actorType = $actor;
+        $this->actionFilter = $action;
+        $this->search = trim($search);
         $this->resetPage();
     }
 

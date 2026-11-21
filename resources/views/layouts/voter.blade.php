@@ -93,8 +93,9 @@
       toast.className = `toast toast-${type}`;
       toast.innerHTML = `
         <svg class="icon"><use href="${iconMap[type] || '#i-info'}"></use></svg>
-        <div><strong>${shortMsg}</strong></div>
+        <div><strong></strong></div>
       `;
+      toast.querySelector('strong').textContent = shortMsg;
       root.appendChild(toast);
       requestAnimationFrame(() => toast.classList.add('is-visible'));
       setTimeout(() => {

@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'trusted_proxies' => array_values(array_filter(array_map('trim', explode(',', (string) env('TRUSTED_PROXIES', ''))))),
     'display_timezone' => env('APP_TIMEZONE', 'Asia/Makassar'),
     'browser_cookie_name' => 'evoting_browser_id',
     'browser_cookie_days' => 30,

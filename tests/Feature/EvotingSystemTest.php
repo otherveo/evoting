@@ -14,6 +14,7 @@ use App\Livewire\Public\LiveRecapPage;
 use App\Livewire\Voter\BallotPage;
 use App\Models\Candidate;
 use App\Models\Election;
+use App\Models\PublicElection;
 use App\Models\StaffAccount;
 use App\Services\StaffAccountService;
 use App\Services\SupabaseStorageService;
@@ -21,17 +22,18 @@ use App\Services\TokenService;
 use App\Services\TotpService;
 use App\Services\VotingService;
 use Carbon\CarbonImmutable;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Tests\TestCase;
+use Tests\UsesLocalVotingDatabase;
 
 class EvotingSystemTest extends TestCase
 {
-    use DatabaseTransactions;
+    use UsesLocalVotingDatabase;
 
     public function test_admin_requires_totp_while_operator_logs_in_with_password_only(): void
     {
@@ -279,14 +281,14 @@ class EvotingSystemTest extends TestCase
         $this->assertFalse($schedFail['ok']);
         $this->assertSame('too_few_candidates', $schedFail['code']);
 
-        $c1 = Candidate::create([
+        $c1 = Candidate::on('staff')->create([
             'election_id' => $election->id,
             'number' => 1,
             'name' => 'Paslon Satu',
             'vision' => 'Visi Satu',
             'missions' => ['Misi 1A', 'Misi 1B'],
         ]);
-        $c2 = Candidate::create([
+        $c2 = Candidate::on('staff')->create([
             'election_id' => $election->id,
             'number' => 2,
             'name' => 'Paslon Dua',
@@ -313,15 +315,12 @@ class EvotingSystemTest extends TestCase
 
         Livewire::actingAs($operator, 'staff')
             ->test(VoterMonitorPage::class, ['election' => $election])
-            ->set('voterName', '  andi   pratama ')
-            ->call('registerVoter')
+            ->call('registerVoter', '  andi   pratama ', 0)
             ->assertHasErrors(['voterName']);
 
         Livewire::actingAs($operator, 'staff')
             ->test(VoterMonitorPage::class, ['election' => $election])
-            ->set('voterName', 'Andi Pratama')
-            ->set('confirmDifferentPerson', true)
-            ->call('registerVoter')
+            ->call('registerVoter', 'Andi Pratama', 1)
             ->assertSet('showQrModal', true);
 
         $vr3 = $voting->createVoterRight($election->id, 'Siti Aminah', $operator->id);
@@ -517,11 +516,12 @@ class EvotingSystemTest extends TestCase
             ->assertHasNoErrors();
         $this->assertSame($renamedA, $election->fresh()->name);
 
-        $c1 = Candidate::create(['election_id' => $election->id, 'number' => 1, 'name' => 'Paslon Alpha']);
-        $c2 = Candidate::create(['election_id' => $election->id, 'number' => 2, 'name' => 'Paslon Beta']);
+        $c1 = Candidate::on('staff')->create(['election_id' => $election->id, 'number' => 1, 'name' => 'Paslon Alpha']);
+        $c2 = Candidate::on('staff')->create(['election_id' => $election->id, 'number' => 2, 'name' => 'Paslon Beta']);
 
         // BUG 2 (b): Rename scheduled election (persiapan with future schedule)
         $voting->setElectionSchedule($election->id, $dbNow->addMinutes(30), $dbNow->addHours(3), $operator->id);
+        $this->travel(3)->seconds(); // Separate edits beyond the two-second duplicate-submit window.
         $renamedB = 'Pilketis Rename B '.uniqid();
         Livewire::actingAs($operator, 'staff')
             ->test(ElectionDetailPage::class, ['election' => $election->fresh()])
@@ -533,6 +533,7 @@ class EvotingSystemTest extends TestCase
 
         // BUG 2 (c): Rename ongoing election (berlangsung)
         $voting->setElectionSchedule($election->id, $dbNow->subMinute(), $dbNow->addHours(3), $operator->id);
+        $this->travel(3)->seconds();
         $renamedC = 'Pilketis Rename C '.uniqid();
         Livewire::actingAs($operator, 'staff')
             ->test(ElectionDetailPage::class, ['election' => $election->fresh()])
@@ -542,6 +543,8 @@ class EvotingSystemTest extends TestCase
             ->assertHasNoErrors();
         $this->assertSame($renamedC, $election->fresh()->name);
 
+        $this->travelBack();
+
         // PERUBAHAN 3.2 + UPDATE V2: Shared-device operator approval gate & issuer isolation
         $operatorB = StaffAccount::create([
             'username' => 'op_b_update_v2',
@@ -550,6 +553,7 @@ class EvotingSystemTest extends TestCase
             'role' => 'operator',
             'is_active' => true,
             'totp_enabled' => false,
+            'must_change_password' => false,
         ]);
 
         $vr1 = $voting->createVoterRight($election->id, 'Nayla Putri', $operator->id);
@@ -569,6 +573,7 @@ class EvotingSystemTest extends TestCase
         $this->assertSame('approval_required', $start2['code']);
 
         // Check permission while pending -> returns pending
+        $this->assertSame('wrong_browser', $voting->checkDeviceApproval($vr2['raw_token'], 'other_browser')['code']);
         $checkPending = $voting->checkDeviceApproval($vr2['raw_token'], $sharedBrowser);
         $this->assertSame('pending', $checkPending['code']);
 
@@ -596,7 +601,7 @@ class EvotingSystemTest extends TestCase
         // Status remains pending after Operator B's rejected attempt and no audit log is created
         $this->assertSame('pending', $voting->checkDeviceApproval($vr2['raw_token'], $sharedBrowser)['code']);
         $this->assertFalse(
-            DB::table('evoting.audit_logs')
+            DB::connection('staff')->table('evoting.audit_logs')
                 ->where('actor_id', $operatorB->id)
                 ->where('object_id', $vr2['voter_right_id'])
                 ->exists()
@@ -628,27 +633,23 @@ class EvotingSystemTest extends TestCase
         $this->assertFalse($reopen3['ok']);
         $this->assertSame('device_rejected', $reopen3['code']);
 
-        // UPDATE V2: Legacy row (issued_by IS NULL) is visible to and decidable by any operator
+        // Existing rows without an issuer require explicit reissue before approval.
         $legacyPair = $tokens->generateVoterToken();
-        $legacyRawToken = $legacyPair['raw'];
-        $legacyHash = $legacyPair['hash'];
-        $legacyRow = DB::selectOne(
-            'select * from evoting.fn_create_voter_right(?::uuid, ?, ?, ?, null::uuid)',
-            [$election->id, 'Pemilih Lama Legacy', 'pemilih lama legacy', $legacyHash]
-        );
-        $startLegacy = $voting->startVoting($legacyRawToken, $sharedBrowser, 'Chrome Android', '10.0.0.10');
-        $this->assertSame('approval_required', $startLegacy['code']);
-
-        Livewire::actingAs($operatorB, 'staff')
-            ->test(VoterMonitorPage::class, ['election' => $election->fresh()])
-            ->assertSee('Permintaan Persetujuan Perangkat Bersama');
-
-        $legacyApprove = $voting->decideDeviceApproval((string) $legacyRow->o_voter_right_id, $operatorB->id, 'setujui');
-        $this->assertTrue($legacyApprove['ok']);
+        $legacy = $this->fixtureDb->prepare("insert into evoting.voter_rights
+            (election_id, name, name_normalized, token_hash) values (?, 'Legacy', 'legacy', ?) returning id");
+        $legacy->execute([$election->id, $legacyPair['hash']]);
+        $legacyId = $legacy->fetchColumn();
+        $this->assertSame('approval_required', $voting->startVoting($legacyPair['raw'], $sharedBrowser, 'UA', null)['code']);
+        $this->assertSame('bukan_penerbit', $voting->decideDeviceApproval($legacyId, $operatorB->id, 'setujui')['code']);
+        $this->assertTrue($voting->resetSession($legacyId, $operatorB->id, 'Verifikasi ulang di meja petugas')['ok']);
+        $reissued = $voting->reissueToken($legacyId, $operatorB->id, 'QR lama tanpa penerbit');
+        $this->assertSame('approval_required', $voting->startVoting($reissued['raw_token'], $sharedBrowser, 'UA', null)['code']);
+        $this->assertSame('bukan_penerbit', $voting->decideDeviceApproval($legacyId, $operator->id, 'setujui')['code']);
+        $this->assertTrue($voting->decideDeviceApproval($legacyId, $operatorB->id, 'setujui')['ok']);
 
         // UPDATE V4 BAGIAN A: Monitor pagination (25 per page) + poll only on page 1
-        DB::select(
-            "select (evoting.fn_create_voter_right(?::uuid, 'Pemilih Paginasi ' || g, 'pemilih paginasi ' || g, encode(sha256(('tok_v4_' || g || '_' || ?)::bytea), 'hex'), ?::uuid)).* from generate_series(1, 23) g",
+        DB::connection('staff')->select(
+            "select vr.* from generate_series(1, 23) g cross join lateral evoting.fn_create_voter_right(?::uuid, 'Pemilih Paginasi ' || g, 'pemilih paginasi ' || g, encode(sha256(('tok_v4_' || g || '_' || ?)::bytea), 'hex'), ?::uuid) vr",
             [$election->id, uniqid(), $operator->id]
         );
 
@@ -721,7 +722,7 @@ class EvotingSystemTest extends TestCase
         $this->assertFalse($voting->liveElectionResults($election->id, $tokens->hashToken((string) $key1['raw_key']))['ok']);
         $this->assertTrue($voting->liveElectionResults($election->id, $tokens->hashToken((string) $key2['raw_key']))['ok']);
 
-        Livewire::test(LiveRecapPage::class, ['election' => $election->fresh()])
+        Livewire::test(LiveRecapPage::class, ['election' => PublicElection::findOrFail($election->id)])
             ->assertSee('PERINGATAN: Halaman ini menampilkan hasil sementara secara real-time.')
             ->set('accessKeyInput', (string) $key2['raw_key'])
             ->call('verifyAccessKey')
@@ -759,6 +760,7 @@ class EvotingSystemTest extends TestCase
             'role' => 'operator',
             'is_active' => true,
             'totp_enabled' => false,
+            'must_change_password' => false,
         ]);
 
         $operatorB = StaffAccount::create([
@@ -768,6 +770,7 @@ class EvotingSystemTest extends TestCase
             'role' => 'operator',
             'is_active' => true,
             'totp_enabled' => false,
+            'must_change_password' => false,
         ]);
 
         $election = Election::create([
@@ -775,7 +778,7 @@ class EvotingSystemTest extends TestCase
             'max_voter_rights' => 3,
         ]);
 
-        $c1 = Candidate::create([
+        $c1 = Candidate::on('staff')->create([
             'election_id' => $election->id,
             'number' => 1,
             'name' => 'Paslon Satu V5',
@@ -783,7 +786,7 @@ class EvotingSystemTest extends TestCase
             'missions' => ['Misi 1A', 'Misi 1B'],
         ]);
 
-        $c2 = Candidate::create([
+        $c2 = Candidate::on('staff')->create([
             'election_id' => $election->id,
             'number' => 2,
             'name' => 'Paslon Dua V5',
@@ -791,7 +794,7 @@ class EvotingSystemTest extends TestCase
             'missions' => ['Misi 2A'],
         ]);
 
-        $c3 = Candidate::create([
+        $c3 = Candidate::on('staff')->create([
             'election_id' => $election->id,
             'number' => 3,
             'name' => 'Paslon Nol Suara V5',
@@ -812,7 +815,8 @@ class EvotingSystemTest extends TestCase
             ->assertStatus(200)
             ->assertSee('css/voter/ballot.css?v=', false);
 
-        $ballot = Livewire::test(BallotPage::class, ['token' => $vr1['raw_token']])
+        $ballot = Livewire::withCookie(config('evoting.browser_cookie_name'), 'test_browser_v5_0123456789abcdef')
+            ->test(BallotPage::class, ['token' => $vr1['raw_token']])
             ->call('startVoting')
             ->assertSet('stage', 'memilih')
             ->assertSee('Pilih Paslon Ini')
@@ -820,33 +824,24 @@ class EvotingSystemTest extends TestCase
             ->assertDontSeeHtml('<div class="candidate-vision">')
             ->assertSeeHtml('role="radio"');
 
-        // Pilih paslon tanpa membaca visi & misi satu pun -> DITOLAK di server dengan pesan persis
-        $ballot->call('selectCandidate', $c1->id)
-            ->call('proceedToConfirm')
-            ->assertSet('stage', 'memilih')
-            ->assertDispatched(
-                'toast',
-                message: 'Anda belum boleh lanjut sebelum membaca seluruh visi & misi setiap paslon.',
-                type: 'warning'
-            );
+        $allIds = [$c1->id, $c2->id, $c3->id];
+        foreach ([[], [$c1->id, $c2->id], [$c1->id, $c2->id, $c2->id], [$c1->id, $c2->id, []]] as $incomplete) {
+            $ballot->call('confirmVote', $c1->id, $incomplete)
+                ->assertSet('stage', 'memilih')
+                ->assertDispatched('ballot-edit')
+                ->assertDispatched('toast', message: 'Anda belum boleh lanjut sebelum membaca seluruh visi & misi setiap paslon.', type: 'warning');
+        }
 
-        // Baru baca 2 dari 3 paslon -> MASIH DITOLAK
-        $ballot->call('markVisionMissionRead', $c1->id)
-            ->call('markVisionMissionRead', $c2->id)
-            ->call('proceedToConfirm')
+        $ballot->call('confirmVote', (string) Str::uuid(), $allIds)
             ->assertSet('stage', 'memilih')
-            ->assertDispatched(
-                'toast',
-                message: 'Anda belum boleh lanjut sebelum membaca seluruh visi & misi setiap paslon.',
-                type: 'warning'
-            );
-
-        // Setelah membaca SELURUH paslon (termasuk paslon ke-3) -> DIIZINKAN lanjut ke konfirmasi & simpan suara
-        $ballot->call('markVisionMissionRead', $c3->id)
-            ->call('proceedToConfirm')
-            ->assertSet('stage', 'konfirmasi')
-            ->call('confirmVote', $c1->id)
+            ->assertDispatched('ballot-edit')
+            ->call('confirmVote', $c1->id, $allIds)
             ->assertSet('stage', 'selesai');
+
+        $this->assertSame('recap_locked', $voting->operatorElectionResults($election->id)['code']);
+        $election->update(['recap_open' => true]);
+        $this->assertSame('recap_locked', $voting->operatorElectionResults($election->id)['code']);
+        $election->update(['recap_open' => false]);
 
         // --- BAGIAN B.1: Default terkunci, tidak bisa dibuka saat kuota belum penuh (1/3) & masih berlangsung ---
         $this->actingAs($operatorA, 'staff')
@@ -979,8 +974,8 @@ class EvotingSystemTest extends TestCase
             'name' => 'Pemilihan Shortcut Ditutup V5 '.uniqid(),
             'max_voter_rights' => 100,
         ]);
-        Candidate::create(['election_id' => $electionShortcut->id, 'number' => 1, 'name' => 'Paslon X']);
-        Candidate::create(['election_id' => $electionShortcut->id, 'number' => 2, 'name' => 'Paslon Y']);
+        Candidate::on('staff')->create(['election_id' => $electionShortcut->id, 'number' => 1, 'name' => 'Paslon X']);
+        Candidate::on('staff')->create(['election_id' => $electionShortcut->id, 'number' => 2, 'name' => 'Paslon Y']);
         $this->assertTrue($voting->setElectionSchedule($electionShortcut->id, $dbNow->subMinute(), $dbNow->addHours(2), $operatorA->id)['ok']);
         $electionShortcut->refresh();
         $this->assertTrue($voting->setElectionSchedule(

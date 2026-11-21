@@ -11,6 +11,8 @@ class VoterRight extends Model
 {
     use HasUuids;
 
+    protected $connection = 'staff';
+
     protected $table = 'evoting.voter_rights';
 
     protected $keyType = 'string';
@@ -18,7 +20,7 @@ class VoterRight extends Model
     public $incrementing = false;
 
     /**
-     * Kolom yang diizinkan SELECT bagi role evoting_app (tanpa token_hash).
+     * Kolom yang diizinkan SELECT bagi role evoting_staff (tanpa token_hash).
      *
      * @var list<string>
      */

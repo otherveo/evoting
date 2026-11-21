@@ -4,11 +4,12 @@ namespace App\Livewire\Voter;
 
 use App\Livewire\Concerns\HandlesSafeErrors;
 use App\Models\Candidate;
-use App\Models\Election;
+use App\Models\PublicElection;
 use App\Services\TokenService;
 use App\Services\VotingService;
 use Carbon\CarbonImmutable;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 use Throwable;
@@ -19,29 +20,19 @@ class BallotPage extends Component
 {
     use HandlesSafeErrors;
 
+    #[Locked]
     public string $token = '';
 
-    public string $browserId = '';
-
     /**
-     * verifikasi | memilih | konfirmasi | selesai | kendala
+     * verifikasi | memilih | selesai | kendala
      */
+    #[Locked]
     public string $stage = 'verifikasi';
 
+    #[Locked]
     public ?string $electionId = null;
 
     public string $electionName = 'Pemilihan Sekolah';
-
-    public ?string $selectedCandidateId = null;
-
-    /**
-     * Update v5 Bagian A: Daftar ID paslon yang sudah ditekan tombol "Lihat Visi & Misi"-nya.
-     *
-     * @var list<string>
-     */
-    public array $readCandidateIds = [];
-
-    public ?string $activeVisionMissionCandidateId = null;
 
     public bool $isResumedSession = false;
 
@@ -50,6 +41,7 @@ class BallotPage extends Component
     public string $sessionExpiresLabel = '';
 
     // Perubahan 3.2: Gerbang Persetujuan Operator untuk Perangkat Bersama
+    #[Locked]
     public bool $waitingForDeviceApproval = false;
 
     /**
@@ -66,22 +58,26 @@ class BallotPage extends Component
 
     public string $errorNextStep = '';
 
-    public function mount(string $token, TokenService $tokens, VotingService $voting): void
+    private function browserId(): string
+    {
+        return app(TokenService::class)->resolveOrCreateBrowserId(request());
+    }
+
+    public function mount(string $token, VotingService $voting): void
     {
         $this->token = trim($token);
-        $this->browserId = $tokens->resolveOrCreateBrowserId(request());
 
         try {
             $openResult = $voting->openQr(
                 rawToken: $this->token,
-                browserId: $this->browserId,
+                browserId: $this->browserId(),
                 userAgent: request()->userAgent(),
                 ip: request()->ip()
             );
 
             if ($openResult['election_id']) {
                 $this->electionId = $openResult['election_id'];
-                $el = Election::find($this->electionId);
+                $el = PublicElection::find($this->electionId);
                 if ($el) {
                     $this->electionName = $el->name;
                 }
@@ -89,7 +85,6 @@ class BallotPage extends Component
 
             if ($openResult['code'] === 'already_voted') {
                 $this->stage = 'selesai';
-                $this->selectedCandidateId = null;
 
                 return;
             }
@@ -136,21 +131,20 @@ class BallotPage extends Component
         try {
             $result = $voting->startVoting(
                 rawToken: $this->token,
-                browserId: $this->browserId,
+                browserId: $this->browserId(),
                 userAgent: request()->userAgent(),
                 ip: request()->ip()
             );
 
             if ($result['election_id'] && ! $this->electionId) {
                 $this->electionId = $result['election_id'];
-                $el = Election::find($this->electionId);
+                $el = PublicElection::find($this->electionId);
                 if ($el) {
                     $this->electionName = $el->name;
                 }
             }
 
             if ($result['code'] === 'already_voted') {
-                $this->selectedCandidateId = null;
                 $this->waitingForDeviceApproval = false;
                 $this->stage = 'selesai';
                 $this->dispatch('step-changed');
@@ -225,7 +219,7 @@ class BallotPage extends Component
     public function checkDeviceApproval(VotingService $voting, bool $isManual = false): string
     {
         try {
-            $res = $voting->checkDeviceApproval($this->token, $this->browserId);
+            $res = $voting->checkDeviceApproval($this->token, $this->browserId());
 
             if ($res['code'] === 'approved') {
                 $this->approvalButtonState = 'approved';
@@ -278,118 +272,37 @@ class BallotPage extends Component
         }
     }
 
-    public function selectCandidate(string $candidateId): void
+    public function confirmVote(VotingService $voting, string $candidateId, array $readCandidateIds): void
     {
         if ($this->stage !== 'memilih' || $this->waitingForDeviceApproval || ! $this->electionId) {
             return;
         }
 
-        $exists = Candidate::query()
-            ->where('election_id', $this->electionId)
-            ->where('id', $candidateId)
-            ->exists();
-
-        if ($exists) {
-            $this->selectedCandidateId = $candidateId;
-        }
-    }
-
-    public function openVisionMission(string $candidateId): void
-    {
-        $this->markVisionMissionRead($candidateId);
-        $this->activeVisionMissionCandidateId = $candidateId;
-    }
-
-    public function closeVisionMission(): void
-    {
-        $this->activeVisionMissionCandidateId = null;
-    }
-
-    public function markVisionMissionRead(string $candidateId): void
-    {
-        if (! $this->electionId) {
-            return;
-        }
-
-        $exists = Candidate::query()
-            ->where('election_id', $this->electionId)
-            ->where('id', $candidateId)
-            ->exists();
-
-        if ($exists && ! in_array($candidateId, $this->readCandidateIds, true)) {
-            $this->readCandidateIds[] = $candidateId;
-        }
-    }
-
-    public function proceedToConfirm(): void
-    {
-        if ($this->stage !== 'memilih') {
-            return;
-        }
-
-        if (! $this->selectedCandidateId) {
-            $this->dispatch('toast', message: 'Pilih satu pasangan calon terlebih dahulu.', type: 'warning');
-
-            return;
-        }
-
-        $allCandidateIds = Candidate::query()
-            ->where('election_id', $this->electionId)
-            ->pluck('id')
-            ->map(static fn ($id) => (string) $id)
-            ->all();
-
-        $readSet = array_flip(array_map('strval', $this->readCandidateIds));
-        foreach ($allCandidateIds as $candId) {
-            if (! isset($readSet[$candId])) {
-                $this->dispatch(
-                    'toast',
-                    message: 'Anda belum boleh lanjut sebelum membaca seluruh visi & misi setiap paslon.',
-                    type: 'warning'
-                );
+        try {
+            $roster = Candidate::query()->where('election_id', $this->electionId)->pluck('id')->all();
+            if (! in_array($candidateId, $roster, true)) {
+                $this->dispatch('ballot-edit');
+                $this->dispatch('toast', message: 'Pilih pasangan calon yang terdaftar pada pemilihan ini.', type: 'warning');
 
                 return;
             }
-        }
+            if (! array_is_list($readCandidateIds) || count($readCandidateIds) !== count($roster)
+                || array_filter($readCandidateIds, 'is_string') !== $readCandidateIds || array_diff($roster, $readCandidateIds)) {
+                $this->dispatch('ballot-edit');
+                $this->dispatch('toast', message: 'Anda belum boleh lanjut sebelum membaca seluruh visi & misi setiap paslon.', type: 'warning');
 
-        $this->stage = 'konfirmasi';
-        $this->dispatch('step-changed');
-    }
+                return;
+            }
 
-    public function backToBallot(): void
-    {
-        if ($this->stage !== 'konfirmasi') {
-            return;
-        }
-
-        $this->stage = 'memilih';
-        $this->dispatch('step-changed');
-    }
-
-    public function confirmVote(VotingService $voting, ?string $candidateId = null): void
-    {
-        if ($candidateId !== null && $candidateId !== '') {
-            $this->selectedCandidateId = $candidateId;
-        }
-
-        if (! $this->selectedCandidateId) {
-            $this->stage = 'memilih';
-
-            return;
-        }
-
-        try {
             $result = $voting->confirmVote(
                 rawToken: $this->token,
-                browserId: $this->browserId,
-                candidateId: $this->selectedCandidateId,
+                browserId: $this->browserId(),
+                candidateId: $candidateId,
                 userAgent: request()->userAgent(),
                 ip: request()->ip()
             );
 
             if ($result['ok'] || $result['code'] === 'already_voted') {
-                // BR-028: Hapus pilihan dari memori agar halaman selesai tidak pernah menampilkan kembali pilihan
-                $this->selectedCandidateId = null;
                 $this->stage = 'selesai';
                 $this->dispatch('step-changed');
                 $this->dispatch('toast', message: 'Suara Anda berhasil disimpan secara anonim.', type: 'success');
@@ -398,8 +311,7 @@ class BallotPage extends Component
             }
 
             if ($result['code'] === 'invalid_candidate') {
-                $this->selectedCandidateId = null;
-                $this->stage = 'memilih';
+                $this->dispatch('ballot-edit');
                 $this->dispatch('toast', message: $result['message'], type: 'error');
 
                 return;
@@ -426,7 +338,6 @@ class BallotPage extends Component
     private function setTroubleState(string $code, string $message): void
     {
         $this->stage = 'kendala';
-        $this->selectedCandidateId = null;
         $this->errorCode = $code;
 
         match ($code) {
@@ -466,31 +377,14 @@ class BallotPage extends Component
     public function render()
     {
         $candidates = collect();
-        $selectedCandidate = null;
 
-        if ($this->electionId && in_array($this->stage, ['memilih', 'konfirmasi'], true)) {
+        if ($this->stage === 'memilih' && ! $this->waitingForDeviceApproval && $this->electionId) {
             $candidates = Candidate::query()
                 ->where('election_id', $this->electionId)
                 ->orderBy('number')
                 ->get();
-
-            if ($this->selectedCandidateId) {
-                $selectedCandidate = $candidates->firstWhere('id', $this->selectedCandidateId);
-            }
         }
 
-        $stepIndex = match ($this->stage) {
-            'verifikasi' => 1,
-            'memilih' => 2,
-            'konfirmasi' => 3,
-            'selesai' => 4,
-            default => 0,
-        };
-
-        return view('livewire.voter.ballot-page', [
-            'candidates' => $candidates,
-            'selectedCandidate' => $selectedCandidate,
-            'stepIndex' => $stepIndex,
-        ]);
+        return view('livewire.voter.ballot-page', ['candidates' => $candidates]);
     }
 }

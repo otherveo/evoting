@@ -625,7 +625,7 @@
       maxWidth="540px"
       closeAction="closeDeleteModal"
     >
-      <form wire:submit="confirmDeleteElection" novalidate>
+      <form wire:submit="confirmDeleteElection" x-data="{ expectedName: @js($deletingElectionName) }" novalidate>
         <div class="modal-body">
           <div class="alert alert-danger" role="alert">
             <svg class="icon"><use href="#i-alert"></use></svg>
@@ -644,7 +644,7 @@
             <input
               id="del-confirm-name"
               type="text"
-              wire:model.live="deleteConfirmName"
+              wire:model="deleteConfirmName"
               class="field-input @error('deleteConfirmName') is-invalid @enderror"
               placeholder="{{ $deletingElectionName }}"
               autocomplete="off"
@@ -666,7 +666,7 @@
             target="confirmDeleteElection"
             icon="#i-trash"
             loadingText="Menghapus..."
-            :disabled="trim($deleteConfirmName) !== trim($deletingElectionName)"
+            x-bind:disabled="$wire.deleteConfirmName.trim() !== expectedName.trim()"
           >
             Hapus Permanen
           </x-action-button>

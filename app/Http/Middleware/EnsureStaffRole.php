@@ -6,6 +6,7 @@ use App\Models\StaffAccount;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureStaffRole
@@ -19,7 +20,7 @@ class EnsureStaffRole
             return redirect()->route('login');
         }
 
-        if ($user->role !== $role) {
+        if (! Gate::forUser($user)->allows('use-staff-area', $role)) {
             abort(403, 'Anda tidak memiliki wewenang untuk mengakses halaman ini.');
         }
 

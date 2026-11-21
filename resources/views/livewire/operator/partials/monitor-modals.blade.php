@@ -7,10 +7,11 @@
     closeAction="closeRegisterModal"
   >
     <form
+      wire:key="registration-{{ $registrationId }}-{{ $registrationReviewVersion }}"
       novalidate
       x-data="{
-        localName: $wire.entangle('voterName'),
-        confirmed: $wire.entangle('confirmDifferentPerson'),
+        localName: @js($voterName),
+        confirmed: false,
         submitting: false,
         existingVoters: @js($existingVotersForClient ?? []),
         get normalizedInput() {
@@ -24,12 +25,12 @@
         submitRegistration() {
           if (this.submitting) return;
           this.submitting = true;
-          $wire.registerVoter().finally(() => {
+          $wire.registerVoter(this.localName, this.confirmed ? this.clientDuplicates.length : 0).finally(() => {
             this.submitting = false;
           });
         }
       }"
-      x-on:submit.prevent="submitRegistration()"
+      x-on:submit.prevent.stop="submitRegistration()"
       x-effect="if (clientDuplicates.length === 0) confirmed = false"
     >
       <div class="modal-body">

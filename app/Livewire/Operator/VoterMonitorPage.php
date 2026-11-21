@@ -3,6 +3,7 @@
 namespace App\Livewire\Operator;
 
 use App\Livewire\Concerns\HandlesSafeErrors;
+use App\Livewire\StaffPage;
 use App\Models\Election;
 use App\Models\StaffAccount;
 use App\Models\VoterRight;
@@ -14,16 +15,19 @@ use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\View;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Title;
-use Livewire\Component;
 use Livewire\WithPagination;
 use Throwable;
 
 #[Layout('layouts.app')]
 #[Title('Pantau Pemilih & Registrasi QR')]
-class VoterMonitorPage extends Component
+class VoterMonitorPage extends StaffPage
 {
+    protected const ROLE = 'operator';
+
     use HandlesSafeErrors;
     use WithPagination;
 
@@ -38,12 +42,11 @@ class VoterMonitorPage extends Component
 
     public string $voterName = '';
 
-    public bool $confirmDifferentPerson = false;
+    #[Locked]
+    public string $registrationId;
 
-    public int $expectedDuplicateCount = 0;
-
-    /** @var list<array{id: string, name: string, status: string, created_at: string}> */
-    public array $duplicateMatches = [];
+    #[Locked]
+    public int $registrationReviewVersion = 0;
 
     // UI-011: Modal Panel QR Sekali Tampil
     public bool $showQrModal = false;
@@ -70,6 +73,7 @@ class VoterMonitorPage extends Component
     public function mount(Election $election): void
     {
         $this->election = $election;
+        $this->registrationId = (string) Str::uuid();
     }
 
     public function updatedSearch(): void
@@ -86,9 +90,7 @@ class VoterMonitorPage extends Component
     {
         $this->resetValidation();
         $this->voterName = '';
-        $this->confirmDifferentPerson = false;
-        $this->expectedDuplicateCount = 0;
-        $this->duplicateMatches = [];
+        $this->registrationId = (string) Str::uuid();
         $this->showRegisterModal = true;
     }
 
@@ -96,47 +98,11 @@ class VoterMonitorPage extends Component
     {
         $this->showRegisterModal = false;
         $this->voterName = '';
-        $this->confirmDifferentPerson = false;
-        $this->expectedDuplicateCount = 0;
-        $this->duplicateMatches = [];
     }
 
-    public function updatedVoterName(): void
+    public function registerVoter(VotingService $voting, TokenService $tokens, string $name, int $confirmedMatches): void
     {
-        $this->confirmDifferentPerson = false;
-        $this->checkDuplicates();
-    }
-
-    private function checkDuplicates(): void
-    {
-        $normalized = VoterRight::normalizeName($this->voterName);
-        if ($normalized === '') {
-            $this->duplicateMatches = [];
-            $this->expectedDuplicateCount = 0;
-
-            return;
-        }
-
-        $tz = (string) config('evoting.display_timezone', 'Asia/Makassar');
-        $rows = VoterRight::query()
-            ->select(VoterRight::SAFE_COLUMNS)
-            ->where('election_id', $this->election->id)
-            ->where('name_normalized', $normalized)
-            ->orderBy('created_at')
-            ->get();
-
-        $this->duplicateMatches = $rows->map(fn (VoterRight $vr) => [
-            'id' => $vr->id,
-            'name' => $vr->name,
-            'status' => VoterRight::statusLabel($vr->status),
-            'created_at' => $vr->created_at ? $vr->created_at->copy()->setTimezone($tz)->format('H:i:s') : '-',
-        ])->all();
-
-        $this->expectedDuplicateCount = count($this->duplicateMatches);
-    }
-
-    public function registerVoter(VotingService $voting, TokenService $tokens): void
-    {
+        $this->voterName = $name;
         $this->resetValidation();
 
         $this->validate([
@@ -147,33 +113,21 @@ class VoterMonitorPage extends Component
         ]);
 
         try {
-            $normalized = VoterRight::normalizeName($this->voterName);
-            $currentDuplicatesCount = VoterRight::query()
-                ->where('election_id', $this->election->id)
-                ->where('name_normalized', $normalized)
-                ->count();
-
-            // FR-013, BR-003, BR-004, AC-015: Deteksi Nama Kembar & konfirmasi orang berbeda
-            if ($currentDuplicatesCount > 0 && ! $this->confirmDifferentPerson) {
-                $this->checkDuplicates();
-                $this->confirmDifferentPerson = false;
-                $msg = 'Nama ini sudah terdaftar. Pastikan keduanya adalah orang yang berbeda lalu centang pernyataan konfirmasi di bawah.';
-                $this->addError('voterName', $msg);
-                $this->dispatch('toast', message: $msg, type: 'warning');
-
-                return;
-            }
-
             /** @var StaffAccount $operator */
             $operator = Auth::guard('staff')->user();
 
             $result = $voting->createVoterRight(
                 electionId: $this->election->id,
                 name: $this->voterName,
-                operatorId: $operator->id
+                operatorId: $operator->id,
+                registrationId: $this->registrationId,
+                confirmedMatches: $confirmedMatches
             );
 
             if (! $result['ok'] || ! $result['raw_token']) {
+                if ($result['code'] === 'duplicate_name') {
+                    $this->registrationReviewVersion++;
+                }
                 $this->addError('voterName', $result['message']);
                 $this->dispatch('toast', message: $result['message'], type: 'error');
 
@@ -373,7 +327,7 @@ class VoterMonitorPage extends Component
         $phase = $this->election->currentPhase();
         $tz = (string) config('evoting.display_timezone', 'Asia/Makassar');
 
-        $allMonitorRows = DB::select('
+        $allMonitorRows = DB::connection('staff')->select('
             with ir as materialized (
                 select total_votes, is_consistent
                 from evoting.fn_integrity_report(?::uuid)
@@ -453,7 +407,7 @@ class VoterMonitorPage extends Component
                 return false;
             }
 
-            return $r->issued_by === null || $r->issued_by === $currentOperatorId;
+            return $r->issued_by !== null && $r->issued_by === $currentOperatorId;
         })->values();
 
         $totalRights = $allCollection->count();
@@ -530,14 +484,14 @@ class VoterMonitorPage extends Component
         if ($this->showDetailModal && $this->selectedVoterRightId) {
             $monitorItem = $allCollection->firstWhere('id', $this->selectedVoterRightId);
             if ($monitorItem) {
-                $accessLogs = DB::select('
+                $accessLogs = DB::connection('staff')->select('
                     select id, access_type, browser_id, user_agent, ip_address::text as ip_address, accessed_at
                     from evoting.device_access_logs
                     where voter_right_id = ?::uuid
                     order by accessed_at desc
                 ', [$this->selectedVoterRightId]);
 
-                $sharedRights = DB::select('
+                $sharedRights = DB::connection('staff')->select('
                     select distinct vr2.id, vr2.name, vr2.status, d2.browser_id
                     from evoting.device_access_logs d1
                     join evoting.device_access_logs d2 on d2.browser_id = d1.browser_id

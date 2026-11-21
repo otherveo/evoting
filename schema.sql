@@ -11,7 +11,7 @@
 --
 -- KEPUTUSAN YANG DIKUNCI FILE INI (mengikuti Blueprint bp_a.md):
 --   - Schema `evoting`; aplikasi TIDAK memakai schema `public`.
---   - Aplikasi konek sebagai role `evoting_app` (least privilege) lewat
+--   - Pemilih/publik memakai evoting_app, operasi staf memakai evoting_staff lewat
 --     Supavisor SESSION mode (port 5432), username `evoting_app.<ref>`.
 --     Mode transaction (6543) TIDAK dipakai — backend Laravel persisten,
 --     butuh prepared statements dan state sesi (Blueprint §2.4.4).
@@ -28,9 +28,7 @@
 --     Foto paslon tetap di luar MVP (PRD OD-011) — bucket dan kolom
 --     photo_path tidak memaksa fitur itu; upload/tampil foto diputuskan nanti.
 --
--- SEBELUM MENJALANKAN: ganti password placeholder `GANTI_DENGAN_PASSWORD_KUAT`
--- di bawah dengan password kuat. Password ini untuk role evoting_app (dipakai
--- aplikasi), BUKAN password database postgres. Simpan di vault, jangan commit.
+-- Tetapkan password masing-masing role lewat pengelola rahasia setelah provisioning.
 -- ============================================================================
 
 create schema if not exists evoting;
@@ -45,13 +43,16 @@ do $$
 begin
   if not exists (select 1 from pg_roles where rolname = 'evoting_app') then
     create role evoting_app with login nosuperuser nobypassrls
-      nocreaterole nocreatedb noinherit
-      password 'GANTI_DENGAN_PASSWORD_KUAT';
+      nocreaterole nocreatedb noinherit;
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'evoting_staff') then
+    create role evoting_staff login nosuperuser nobypassrls nocreaterole nocreatedb noinherit;
   end if;
 end
 $$;
 
-grant evoting_app to postgres;
+grant evoting_app, evoting_staff to postgres;
+alter role evoting_staff set search_path to evoting;
 alter role evoting_app set search_path to evoting;
 
 -- ============================================================================
@@ -75,6 +76,7 @@ create table if not exists evoting.staff_accounts (
   check (role <> 'operator' or totp_secret is null),
   check (totp_enabled = false or totp_secret is not null)
 );
+alter table evoting.staff_accounts add column if not exists session_version bigint not null default 1;
 create unique index if not exists staff_accounts_username_unique
   on evoting.staff_accounts (lower(username));
 
@@ -157,6 +159,8 @@ create table if not exists evoting.voter_rights (
 alter table evoting.voter_rights add column if not exists device_approval_status text not null default 'tidak_perlu'
   check (device_approval_status in ('tidak_perlu', 'menunggu', 'disetujui', 'ditolak'));
 alter table evoting.voter_rights add column if not exists device_approval_requested_at timestamptz null;
+alter table evoting.voter_rights add column if not exists registration_id uuid;
+create unique index if not exists voter_registration_unique on evoting.voter_rights (election_id, registration_id);
 alter table evoting.voter_rights add column if not exists issued_by uuid null references evoting.staff_accounts (id) on delete set null;
 create unique index if not exists voter_rights_token_hash_unique
   on evoting.voter_rights (token_hash);
@@ -371,12 +375,25 @@ $$;
 -- DB-020 — Buat Hak Pilih + terbitkan token (PRD FR-012, FR-014; BR-023:
 -- hanya pada Fase Berlangsung; BR-018: batas maksimum ditegakkan di sini).
 -- p_token_hash = SHA-256 (hex 64) yang dibuat aplikasi (MOD-005).
+create or replace function evoting.require_active_operator(p_operator_id uuid)
+returns void language plpgsql security definer set search_path = evoting as $$
+begin
+  if not exists (select 1 from evoting.staff_accounts where id = p_operator_id
+      and role = 'operator' and is_active and not must_change_password) then
+    raise insufficient_privilege using message = 'Operator aktif diperlukan.';
+  end if;
+end;
+$$;
+
+drop function if exists evoting.fn_create_voter_right(uuid, text, text, text, uuid);
 create or replace function evoting.fn_create_voter_right(
   p_election_id uuid,
   p_name text,
   p_name_normalized text,
   p_token_hash text,
-  p_operator_id uuid
+  p_operator_id uuid,
+  p_registration_id uuid default gen_random_uuid(),
+  p_confirmed_matches integer default 0
 )
 returns table(o_result_code text, o_message text, o_voter_right_id uuid, o_election_id uuid)
 language plpgsql security definer set search_path = evoting as $$
@@ -385,6 +402,7 @@ declare
   v_count bigint;
   v_id uuid;
 begin
+  perform evoting.require_active_operator(p_operator_id);
   select e.max_voter_rights into v_max
   from evoting.elections e where e.id = p_election_id for update;
   if v_max is null then
@@ -395,13 +413,24 @@ begin
     return query select 'wrong_phase', 'Hak pilih hanya dapat dibuat pada Fase Berlangsung.', null::uuid, p_election_id;
     return;
   end if;
+  if p_registration_id is null or exists (select 1 from evoting.voter_rights
+      where election_id = p_election_id and registration_id = p_registration_id) then
+    return query select 'already_issued', 'Permintaan telah diproses. Periksa monitor sebelum menerbitkan ulang QR.', null::uuid, p_election_id;
+    return;
+  end if;
+  select count(*) into v_count from evoting.voter_rights
+    where election_id = p_election_id and name_normalized = p_name_normalized;
+  if v_count is distinct from p_confirmed_matches then
+    return query select 'duplicate_name', 'Periksa kembali daftar nama kembar dan konfirmasi bahwa orangnya berbeda.', null::uuid, p_election_id;
+    return;
+  end if;
   select count(*) into v_count from evoting.voter_rights where election_id = p_election_id;
   if v_count >= v_max then
     return query select 'limit_reached', 'Batas maksimum hak pilih tercapai.', null::uuid, p_election_id;
     return;
   end if;
-  insert into evoting.voter_rights (election_id, name, name_normalized, status, token_hash, issued_by)
-  values (p_election_id, p_name, p_name_normalized, 'belum_memilih', p_token_hash, p_operator_id)
+  insert into evoting.voter_rights (election_id, name, name_normalized, status, token_hash, issued_by, registration_id)
+  values (p_election_id, p_name, p_name_normalized, 'belum_memilih', p_token_hash, p_operator_id, p_registration_id)
   returning id into v_id;
   insert into evoting.audit_logs (actor_type, actor_id, action, object_type, object_id, detail)
   values ('operator', p_operator_id, 'buat_hak_pilih', 'voter_right', v_id,
@@ -434,7 +463,7 @@ declare
   v_vr evoting.voter_rights%rowtype;
   v_phase text;
 begin
-  select * into v_vr from evoting.voter_rights where token_hash = p_token_hash;
+  select * into v_vr from evoting.voter_rights where token_hash = p_token_hash for update;
   if v_vr.id is null then
     if exists (select 1 from evoting.cache where key = 'rejected_token:' || p_token_hash) then
       return query select 'device_rejected',
@@ -467,6 +496,13 @@ begin
   end if;
 
   if v_vr.status = 'sedang_memilih' then
+    if v_vr.session_browser_id is distinct from p_browser_id then
+      insert into evoting.device_access_logs (voter_right_id, access_type, browser_id, user_agent, ip_address)
+      values (v_vr.id, 'akses_ditolak', p_browser_id, p_user_agent, p_ip);
+      return query select 'wrong_browser', 'Sesi ini berjalan di browser lain. Hubungi Operator.',
+        v_vr.id, v_vr.election_id, v_vr.status, v_phase, v_vr.session_started_at + interval '10 minutes';
+      return;
+    end if;
     if v_vr.session_started_at is not null and v_vr.session_started_at + interval '10 minutes' <= now() then
       if v_vr.device_approval_status = 'menunggu' then
         update evoting.voter_rights
@@ -485,13 +521,6 @@ begin
       insert into evoting.device_access_logs (voter_right_id, access_type, browser_id, user_agent, ip_address)
       values (v_vr.id, 'akses_ditolak', p_browser_id, p_user_agent, p_ip);
       return query select 'session_expired', 'Sesi memilih sudah lewat 10 menit. Hubungi Operator.',
-        v_vr.id, v_vr.election_id, v_vr.status, v_phase, v_vr.session_started_at + interval '10 minutes';
-      return;
-    end if;
-    if v_vr.session_browser_id is distinct from p_browser_id then
-      insert into evoting.device_access_logs (voter_right_id, access_type, browser_id, user_agent, ip_address)
-      values (v_vr.id, 'akses_ditolak', p_browser_id, p_user_agent, p_ip);
-      return query select 'wrong_browser', 'Sesi ini berjalan di browser lain. Hubungi Operator.',
         v_vr.id, v_vr.election_id, v_vr.status, v_phase, v_vr.session_started_at + interval '10 minutes';
       return;
     end if;
@@ -554,7 +583,7 @@ begin
       end if;
       return query select 'ok', 'Sesi dilanjutkan.', v_vr.id, v_vr.election_id;
       return;
-    elsif v_vr.session_started_at + interval '10 minutes' <= now() then
+    elsif v_vr.session_browser_id = p_browser_id and v_vr.session_started_at + interval '10 minutes' <= now() then
       if v_vr.device_approval_status = 'menunggu' then
         update evoting.voter_rights
         set status = 'belum_memilih',
@@ -696,6 +725,7 @@ language plpgsql security definer set search_path = evoting as $$
 declare
   v_vr evoting.voter_rights%rowtype;
 begin
+  perform evoting.require_active_operator(p_operator_id);
   select * into v_vr from evoting.voter_rights where id = p_voter_right_id for update;
   if v_vr.id is null then
     return query select 'not_found', 'Hak pilih tidak ditemukan.', null::uuid, null::uuid;
@@ -740,6 +770,7 @@ language plpgsql security definer set search_path = evoting as $$
 declare
   v_vr evoting.voter_rights%rowtype;
 begin
+  perform evoting.require_active_operator(p_operator_id);
   select * into v_vr from evoting.voter_rights where id = p_voter_right_id for update;
   if v_vr.id is null then
     return query select 'not_found', 'Hak pilih tidak ditemukan.', null::uuid, null::uuid;
@@ -763,6 +794,7 @@ begin
   end if;
   update evoting.voter_rights
   set token_hash = p_new_token_hash,
+      issued_by = p_operator_id,
       device_approval_status = 'tidak_perlu',
       device_approval_requested_at = null
   where id = v_vr.id;
@@ -788,6 +820,7 @@ declare
   v_el evoting.elections%rowtype;
   v_candidates bigint;
 begin
+  perform evoting.require_active_operator(p_operator_id);
   select * into v_el from evoting.elections where id = p_election_id for update;
   if v_el.id is null then
     return query select 'not_found', 'Pemilihan tidak ditemukan.', null::uuid, null::uuid;
@@ -870,10 +903,16 @@ $$;
 -- DB-028b — Hasil per paslon untuk Operator (Update v5 B.7: tanpa gate fase Ditutup).
 create or replace function evoting.fn_operator_election_results(p_election_id uuid)
 returns table(o_result_code text, candidate_id uuid, candidate_number integer, candidate_name text, vote_count bigint)
-language plpgsql security definer set search_path = evoting as $$
+language plpgsql stable security definer set search_path = evoting as $$
 begin
   if not exists (select 1 from evoting.elections where id = p_election_id) then
     return query select 'not_found', null::uuid, null::integer, null::text, null::bigint;
+    return;
+  end if;
+  if not exists (select 1 from evoting.elections e where e.id = p_election_id and e.recap_open
+      and (evoting.fn_election_phase(e.id) = 'ditutup' or
+        (select count(*) from evoting.voter_rights vr where vr.election_id = e.id and vr.status = 'sudah_memilih') >= e.max_voter_rights)) then
+    return query select 'recap_locked', null::uuid, null::integer, null::text, null::bigint;
     return;
   end if;
   return query
@@ -898,6 +937,7 @@ declare
   v_vr evoting.voter_rights%rowtype;
   v_revoked_hash text;
 begin
+  perform evoting.require_active_operator(p_operator_id);
   select * into v_vr from evoting.voter_rights where id = p_voter_right_id for update;
   if v_vr.id is null then
     return query select 'not_found', 'Hak pilih tidak ditemukan.', null::uuid, null::uuid;
@@ -907,7 +947,7 @@ begin
     return query select 'wrong_status', 'Pemilih ini sedang tidak menunggu persetujuan perangkat.', v_vr.id, v_vr.election_id;
     return;
   end if;
-  if v_vr.issued_by is not null and v_vr.issued_by <> p_operator_id then
+  if v_vr.issued_by is distinct from p_operator_id then
     return query select 'bukan_penerbit', 'Permintaan ini hanya dapat diputuskan oleh operator yang menerbitkan QR.', v_vr.id, v_vr.election_id;
     return;
   end if;
@@ -916,6 +956,10 @@ begin
     return;
   end if;
 
+  if v_vr.session_started_at + interval '10 minutes' <= now() then
+    return query select 'approval_expired', 'Masa persetujuan sudah habis.', v_vr.id, v_vr.election_id;
+    return;
+  end if;
   if p_decision = 'setujui' then
     update evoting.voter_rights
     set device_approval_status = 'disetujui'
@@ -981,6 +1025,10 @@ begin
     return;
   end if;
 
+  if v_vr.status = 'sedang_memilih' and v_vr.session_browser_id is distinct from p_browser_id then
+    return query select 'wrong_browser', 'Periksa persetujuan pada browser awal.', null::uuid, null::uuid, null::timestamptz;
+    return;
+  end if;
   if v_vr.device_approval_status = 'ditolak' then
     return query select 'rejected',
       'Aksesmu telah ditolak oleh operator, silakan minta QR baru jika kamu memang punya hak suara',
@@ -989,6 +1037,10 @@ begin
   end if;
 
   if v_vr.status = 'sedang_memilih' and v_vr.session_started_at is not null and v_vr.session_started_at + interval '10 minutes' <= now() then
+    if v_vr.device_approval_status <> 'menunggu' then
+      return query select 'session_expired', 'Sesi memilih kedaluwarsa. Hubungi Operator.', v_vr.id, v_vr.election_id, null::timestamptz;
+      return;
+    end if;
     update evoting.voter_rights
     set status = 'belum_memilih',
         session_started_at = null,
@@ -1033,6 +1085,7 @@ declare
   v_el evoting.elections%rowtype;
   v_phase text;
 begin
+  perform evoting.require_active_operator(p_operator_id);
   select * into v_el from evoting.elections where id = p_election_id for update;
   if v_el.id is null then
     return query select 'not_found', 'Pemilihan tidak ditemukan.', null::uuid;
@@ -1089,6 +1142,7 @@ language plpgsql security definer set search_path = evoting as $$
 declare
   v_el evoting.elections%rowtype;
 begin
+  perform evoting.require_active_operator(p_operator_id);
   select * into v_el from evoting.elections where id = p_election_id for update;
   if v_el.id is null then
     return query select 'not_found', 'Pemilihan tidak ditemukan.', null::uuid;
@@ -1121,6 +1175,7 @@ language plpgsql security definer set search_path = evoting as $$
 declare
   v_el evoting.elections%rowtype;
 begin
+  perform evoting.require_active_operator(p_operator_id);
   select * into v_el from evoting.elections where id = p_election_id for update;
   if v_el.id is null then
     return query select 'not_found', 'Pemilihan tidak ditemukan.', null::uuid;
@@ -1176,30 +1231,43 @@ $$;
 -- RLS secara bawaan — karena itu haknya DICABUT eksplisit di bawah.
 -- ============================================================================
 revoke all on schema evoting from public;
-grant usage on schema evoting to evoting_app;
+grant usage on schema evoting to evoting_app, evoting_staff;
 
 revoke all on all tables in schema evoting from anon, authenticated, service_role;
 revoke all on all sequences in schema evoting from anon, authenticated, service_role;
 revoke all on all functions in schema evoting from anon, authenticated, service_role;
 revoke all on all functions in schema evoting from public;
 
-grant select, insert, update on evoting.staff_accounts to evoting_app;
-grant select, insert on evoting.elections to evoting_app;
-grant update (name, max_voter_rights, recap_open, recap_mode, reveal_order, reveal_mode, reveal_delay_ms, reveal_locked, revealed_ids, reveal_locked_by, updated_at) on evoting.elections to evoting_app;
-grant select, insert, update, delete on evoting.candidates to evoting_app;
-grant select (id, election_id, name, name_normalized, status, session_started_at, session_browser_id, device_approval_status, device_approval_requested_at, issued_by, created_at, updated_at)
-  on evoting.voter_rights to evoting_app;
--- votes: SENGAJA tanpa grant apa pun untuk evoting_app.
-grant select, insert on evoting.device_access_logs to evoting_app;
-grant select, insert on evoting.audit_logs to evoting_app;
-grant select, insert, update, delete on evoting.sessions to evoting_app;
-grant select, insert, update, delete on evoting.cache to evoting_app;
-grant select, insert, update, delete on evoting.cache_locks to evoting_app;
-grant select on evoting.v_elections to evoting_app;
-grant select on evoting.v_voter_right_monitor to evoting_app;
-grant execute on all functions in schema evoting to evoting_app;
+-- Remove table and column privileges from earlier installations before granting the split.
+revoke all privileges on all tables in schema evoting from evoting_app;
+revoke all privileges on all functions in schema evoting from evoting_app;
+grant select on evoting.v_elections, evoting.candidates to evoting_app;
+grant execute on function evoting.fn_open_qr, evoting.fn_start_voting, evoting.fn_confirm_vote,
+  evoting.fn_check_device_approval, evoting.fn_election_results, evoting.fn_integrity_report,
+  evoting.fn_live_election_results to evoting_app;
 
--- RLS aktif di semua tabel; kebijakan permissive HANYA untuk evoting_app
+grant select, insert on evoting.staff_accounts to evoting_staff;
+grant update (password_hash, is_active, totp_secret, totp_enabled, must_change_password, session_version, updated_at)
+  on evoting.staff_accounts to evoting_staff;
+grant select, insert on evoting.elections to evoting_staff;
+grant update (name, max_voter_rights, recap_open, recap_mode, reveal_order, reveal_mode, reveal_delay_ms, reveal_locked, revealed_ids, reveal_locked_by, updated_at) on evoting.elections to evoting_staff;
+grant select, insert, update, delete on evoting.candidates to evoting_staff;
+grant select (id, election_id, name, name_normalized, status, session_started_at, session_browser_id, device_approval_status, device_approval_requested_at, issued_by, created_at, updated_at)
+  on evoting.voter_rights to evoting_staff;
+-- votes: SENGAJA tanpa grant apa pun untuk evoting_app.
+grant select, insert on evoting.device_access_logs to evoting_staff;
+grant select, insert on evoting.audit_logs to evoting_staff;
+grant select, insert, update, delete on evoting.sessions to evoting_staff;
+grant select, insert, update, delete on evoting.cache to evoting_staff;
+grant select, insert, update, delete on evoting.cache_locks to evoting_staff;
+grant select on evoting.v_elections to evoting_staff;
+grant select on evoting.v_voter_right_monitor to evoting_staff;
+grant execute on function evoting.fn_create_voter_right, evoting.fn_reset_session, evoting.fn_reissue_token,
+  evoting.fn_set_election_schedule, evoting.fn_operator_election_results, evoting.fn_decide_device_approval,
+  evoting.fn_delete_election, evoting.fn_issue_access_key, evoting.fn_revoke_access_key,
+  evoting.fn_integrity_report to evoting_staff;
+
+-- RLS aktif di semua tabel untuk kedua role aplikasi
 -- (hak kolom/tabel di atas yang tetap membatasi). Tanpa kebijakan ini,
 -- NOBYPASSRLS membuat evoting_app tidak bisa membaca apa pun.
 do $$
@@ -1209,7 +1277,7 @@ begin
   for t in select tablename from pg_tables where schemaname = 'evoting' loop
     execute format('alter table evoting.%I enable row level security', t);
     execute format('drop policy if exists evoting_app_access on evoting.%I', t);
-    execute format('create policy evoting_app_access on evoting.%I for all to evoting_app using (true) with check (true)', t);
+    execute format('create policy evoting_app_access on evoting.%I for all to evoting_app, evoting_staff using (true) with check (true)', t);
   end loop;
 end
 $$;

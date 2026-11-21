@@ -6,6 +6,7 @@ use App\Models\VoterRight;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class VotingService
 {
@@ -40,15 +41,15 @@ class VotingService
      *
      * @return array{ok: bool, code: string, message: string, voter_right_id: ?string, election_id: ?string, raw_token: ?string}
      */
-    public function createVoterRight(string $electionId, string $name, string $operatorId): array
+    public function createVoterRight(string $electionId, string $name, string $operatorId, ?string $registrationId = null, int $confirmedMatches = 0): array
     {
         $cleanName = preg_replace('/\s+/u', ' ', trim($name)) ?? '';
         $normalized = VoterRight::normalizeName($cleanName);
         $tokenPair = $this->tokens->generateVoterToken();
 
-        $row = DB::selectOne(
-            'select * from evoting.fn_create_voter_right(?::uuid, ?, ?, ?, ?::uuid)',
-            [$electionId, $cleanName, $normalized, $tokenPair['hash'], $operatorId]
+        $row = DB::connection('staff')->selectOne(
+            'select * from evoting.fn_create_voter_right(?::uuid, ?, ?, ?, ?::uuid, ?::uuid, ?)',
+            [$electionId, $cleanName, $normalized, $tokenPair['hash'], $operatorId, $registrationId ?? (string) Str::uuid(), $confirmedMatches]
         );
 
         $code = (string) ($row->o_result_code ?? 'error');
@@ -153,7 +154,7 @@ class VotingService
      */
     public function resetSession(string $voterRightId, string $operatorId, string $reason): array
     {
-        $row = DB::selectOne(
+        $row = DB::connection('staff')->selectOne(
             'select * from evoting.fn_reset_session(?::uuid, ?::uuid, ?)',
             [$voterRightId, $operatorId, trim($reason)]
         );
@@ -176,7 +177,7 @@ class VotingService
     {
         $tokenPair = $this->tokens->generateVoterToken();
 
-        $row = DB::selectOne(
+        $row = DB::connection('staff')->selectOne(
             'select * from evoting.fn_reissue_token(?::uuid, ?::uuid, ?, ?)',
             [$voterRightId, $operatorId, $tokenPair['hash'], trim($reason)]
         );
@@ -202,7 +203,7 @@ class VotingService
         CarbonInterface $endsAtUtc,
         string $operatorId
     ): array {
-        $row = DB::selectOne(
+        $row = DB::connection('staff')->selectOne(
             'select * from evoting.fn_set_election_schedule(?::uuid, ?::timestamptz, ?::timestamptz, ?::uuid)',
             [
                 $electionId,
@@ -300,7 +301,7 @@ class VotingService
      */
     public function operatorElectionResults(string $electionId): array
     {
-        $rows = DB::select('select * from evoting.fn_operator_election_results(?::uuid)', [$electionId]);
+        $rows = DB::connection('staff')->select('select * from evoting.fn_operator_election_results(?::uuid)', [$electionId]);
         if ($rows === []) {
             return [
                 'ok' => true,
@@ -345,7 +346,7 @@ class VotingService
      */
     public function decideDeviceApproval(string $voterRightId, string $operatorId, string $decision): array
     {
-        $row = DB::selectOne(
+        $row = DB::connection('staff')->selectOne(
             'select * from evoting.fn_decide_device_approval(?::uuid, ?::uuid, ?)',
             [$voterRightId, $operatorId, trim($decision)]
         );
@@ -408,7 +409,7 @@ class VotingService
             ->values()
             ->all();
 
-        $row = DB::selectOne(
+        $row = DB::connection('staff')->selectOne(
             'select * from evoting.fn_delete_election(?::uuid, ?::uuid, ?)',
             [$electionId, $operatorId, trim($confirmName)]
         );
@@ -438,7 +439,7 @@ class VotingService
     {
         $pair = $this->tokens->generateAccessKey();
 
-        $row = DB::selectOne(
+        $row = DB::connection('staff')->selectOne(
             'select * from evoting.fn_issue_access_key(?::uuid, ?, ?::uuid)',
             [$electionId, $pair['hash'], $operatorId]
         );
@@ -460,7 +461,7 @@ class VotingService
      */
     public function revokeAccessKey(string $electionId, string $operatorId): array
     {
-        $row = DB::selectOne(
+        $row = DB::connection('staff')->selectOne(
             'select * from evoting.fn_revoke_access_key(?::uuid, ?::uuid)',
             [$electionId, $operatorId]
         );

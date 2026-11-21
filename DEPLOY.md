@@ -24,20 +24,20 @@ Dokumen ini memuat daftar periksa wajib sebelum dan sesudah penyebaran aplikasi 
 
 ## 2. Database Supabase PostgreSQL
 
-- [ ] **Jalankan `schema.sql` Sekali pada Project Supabase:**
-  Jalankan berkas `schema.sql` melalui Supabase SQL Editor atau koneksi langsung port `5432` (bukan transaction pooler `6543`).
-- [ ] **Koneksi Aplikasi (`evoting_app` via Supavisor Session Mode):**
-  Aplikasi Laravel wajib terhubung menggunakan:
-  - `DB_PORT=5432` (Supavisor *session mode* — mendukung *prepared statements* dan state sesi).
-  - `DB_USERNAME=evoting_app` (atau `evoting_app.<project-ref>` pada pooler).
-  - `DB_SEARCH_PATH=evoting`.
-  - `DB_SSLMODE=require`.
-  - Jangan pernah menjalankan `php artisan migrate` di produksi.
-- [ ] **Verifikasi Hak Akses Minimum (`least privilege`):**
-  Pastikan kueri berikut mengembalikan `false` (`f`):
-  ```sql
-  select has_table_privilege('evoting_app', 'evoting.votes', 'select');
-  ```
+- Untuk upgrade instalasi lama, jadwalkan jeda layanan di luar pemungutan suara. Siapkan backup dan simpan dua kredensial di pengelola rahasia.
+- Terapkan isi `schema.sql` dalam satu transaksi lewat koneksi pemilik schema pada port 5432. File ini juga memperbarui fungsi, grant lama, dan kolom data yang sudah ada. Password role yang sudah ada dipertahankan. Tetapkan password role baru melalui kanal administrasi rahasia.
+- Pasang aplikasi bersama konfigurasi kedua login. `DB_USERNAME` dan `DB_PASSWORD` adalah kredensial `evoting_app`. `STAFF_DB_USERNAME` dan `STAFF_DB_PASSWORD` adalah kredensial `evoting_staff`. Pada Supavisor Session Mode sertakan akhiran proyek pada kedua username. Host, database, port, `DB_SEARCH_PATH=evoting`, dan `DB_SSLMODE=require` digunakan bersama. Jika memakai URL koneksi, atur `DB_URL` dan `STAFF_DB_URL` secara terpisah. Untuk sesi/cache berbasis database, pilih koneksi `staff`.
+- Atur `TRUSTED_PROXIES` ke daftar alamat atau CIDR proxy yang benar, dipisahkan koma. Proxy harus mengganti header forwarding dari klien. Redaksi bagian token pada path `/v/{token}` di log proxy, CDN, dan APM. Hindari pencatatan isi request Livewire dan parameter SQL.
+- Bangun ulang cache konfigurasi dan muat ulang worker. Semua sesi staf lama perlu login kembali. Sebelum membuka layanan, periksa login, aktivasi, akses publik, dan izin di bawah dengan data uji staging. Rollback aplikasi versi sebelumnya juga memerlukan pemulihan skema/grant yang kompatibel.
+
+```sql
+select has_table_privilege('evoting_app', 'evoting.staff_accounts', 'UPDATE'),
+       has_function_privilege('evoting_app', 'evoting.fn_operator_election_results(uuid)', 'EXECUTE'),
+       has_function_privilege('evoting_app', 'evoting.fn_delete_election(uuid,uuid,text)', 'EXECUTE'),
+       has_table_privilege('evoting_staff', 'evoting.votes', 'SELECT');
+```
+
+Keempat pemeriksaan harus menghasilkan `false`.
 
 ---
 

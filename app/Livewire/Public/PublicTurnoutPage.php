@@ -3,7 +3,7 @@
 namespace App\Livewire\Public;
 
 use App\Livewire\Concerns\HandlesSafeErrors;
-use App\Models\Election;
+use App\Models\PublicElection;
 use App\Services\VotingService;
 use Illuminate\Support\Facades\View;
 use Livewire\Attributes\Layout;
@@ -17,11 +17,11 @@ class PublicTurnoutPage extends Component
 {
     use HandlesSafeErrors;
 
-    public Election $election;
+    public PublicElection $election;
 
     public string $loadedAtLabel = '';
 
-    public function mount(Election $election): void
+    public function mount(PublicElection $election): void
     {
         $this->election = $election;
         $this->updateTimestamp();

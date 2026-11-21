@@ -20,7 +20,7 @@ class EnsureStaffAuthenticated
         }
 
         // Auth::guard('staff')->user() sudah memuat baris terbaru dari evoting.staff_accounts pada setiap request (AC-007, MOD-001)
-        if (! $user->is_active) {
+        if (! $user->is_active || ! $user->hasCurrentSession()) {
             Auth::guard('staff')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();

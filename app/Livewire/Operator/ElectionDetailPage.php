@@ -3,6 +3,7 @@
 namespace App\Livewire\Operator;
 
 use App\Livewire\Concerns\HandlesSafeErrors;
+use App\Livewire\StaffPage;
 use App\Models\Candidate;
 use App\Models\Election;
 use App\Models\StaffAccount;
@@ -17,15 +18,15 @@ use Illuminate\Support\Facades\View;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
-use Livewire\Component;
 use Livewire\WithFileUploads;
-use RuntimeException;
 use Throwable;
 
 #[Layout('layouts.app')]
 #[Title('Detail & Konfigurasi Pemilihan')]
-class ElectionDetailPage extends Component
+class ElectionDetailPage extends StaffPage
 {
+    protected const ROLE = 'operator';
+
     use HandlesSafeErrors;
     use WithFileUploads;
 
@@ -129,7 +130,7 @@ class ElectionDetailPage extends Component
             $operator = Auth::guard('staff')->user();
             $cleanName = preg_replace('/\s+/u', ' ', trim($this->name)) ?? trim($this->name);
 
-            DB::transaction(function () use ($cleanName, $operator, $audit) {
+            DB::connection('staff')->transaction(function () use ($cleanName, $operator, $audit) {
                 $this->election->update([
                     'name' => $cleanName,
                     'max_voter_rights' => $this->maxVoterRights,
@@ -435,7 +436,7 @@ class ElectionDetailPage extends Component
                 'photo_path' => $photoPath,
             ]);
             $cand->id = $candidateId;
-            $cand->save();
+            $cand->setConnection('staff')->save();
 
             $audit->log(
                 actorType: 'operator',
@@ -452,16 +453,11 @@ class ElectionDetailPage extends Component
 
             $this->closeCandidateModal();
             $this->dispatch('toast', message: 'Pasangan calon berhasil ditambahkan.', type: 'success');
-        } catch (RuntimeException $e) {
-            // RuntimeException dari SupabaseStorageService sudah memiliki pesan ramah pengguna & sudah dicatat ke log
-            $this->addError('candidatePhoto', $e->getMessage());
-            $this->dispatch('toast', message: $e->getMessage(), type: 'error');
         } catch (Throwable $e) {
             $this->reportSafeError(
                 $e,
                 'Gagal menyimpan data pasangan calon. Silakan periksa kembali isian atau koneksi Anda.',
-                'candidatePhoto',
-                ['election_id' => $this->election->id]
+                'candidatePhoto'
             );
         }
     }
@@ -668,7 +664,7 @@ class ElectionDetailPage extends Component
         $candidates = $this->election->candidates()->get();
         $voterRightsCount = $this->election->voterRights()->count();
         $tz = (string) config('evoting.display_timezone', 'Asia/Makassar');
-        $veRow = DB::selectOne('select has_access_key, access_key_created_at from evoting.v_elections where id = ?::uuid', [$this->election->id]);
+        $veRow = DB::connection('staff')->selectOne('select has_access_key, access_key_created_at from evoting.v_elections where id = ?::uuid', [$this->election->id]);
         $hasAccessKey = (bool) ($veRow->has_access_key ?? false);
         $accessKeyCreatedAt = ! empty($veRow->access_key_created_at)
             ? CarbonImmutable::parse($veRow->access_key_created_at)->setTimezone($tz)

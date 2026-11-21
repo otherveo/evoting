@@ -3,6 +3,7 @@
 namespace App\Livewire\Operator;
 
 use App\Livewire\Concerns\HandlesSafeErrors;
+use App\Livewire\StaffPage;
 use App\Models\Candidate;
 use App\Models\Election;
 use App\Models\StaffAccount;
@@ -15,14 +16,15 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
-use Livewire\Component;
 use Livewire\WithFileUploads;
 use Throwable;
 
 #[Layout('layouts.app')]
 #[Title('Daftar Pemilihan')]
-class ElectionIndexPage extends Component
+class ElectionIndexPage extends StaffPage
 {
+    protected const ROLE = 'operator';
+
     use HandlesSafeErrors;
     use WithFileUploads;
 
@@ -237,7 +239,7 @@ class ElectionIndexPage extends Component
         }
 
         try {
-            $election = DB::transaction(function () use (
+            $election = DB::connection('staff')->transaction(function () use (
                 $cleanName,
                 $resolvedMaxRights,
                 $operator,
@@ -249,7 +251,7 @@ class ElectionIndexPage extends Component
                 $voting,
                 $storage
             ) {
-                DB::selectOne('select pg_advisory_xact_lock(hashtext(?))', ['create_el:'.mb_strtolower($cleanName)]);
+                DB::connection('staff')->selectOne('select pg_advisory_xact_lock(hashtext(?))', ['create_el:'.mb_strtolower($cleanName)]);
 
                 $existing = Election::query()
                     ->whereRaw('lower(name) = ?', [mb_strtolower($cleanName)])
@@ -295,7 +297,7 @@ class ElectionIndexPage extends Component
                         'photo_path' => $photoPath,
                     ]);
                     $cand->id = $candId;
-                    $cand->save();
+                    $cand->setConnection('staff')->save();
 
                     $audit->log(
                         actorType: 'operator',
@@ -371,8 +373,8 @@ class ElectionIndexPage extends Component
         }
 
         try {
-            $election = DB::transaction(function () use ($cleanName, $operator, $audit) {
-                DB::selectOne('select pg_advisory_xact_lock(hashtext(?))', ['create_el:'.mb_strtolower($cleanName)]);
+            $election = DB::connection('staff')->transaction(function () use ($cleanName, $operator, $audit) {
+                DB::connection('staff')->selectOne('select pg_advisory_xact_lock(hashtext(?))', ['create_el:'.mb_strtolower($cleanName)]);
 
                 $existing = Election::query()
                     ->whereRaw('lower(name) = ?', [mb_strtolower($cleanName)])
@@ -535,7 +537,7 @@ class ElectionIndexPage extends Component
         }
 
         try {
-            $election = DB::transaction(function () use (
+            $election = DB::connection('staff')->transaction(function () use (
                 $cleanName,
                 $operator,
                 $normalizedCandidates,
@@ -545,7 +547,7 @@ class ElectionIndexPage extends Component
                 $voting,
                 $storage
             ) {
-                DB::selectOne('select pg_advisory_xact_lock(hashtext(?))', ['create_el:'.mb_strtolower($cleanName)]);
+                DB::connection('staff')->selectOne('select pg_advisory_xact_lock(hashtext(?))', ['create_el:'.mb_strtolower($cleanName)]);
 
                 $existing = Election::query()
                     ->whereRaw('lower(name) = ?', [mb_strtolower($cleanName)])
@@ -590,7 +592,7 @@ class ElectionIndexPage extends Component
                         'photo_path' => $photoPath,
                     ]);
                     $cand->id = $candId;
-                    $cand->save();
+                    $cand->setConnection('staff')->save();
 
                     $audit->log(
                         actorType: 'operator',
@@ -702,7 +704,7 @@ class ElectionIndexPage extends Component
 
     public function render()
     {
-        $rows = DB::select('
+        $rows = DB::connection('staff')->select('
             select
                 ve.*,
                 (select count(*) from evoting.candidates c where c.election_id = ve.id) as candidates_count,

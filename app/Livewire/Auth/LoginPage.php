@@ -59,12 +59,13 @@ class LoginPage extends Component
         try {
             $cleanUsername = mb_strtolower(trim($this->username));
             $ip = (string) request()->ip();
-            $throttleKey = "staff_login:{$cleanUsername}|{$ip}";
+            $throttleKey = 'staff_login:'.hash('sha256', $cleanUsername);
+            $ipKey = 'staff_login_ip:'.$ip;
             $maxAttempts = (int) config('evoting.login_max_attempts', 5);
             $decaySeconds = (int) config('evoting.login_decay_seconds', 60);
 
-            if (RateLimiter::tooManyAttempts($throttleKey, $maxAttempts)) {
-                $seconds = RateLimiter::availableIn($throttleKey);
+            if (RateLimiter::tooManyAttempts($throttleKey, $maxAttempts) || RateLimiter::tooManyAttempts($ipKey, 60)) {
+                $seconds = max(RateLimiter::availableIn($throttleKey), RateLimiter::availableIn($ipKey));
                 $this->errorMessage = "Terlalu banyak percobaan masuk yang gagal. Silakan tunggu {$seconds} detik sebelum mencoba kembali.";
                 $this->dispatch('toast', message: $this->errorMessage, type: 'error');
 
@@ -79,6 +80,7 @@ class LoginPage extends Component
             // FR-001, AC-002: Pesan gagal tidak membedakan username salah dan kata sandi salah
             if (! $account || ! $account->is_active || ! Hash::check($this->password, $account->password_hash)) {
                 RateLimiter::hit($throttleKey, $decaySeconds);
+                RateLimiter::hit($ipKey, $decaySeconds);
 
                 $audit->log(
                     actorType: $account ? $account->role : 'sistem',
@@ -102,6 +104,8 @@ class LoginPage extends Component
             RateLimiter::clear($throttleKey);
             Auth::guard('staff')->login($account);
             session()->regenerate();
+            session()->forget(['pending_totp_enrollment', 'staff_2fa_verified']);
+            session(['staff_session_version' => (int) $account->session_version]);
 
             // Amandemen PRD: Admin wajib melewati TOTP (UI-002 bila sudah aktif, atau UI-003 bila aktivasi awal)
             if ($account->isAdmin()) {

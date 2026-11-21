@@ -10,6 +10,8 @@ class DeviceAccessLog extends Model
 {
     use HasUuids;
 
+    protected $connection = 'staff';
+
     protected $table = 'evoting.device_access_logs';
 
     protected $keyType = 'string';

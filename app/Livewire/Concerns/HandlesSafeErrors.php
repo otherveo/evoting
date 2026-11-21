@@ -5,8 +5,7 @@ namespace App\Livewire\Concerns;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use InvalidArgumentException;
-use RuntimeException;
+use Illuminate\Support\Str;
 use Throwable;
 
 trait HandlesSafeErrors
@@ -20,27 +19,17 @@ trait HandlesSafeErrors
         return Cache::add('evoting_idem:'.sha1(static::class.':'.$key), 1, $ttlSeconds);
     }
 
-    /**
-     * Mencatat detail exception mentah ke berkas log harian ber-timestamp (storage/logs/laravel-YYYY-MM-DD.log),
-     * memberikan penjelasan penyebab spesifik pada form error (tanpa membocorkan teks cURL/SQL mentah),
-     * dan menampilkan popup singkat 1–2 kata.
-     *
-     * @param  array<string, mixed>  $context
-     */
     protected function reportSafeError(
         Throwable $exception,
         string $friendlyMessage,
-        ?string $errorField = null,
-        array $context = []
+        ?string $errorField = null
     ): void {
-        Log::error($friendlyMessage, array_merge([
-            'timestamp' => now()->toIso8601String(),
+        Log::error($friendlyMessage, [
+            'incident_id' => (string) Str::uuid(),
             'component' => static::class,
             'exception_class' => $exception::class,
-            'exception_message' => $exception->getMessage(),
-            'file' => $exception->getFile(),
-            'line' => $exception->getLine(),
-        ], $context));
+            'sql_state' => $exception instanceof QueryException ? $exception->getCode() : null,
+        ]);
 
         $specificMessage = $this->resolveSpecificSafeMessage($exception, $friendlyMessage);
 
@@ -53,13 +42,6 @@ trait HandlesSafeErrors
 
     protected function resolveSpecificSafeMessage(Throwable $e, string $fallback): string
     {
-        if ($e instanceof InvalidArgumentException || $e instanceof RuntimeException) {
-            $msg = $e->getMessage();
-            if ($msg !== '' && ! str_contains(strtolower($msg), 'curl') && ! str_contains(strtolower($msg), 'sqlstate')) {
-                return $msg;
-            }
-        }
-
         if ($e instanceof QueryException) {
             $sqlState = (string) ($e->errorInfo[0] ?? $e->getCode());
 

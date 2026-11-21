@@ -198,14 +198,10 @@
               Simpan Jadwal
             </x-action-button>
           @elseif($phase === 'berlangsung')
-            <x-action-button
-              variant="danger-ghost"
-              icon="#i-lock"
-              wire:click="$set('showEndEarlyModal', true)"
-              loadingText="Membuka..."
-            >
-              Akhiri Pemilihan Sekarang
-            </x-action-button>
+            <button type="button" class="btn btn-danger-ghost" x-on:click="$wire.showEndEarlyModal = true">
+              <svg class="icon"><use href="#i-lock"></use></svg>
+              <span>Akhiri Pemilihan Sekarang</span>
+            </button>
 
             <x-action-button
               type="submit"
@@ -233,14 +229,15 @@
 </section>
 
 {{-- OD-006a, BR-025, BR-032, AC-011: Modal Konfirmasi Akhiri Pemilihan Lebih Awal --}}
-@if($showEndEarlyModal)
+@if($phase === 'berlangsung')
   <x-modal
     title="Akhiri Pemilihan Sekarang?"
     subtitle="Tindakan ini bersifat permanen dan tidak dapat dibatalkan."
     icon="#i-lock"
     iconVariant="danger"
     maxWidth="500px"
-    closeAction="$set('showEndEarlyModal', false)"
+    alpineShow="$wire.showEndEarlyModal"
+    alpineClose="$wire.showEndEarlyModal = false"
   >
     <div class="modal-body">
       <div class="alert alert-warning">
@@ -253,7 +250,7 @@
     </div>
 
     <x-slot:footer>
-      <button type="button" class="btn btn-secondary" wire:click="$set('showEndEarlyModal', false)">Batal</button>
+      <button type="button" class="btn btn-secondary" x-on:click="$wire.showEndEarlyModal = false">Batal</button>
       <x-action-button
         variant="danger"
         icon="#i-lock"

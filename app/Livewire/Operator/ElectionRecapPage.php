@@ -3,6 +3,7 @@
 namespace App\Livewire\Operator;
 
 use App\Livewire\Concerns\HandlesSafeErrors;
+use App\Livewire\StaffPage;
 use App\Models\Election;
 use App\Models\StaffAccount;
 use App\Services\VotingService;
@@ -10,13 +11,14 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\View;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
-use Livewire\Component;
 use Throwable;
 
 #[Layout('layouts.app')]
 #[Title('Rekapitulasi & Integritas Suara')]
-class ElectionRecapPage extends Component
+class ElectionRecapPage extends StaffPage
 {
+    protected const ROLE = 'operator';
+
     use HandlesSafeErrors;
 
     public Election $election;
@@ -54,6 +56,14 @@ class ElectionRecapPage extends Component
         $maxRights = (int) $this->election->max_voter_rights;
 
         return $maxRights > 0 && $totalVoted >= $maxRights;
+    }
+
+    private function recapAvailable(VotingService $voting): bool
+    {
+        return $this->election->recap_open && $this->canUnlockRecap(
+            $voting->integrityReport($this->election->id),
+            $this->election->currentPhase()
+        );
     }
 
     public function refreshData(): void
@@ -142,10 +152,7 @@ class ElectionRecapPage extends Component
 
         try {
             $this->election->refresh();
-            $phase = $this->election->currentPhase();
-            $integrity = $voting->integrityReport($this->election->id);
-
-            if (! $this->election->recap_open || ! $this->canUnlockRecap($integrity, $phase)) {
+            if (! $this->recapAvailable($voting)) {
                 $this->activeViewMode = null;
                 $this->dispatch('toast', message: 'Terkunci', type: 'error');
 
@@ -181,10 +188,7 @@ class ElectionRecapPage extends Component
 
         try {
             $this->election->refresh();
-            $phase = $this->election->currentPhase();
-            $integrity = $voting->integrityReport($this->election->id);
-
-            if (! $this->election->recap_open || ! $this->canUnlockRecap($integrity, $phase)) {
+            if (! $this->recapAvailable($voting)) {
                 return [
                     'ok' => false,
                     'message' => 'Halaman rekapitulasi masih terkunci.',
@@ -228,6 +232,10 @@ class ElectionRecapPage extends Component
 
         try {
             $this->election->refresh();
+            if (! $this->recapAvailable(app(VotingService::class))) {
+                return;
+            }
+
             if ($this->election->reveal_locked) {
                 $this->dispatch('toast', message: 'Terkunci', type: 'warning');
 
@@ -247,6 +255,10 @@ class ElectionRecapPage extends Component
     {
         try {
             $this->election->refresh();
+            if (! $this->recapAvailable(app(VotingService::class))) {
+                return;
+            }
+
             if ($this->election->reveal_locked) {
                 $this->dispatch('toast', message: 'Terkunci', type: 'warning');
 
@@ -279,6 +291,10 @@ class ElectionRecapPage extends Component
     {
         try {
             $this->election->refresh();
+            if (! $this->recapAvailable(app(VotingService::class))) {
+                return;
+            }
+
             if ($this->election->reveal_locked) {
                 $this->dispatch('toast', message: 'Terkunci', type: 'warning');
 
@@ -298,6 +314,10 @@ class ElectionRecapPage extends Component
     {
         try {
             $this->election->refresh();
+            if (! $this->recapAvailable(app(VotingService::class))) {
+                return;
+            }
+
             if ($this->election->reveal_locked) {
                 $this->dispatch('toast', message: 'Terkunci', type: 'warning');
 
@@ -319,6 +339,10 @@ class ElectionRecapPage extends Component
     public function saveRevealDelay(?int $delayMs = null): bool
     {
         $this->election->refresh();
+        if (! $this->recapAvailable(app(VotingService::class))) {
+            return false;
+        }
+
         if ($this->election->reveal_locked) {
             $this->dispatch('toast', message: 'Terkunci', type: 'warning');
 
@@ -359,7 +383,7 @@ class ElectionRecapPage extends Component
     {
         try {
             $this->election->refresh();
-            if (! $this->election->recap_open) {
+            if (! $this->recapAvailable($voting)) {
                 $this->dispatch('toast', message: 'Gagal', type: 'error');
 
                 return null;
@@ -433,6 +457,10 @@ class ElectionRecapPage extends Component
     {
         try {
             $this->election->refresh();
+            if (! $this->recapAvailable(app(VotingService::class))) {
+                return;
+            }
+
             if (! $this->election->reveal_locked) {
                 return;
             }
@@ -459,6 +487,10 @@ class ElectionRecapPage extends Component
     {
         try {
             $this->election->refresh();
+            if (! $this->recapAvailable(app(VotingService::class))) {
+                return;
+            }
+
             $this->election->update([
                 'reveal_locked' => false,
                 'revealed_ids' => [],

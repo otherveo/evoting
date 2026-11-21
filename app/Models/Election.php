@@ -12,6 +12,8 @@ class Election extends Model
 {
     use HasUuids;
 
+    protected $connection = 'staff';
+
     protected $table = 'evoting.elections';
 
     protected $keyType = 'string';
@@ -73,19 +75,18 @@ class Election extends Model
 
     public function currentPhase(): string
     {
-        if (isset(VotingService::$scheduleCache[$this->id])) {
-            $this->starts_at = VotingService::$scheduleCache[$this->id]['starts_at'];
-            $this->ends_at = VotingService::$scheduleCache[$this->id]['ends_at'];
-        }
+        $schedule = VotingService::$scheduleCache[$this->id] ?? [];
+        $startsAt = $schedule['starts_at'] ?? $this->starts_at;
+        $endsAt = $schedule['ends_at'] ?? $this->ends_at;
 
-        if (! $this->starts_at || ! $this->ends_at) {
+        if (! $startsAt || ! $endsAt) {
             return 'persiapan';
         }
         $now = now()->addMilliseconds(VotingService::$dbOffsetMs);
-        if ($now->lt($this->starts_at)) {
+        if ($now->lt($startsAt)) {
             return 'persiapan';
         }
-        if ($now->gte($this->starts_at) && $now->lt($this->ends_at)) {
+        if ($now->lt($endsAt)) {
             return 'berlangsung';
         }
 

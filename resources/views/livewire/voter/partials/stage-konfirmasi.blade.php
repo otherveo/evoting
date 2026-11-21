@@ -15,16 +15,16 @@
       </p>
     </div>
 
-    <div class="confirm-summary" x-show="selectedCand">
+    <div class="confirm-summary" x-show="reviewedCand">
       <img
-        :src="selectedCand ? selectedCand.photoUrl : ''"
-        :alt="selectedCand ? ('Foto ' + selectedCand.name) : ''"
+        :src="reviewedCand ? reviewedCand.photoUrl : ''"
+        :alt="reviewedCand ? ('Foto ' + reviewedCand.name) : ''"
         class="confirm-photo"
       />
       <div class="confirm-candidate">
-        <span>PASANGAN CALON NOMOR URUT <span x-text="selectedCand ? selectedCand.number : ''"></span></span>
-        <h2 x-text="selectedCand ? selectedCand.name : ''"></h2>
-        <p x-text="(selectedCand && selectedCand.vision) ? selectedCand.vision : @js('Pemilihan: ' . $electionName)"></p>
+        <span>PASANGAN CALON NOMOR URUT <span x-text="reviewedCand ? reviewedCand.number : ''"></span></span>
+        <h2 x-text="reviewedCand ? reviewedCand.name : ''"></h2>
+        <p x-text="(reviewedCand && reviewedCand.vision) ? reviewedCand.vision : @js('Pemilihan: ' . $electionName)"></p>
       </div>
     </div>
 
@@ -53,7 +53,7 @@
         type="button"
         class="btn btn-primary btn-lg"
         x-on:click="submitFinalVote()"
-        x-bind:disabled="submittingVote || !selectedCand"
+        x-bind:disabled="submittingVote || !reviewedCand"
         x-bind:data-loading="submittingVote ? 'true' : null"
       >
         <span class="btn-label-idle" x-show="!submittingVote">

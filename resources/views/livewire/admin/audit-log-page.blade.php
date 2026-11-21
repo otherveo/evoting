@@ -25,8 +25,12 @@
       </div>
 
       <div class="voter-tools">
-        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-          <select wire:model.live="actorType" class="field-input" style="width:auto;height:38px;font-size:0.78rem;" aria-label="Filter Peran Aktor">
+        <form
+          x-data="{ actor: @js($actorType), action: @js($actionFilter), search: @js($search) }"
+          x-on:submit.prevent.stop="$wire.applyFilters(actor, action, search)"
+          style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;"
+        >
+          <select x-model="actor" class="field-input" style="width:auto;height:38px;font-size:0.78rem;" aria-label="Filter Peran Aktor">
             <option value="all">Semua Aktor</option>
             <option value="admin">Admin</option>
             <option value="operator">Operator</option>
@@ -34,7 +38,7 @@
             <option value="sistem">Sistem (CLI)</option>
           </select>
 
-          <select wire:model.live="actionFilter" class="field-input" style="width:auto;height:38px;font-size:0.78rem;" aria-label="Filter Jenis Aksi">
+          <select x-model="action" class="field-input" style="width:auto;height:38px;font-size:0.78rem;" aria-label="Filter Jenis Aksi">
             <option value="all">Semua Jenis Aksi</option>
             @foreach($distinctActions as $act)
               <option value="{{ $act }}">{{ $act }}</option>
@@ -45,13 +49,16 @@
             <svg class="icon"><use href="#i-search"></use></svg>
             <input
               type="search"
-              wire:model.live.debounce.250ms="search"
+              x-model="search"
               class="field-input"
               placeholder="Cari aksi atau detail..."
               aria-label="Cari entri log audit"
             />
           </div>
-        </div>
+          <x-action-button type="submit" variant="secondary" size="sm" target="applyFilters" loadingText="Memuat...">
+            Terapkan filter
+          </x-action-button>
+        </form>
       </div>
     </div>
 

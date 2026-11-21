@@ -3,7 +3,7 @@
 namespace App\Livewire\Public;
 
 use App\Livewire\Concerns\HandlesSafeErrors;
-use App\Models\Election;
+use App\Models\PublicElection;
 use App\Services\TokenService;
 use App\Services\VotingService;
 use Illuminate\Support\Facades\RateLimiter;
@@ -18,7 +18,7 @@ class LiveRecapPage extends Component
 {
     use HandlesSafeErrors;
 
-    public Election $election;
+    public PublicElection $election;
 
     public string $accessKeyInput = '';
 
@@ -26,7 +26,7 @@ class LiveRecapPage extends Component
 
     public string $loadedAtLabel = '';
 
-    public function mount(Election $election, TokenService $tokens, VotingService $voting): void
+    public function mount(PublicElection $election, TokenService $tokens, VotingService $voting): void
     {
         $this->election = $election;
         $this->updateTimestamp();

@@ -9,6 +9,8 @@ class AuditLog extends Model
 {
     use HasUuids;
 
+    protected $connection = 'staff';
+
     protected $table = 'evoting.audit_logs';
 
     protected $keyType = 'string';

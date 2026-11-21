@@ -9,6 +9,8 @@ class StaffAccount extends Authenticatable
 {
     use HasUuids;
 
+    protected $connection = 'staff';
+
     protected $table = 'evoting.staff_accounts';
 
     protected $keyType = 'string';
@@ -25,6 +27,8 @@ class StaffAccount extends Authenticatable
         'totp_enabled',
         'must_change_password',
     ];
+
+    protected $attributes = ['session_version' => 1];
 
     protected $hidden = [
         'password_hash',
@@ -66,6 +70,11 @@ class StaffAccount extends Authenticatable
     public function isOperator(): bool
     {
         return $this->role === 'operator';
+    }
+
+    public function hasCurrentSession(): bool
+    {
+        return session('staff_session_version') === (int) $this->session_version;
     }
 
     public function needsActivation(): bool

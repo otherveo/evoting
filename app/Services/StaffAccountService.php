@@ -50,7 +50,7 @@ class StaffAccountService
 
         $temporaryPassword = $this->generateTemporaryPassword();
 
-        return DB::transaction(function () use ($normalizedUsername, $normalizedFullName, $role, $temporaryPassword, $actorType, $actorId) {
+        return DB::connection('staff')->transaction(function () use ($normalizedUsername, $normalizedFullName, $role, $temporaryPassword, $actorType, $actorId) {
             $account = StaffAccount::create([
                 'username' => $normalizedUsername,
                 'full_name' => $normalizedFullName,
@@ -91,13 +91,13 @@ class StaffAccountService
             throw new InvalidArgumentException('Hanya akun Operator yang dapat dikelola melalui menu ini.');
         }
 
-        DB::transaction(function () use ($operator, $isActive, $admin) {
+        DB::connection('staff')->transaction(function () use ($operator, $isActive, $admin) {
             $operator->update([
                 'is_active' => $isActive,
             ]);
 
             if (! $isActive) {
-                DB::table('evoting.sessions')->where('user_id', $operator->id)->delete();
+                $operator->increment('session_version');
             }
 
             $this->audit->log(
@@ -125,13 +125,13 @@ class StaffAccountService
 
         $temporaryPassword = $this->generateTemporaryPassword();
 
-        DB::transaction(function () use ($operator, $admin, $temporaryPassword) {
+        DB::connection('staff')->transaction(function () use ($operator, $admin, $temporaryPassword) {
             $operator->update([
                 'password_hash' => Hash::make($temporaryPassword),
                 'must_change_password' => true,
             ]);
 
-            DB::table('evoting.sessions')->where('user_id', $operator->id)->delete();
+            $operator->increment('session_version');
 
             $this->audit->log(
                 actorType: 'admin',

@@ -48,7 +48,7 @@ Sistem ini menerapkan pengamanan berlapis dari tingkat antarmuka hingga skema Po
 - **Penyimpanan Hash Token Satu Arah (SHA-256):**
   Token mentah 256-bit hanya ditampilkan satu kali saat QR diterbitkan. Basis data hanya menyimpan `token_hash` (SHA-256 hex 64 karakter).
 - **Hak Akses Basis Data Minimum (*Least Privilege*):**
-  Role aplikasi (`evoting_app`) **tidak memiliki hak `SELECT` langsung** ke tabel `evoting.votes` dan tidak memiliki hak `UPDATE`/`DELETE` pada `evoting.audit_logs`. Pembacaan hasil suara hanya dapat dilakukan melalui `evoting.fn_election_results()` yang otomatis menolak permintaan apabila `now() < ends_at`.
+  Jalur publik dan pemilih memakai `evoting_app`. Jalur staf memakai `evoting_staff`. Keduanya membaca hasil melalui fungsi database. Hasil publik tersedia sesudah penutupan, rekap Operator setelah kuota terpakai atau penutupan, dan rekap langsung memerlukan kunci aktif.
 - **Sesi Memilih Berbatas 10 Menit & Pengikatan Browser:**
   Sejak pemilih menekan **Mulai memilih**, sesi dikunci pada pengenal browser (`HttpOnly` cookie) yang sama dengan batas waktu **10 menit**. Jika perangkat mati atau waktu habis sebelum konfirmasi, Operator dapat melakukan **Reset Sesi** disertai alasan yang tercatat di Log Audit.
 - **Pemisahan Wewenang Staf (*Role Separation*):**
@@ -170,6 +170,8 @@ DB_PORT=5432
 DB_DATABASE=postgres
 DB_USERNAME=evoting_app
 DB_PASSWORD=<password_evoting_app>
+STAFF_DB_USERNAME=evoting_staff
+STAFF_DB_PASSWORD=<password_evoting_staff>
 DB_SEARCH_PATH=evoting
 DB_SSLMODE=require
 DB_PERSISTENT=true
@@ -218,6 +220,10 @@ php vendor/bin/pint --test
 # Menjalankan seluruh pengujian fitur & integritas siklus pemilihan
 php artisan test
 ```
+
+Pengujian integrasi memakai PostgreSQL di `127.0.0.1` dan membuat database sementara per metode uji. Siapkan cluster pengembangan dengan database template `evoting_test_template`. Pada PostgreSQL biasa, buat role kosong `anon`, `authenticated`, dan `service_role`, serta tabel tiruan `storage.buckets(id text primary key, name text, public boolean)` dan `storage.objects(bucket_id text)` pada schema `storage` di template. Terapkan `schema.sql` di template lalu tetapkan password lokal berbeda untuk kedua role aplikasi.
+
+Sediakan `EVOTING_TEST_PORT`, `EVOTING_TEST_OWNER_PASSWORD` (role lokal `postgres`), `EVOTING_TEST_APP_PASSWORD`, dan `EVOTING_TEST_STAFF_PASSWORD` pada proses PHPUnit. Suite memakai HTTP tiruan untuk Supabase Storage. Tanpa konfigurasi PostgreSQL uji, PHPUnit menandai pengujian integrasi sebagai dilewati.
 
 ---
 

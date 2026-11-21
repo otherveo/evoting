@@ -36,15 +36,11 @@
 
   <div class="candidate-grid" role="radiogroup" aria-label="Daftar Pasangan Calon">
     @foreach($candidates as $cand)
-      @php
-        $isSelected = $selectedCandidateId === $cand->id;
-        $isRead = in_array((string) $cand->id, $readCandidateIds ?? [], true);
-      @endphp
       <div
         role="radio"
         tabindex="0"
         :aria-checked="clientSelectedId === '{{ $cand->id }}' ? 'true' : 'false'"
-        class="candidate-card {{ $isSelected ? 'is-selected' : '' }}"
+        class="candidate-card"
         :class="{ 'is-selected': clientSelectedId === '{{ $cand->id }}' }"
         x-on:click="chooseCandidate('{{ $cand->id }}')"
         x-on:keydown.enter.self.prevent="chooseCandidate('{{ $cand->id }}')"
@@ -66,7 +62,7 @@
           <div class="candidate-card-actions">
             <button
               type="button"
-              class="btn btn-sm candidate-vm-btn {{ $isRead ? 'is-read' : 'is-unread' }}"
+              class="btn btn-sm candidate-vm-btn"
               :class="isCandidateRead('{{ $cand->id }}') ? 'is-read' : 'is-unread'"
               x-on:click.stop="openVisionMissionModal('{{ $cand->id }}')"
             >
@@ -76,13 +72,13 @@
                 <span>Lihat Visi &amp; Misi</span>
               </span>
               <span class="candidate-vm-badge" x-text="isCandidateRead('{{ $cand->id }}') ? 'Sudah Dibaca' : 'Belum Dibaca'">
-                {{ $isRead ? 'Sudah Dibaca' : 'Belum Dibaca' }}
+                Belum Dibaca
               </span>
             </button>
 
             <button
               type="button"
-              class="btn btn-sm candidate-choose-btn {{ $isSelected ? 'btn-primary is-chosen' : 'btn-secondary' }}"
+              class="btn btn-sm candidate-choose-btn"
               :class="clientSelectedId === '{{ $cand->id }}' ? 'btn-primary is-chosen' : 'btn-secondary'"
               x-on:click.stop="chooseCandidate('{{ $cand->id }}')"
             >
@@ -116,11 +112,7 @@
     <div class="ballot-bar-info">
       <span>PILIHAN SEMENTARA (BELUM TERSIMPAN)</span>
       <strong x-text="selectedCand ? ('Paslon ' + selectedCand.number + ' — ' + selectedCand.name) : 'Belum ada pasangan calon yang dipilih'">
-        @if($selectedCandidate)
-          Paslon {{ $selectedCandidate->formattedNumber() }} — {{ $selectedCandidate->name }}
-        @else
-          Belum ada pasangan calon yang dipilih
-        @endif
+        Belum ada pasangan calon yang dipilih
       </strong>
     </div>
 

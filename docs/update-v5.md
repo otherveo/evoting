@@ -37,7 +37,7 @@ Kondisi saat ini (terverifikasi dari kode, commit 9dfe1e1): kartu adalah elemen 
 5. **Gate "Lanjut ke Konfirmasi":** tombol ini **TETAP BISA DITEKAN** untuk gate ini — JANGAN dibuat unclickable/disabled karena visi/misi belum dibaca (perilaku disabled yang sudah ada saat belum ada paslon yang dipilih TETAP seperti sekarang). Saat ditekan:
    - Jika ada SATU SAJA paslon yang tombol "Lihat Visi & Misi"-nya belum ditekan → **TOLAK**: tampilkan pesan persis **"Anda belum boleh lanjut sebelum membaca seluruh visi & misi setiap paslon."** (popup/toast), tetap di halaman memilih, tidak pindah ke konfirmasi.
    - Jika SEMUA paslon sudah dibaca → lanjut ke konfirmasi seperti sekarang.
-   - Gate ini ditegakkan di **server** (`BallotPage::proceedToConfirm()` — tolak dengan pesan yang sama persis bila belum semua dibaca), dengan cerminan di sisi klien untuk umpan balik instan. Satu tombol "Lihat Visi & Misi" per paslon membuka popup berisi visi + misi sekaligus; gate = tombol itu sudah ditekan untuk SETIAP paslon (bukan hanya paslon yang dipilih).
+   - Bilik membuka visi dan misi, menandai setiap paslon yang dibuka, dan menampilkan konfirmasi secara lokal. Saat pemilih mengirim suara, server memeriksa bahwa daftar ID yang dilaporkan mencakup semua paslon pada pemilihan tersebut.
 6. **CSS perubahan ini** mengikuti Bagian C (file mandiri di `public/css/`, BUKAN `suarasekolah.css`).
 
 ---
@@ -118,7 +118,7 @@ Keputusan lokasi (diputuskan Veo 2026-11-18 20:22): **Opsi A — file pecahan te
 3. Struktur kartu valid (tidak ada `<button>` di dalam `<button>`); keyboard/ARIA (fokus, Enter/Space, `aria-checked`) tetap bekerja seperti sebelumnya.
 4. Tombol "Lihat Visi & Misi" berubah warna dengan jelas antara belum vs sudah ditekan, per paslon.
 5. "Lanjut ke Konfirmasi" tetap bisa ditekan (tidak dibuat unclickable untuk gate ini); bila ada paslon yang belum dibaca → tolak dengan pesan persis "Anda belum boleh lanjut sebelum membaca seluruh visi & misi setiap paslon." dan tetap di halaman memilih; bila semua sudah dibaca → lanjut ke konfirmasi.
-6. Gate visi/misi ditegakkan di server (`proceedToConfirm`) — tidak bisa dilewati dari klien saja.
+6. Browser mensyaratkan semua visi/misi dibuka sebelum pratinjau. Server memvalidasi kelengkapan daftar terhadap paslon terdaftar saat submit akhir.
 7. Halaman rekap default terkunci; bila syarat (suara masuk == max_voter_rights, atau fase Ditutup sebagai shortcut) belum terpenuhi, kartu terkunci menjelaskan syaratnya (X / maks suara terpakai); bila sudah terpenuhi, operator bisa membuka halaman. Mengakhiri pemilihan (termasuk akhiri lebih awal) selalu membuka kunci — halaman tidak boleh terkunci permanen.
 8. Setelah dibuka, operator bisa menutup dan membuka kembali halaman rekap secara bebas; state buka/tutup persisten dan sama untuk semua operator.
 9. Mode tampilan (biasa vs animasi) bisa dipilih operator dan tersimpan; mode biasa tampil seperti sekarang.

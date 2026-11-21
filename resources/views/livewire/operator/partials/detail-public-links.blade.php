@@ -76,15 +76,10 @@
 
           <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
             @if($hasAccessKey)
-              <x-action-button
-                variant="danger-ghost"
-                size="sm"
-                icon="#i-x"
-                wire:click="$set('showRevokeAccessKeyModal', true)"
-                loadingText="Membuka..."
-              >
-                Cabut Kunci
-              </x-action-button>
+              <button type="button" class="btn btn-danger-ghost btn-sm" x-on:click="$wire.showRevokeAccessKeyModal = true">
+                <svg class="icon"><use href="#i-x"></use></svg>
+                <span>Cabut Kunci</span>
+              </button>
             @endif
             <x-action-button
               variant="primary"
@@ -167,14 +162,15 @@
 @endif
 
 {{-- Perubahan 7: Modal Konfirmasi Cabut Access Key --}}
-@if($showRevokeAccessKeyModal)
+@if($hasAccessKey)
   <x-modal
     title="Cabut Access Key Rekap Real-Time?"
     subtitle="Seluruh sesi pemantauan real-time yang sedang menggunakan kunci ini akan langsung terputus."
     icon="#i-alert"
     iconVariant="danger"
     maxWidth="480px"
-    closeAction="$set('showRevokeAccessKeyModal', false)"
+    alpineShow="$wire.showRevokeAccessKeyModal"
+    alpineClose="$wire.showRevokeAccessKeyModal = false"
   >
     <div class="modal-body">
       <p class="confirm-message">
@@ -183,7 +179,7 @@
     </div>
 
     <x-slot:footer>
-      <button type="button" class="btn btn-secondary" wire:click="$set('showRevokeAccessKeyModal', false)">Batal</button>
+      <button type="button" class="btn btn-secondary" x-on:click="$wire.showRevokeAccessKeyModal = false">Batal</button>
       <x-action-button
         variant="danger"
         icon="#i-x"
@@ -206,7 +202,7 @@
     maxWidth="540px"
     closeAction="closeDeleteElectionModal"
   >
-    <form wire:submit="confirmDeleteElection" novalidate>
+    <form wire:submit="confirmDeleteElection" x-data="{ expectedName: @js($election->name) }" novalidate>
       <div class="modal-body">
         <div class="alert alert-danger" role="alert">
           <svg class="icon"><use href="#i-alert"></use></svg>
@@ -225,7 +221,7 @@
           <input
             id="detail-del-confirm"
             type="text"
-            wire:model.live="deleteConfirmName"
+            wire:model="deleteConfirmName"
             class="field-input @error('deleteConfirmName') is-invalid @enderror"
             placeholder="{{ $election->name }}"
             autocomplete="off"
@@ -247,7 +243,7 @@
           target="confirmDeleteElection"
           icon="#i-trash"
           loadingText="Menghapus..."
-          :disabled="trim($deleteConfirmName) !== trim($election->name)"
+          x-bind:disabled="$wire.deleteConfirmName.trim() !== expectedName.trim()"
         >
           Hapus Permanen
         </x-action-button>

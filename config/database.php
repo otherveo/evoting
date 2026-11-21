@@ -3,6 +3,22 @@
 use Illuminate\Support\Str;
 use Pdo\Mysql;
 
+$postgres = [
+    'driver' => 'pgsql',
+    'mask_bindings_in_exception_messages' => true,
+    'host' => env('DB_HOST', '127.0.0.1'),
+    'port' => env('DB_PORT', '5432'),
+    'database' => env('DB_DATABASE', 'postgres'),
+    'charset' => env('DB_CHARSET', 'utf8'),
+    'prefix' => '',
+    'prefix_indexes' => true,
+    'search_path' => env('DB_SEARCH_PATH', 'evoting'),
+    'sslmode' => env('DB_SSLMODE', 'prefer'),
+    'options' => extension_loaded('pdo_pgsql') ? [
+        PDO::ATTR_PERSISTENT => (bool) env('DB_PERSISTENT', true),
+    ] : [],
+];
+
 return [
 
     /*
@@ -84,22 +100,16 @@ return [
             ]) : [],
         ],
 
-        'pgsql' => [
-            'driver' => 'pgsql',
+        'pgsql' => $postgres + [
             'url' => env('DB_URL'),
-            'host' => env('DB_HOST', '127.0.0.1'),
-            'port' => env('DB_PORT', '5432'),
-            'database' => env('DB_DATABASE', 'postgres'),
             'username' => env('DB_USERNAME', 'evoting_app'),
             'password' => env('DB_PASSWORD', ''),
-            'charset' => env('DB_CHARSET', 'utf8'),
-            'prefix' => '',
-            'prefix_indexes' => true,
-            'search_path' => env('DB_SEARCH_PATH', 'evoting'),
-            'sslmode' => env('DB_SSLMODE', 'prefer'),
-            'options' => extension_loaded('pdo_pgsql') ? [
-                PDO::ATTR_PERSISTENT => (bool) env('DB_PERSISTENT', true),
-            ] : [],
+        ],
+
+        'staff' => $postgres + [
+            'url' => env('STAFF_DB_URL'),
+            'username' => env('STAFF_DB_USERNAME', 'evoting_staff'),
+            'password' => env('STAFF_DB_PASSWORD', ''),
         ],
 
         'sqlsrv' => [
