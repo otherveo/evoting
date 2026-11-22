@@ -80,6 +80,29 @@
   margin-top: 12px;
 }
 
+.race-mode-grid,
+.race-action-grid {
+  display: grid;
+}
+
+.race-mode-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.race-action-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.race-mode-grid .btn,
+.race-action-grid .btn {
+  width: 100%;
+}
+
+.race-action-grid .btn {
+  min-height: 54px;
+  font-size: 1rem;
+}
+
 .race-delay {
   width: 130px;
 }

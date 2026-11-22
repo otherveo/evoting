@@ -33,7 +33,7 @@
       <button type="button" class="btn btn-secondary" x-show="failed" x-cloak x-on:click="load()">Coba Lagi</button>
 
       <div x-show="ready && !complete" x-cloak>
-        <div class="race-control-row" role="group" aria-label="Cara reveal">
+        <div class="race-control-row race-mode-grid" role="group" aria-label="Cara reveal">
           <button type="button" class="btn btn-secondary" x-on:click="switchMode('manual')" :aria-pressed="mode === 'manual'" :disabled="switching">Manual</button>
           <button type="button" class="btn btn-secondary" x-on:click="switchMode('auto')" :aria-pressed="mode === 'auto'" :disabled="switching">Otomatis</button>
         </div>
@@ -52,7 +52,7 @@
           <span id="race-interval" class="field-hint"
             x-text="validDelay ? 'Interval: ' + formatNumber(interval) + ' ms' : 'Masukkan 20–10.000 ms'"></span>
         </div>
-        <div class="race-control-row">
+        <div class="race-control-row race-action-grid">
           <button type="button" class="btn btn-primary" x-show="mode === 'manual'" x-on:click="openVote()"
             :disabled="switching || inFlight > 0 || remaining === 0">Buka Suara</button>
           <button type="button" class="btn btn-primary" x-show="mode === 'auto'" x-on:click="toggleAuto()"
