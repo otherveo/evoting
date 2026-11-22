@@ -54,56 +54,80 @@
           <p>Tambahkan minimal 2 pasangan calon agar jadwal pemilihan dapat diatur.</p>
         </div>
       @else
-        <div class="candidate-grid">
+        <div class="candidate-grid candidate-detail-grid">
           @foreach($candidates as $cand)
-            <div class="candidate-card" style="cursor: default;" wire:key="cand-{{ $cand->id }}">
-              <div class="candidate-media">
-                <img src="{{ $cand->photoUrl() }}" alt="Foto {{ $cand->name }}" class="candidate-photo" />
-                <span class="candidate-number">NO. {{ $cand->formattedNumber() }}</span>
-              </div>
-              <div class="candidate-body">
-                <span class="candidate-kicker">PASANGAN CALON {{ $cand->formattedNumber() }}</span>
-                <h3 class="candidate-names">{{ $cand->name }}</h3>
+            <div class="candidate-card candidate-detail-card" wire:key="cand-{{ $cand->id }}"
+              :style="bentoRows ? { '--candidate-bento-rows': bentoRows } : {}"
+              x-data="{
+                tallPhoto: false,
+                bentoRows: 0,
+                sizeObserver: null,
+                init() {
+                  this.sizeObserver = new ResizeObserver(([entry]) => {
+                    const height = entry.borderBoxSize?.[0]?.blockSize ?? this.$el.offsetHeight;
+                    this.bentoRows = Math.ceil(height) + 14;
+                  });
+                  this.sizeObserver.observe(this.$el, { box: 'border-box' });
+                },
+                destroy() {
+                  this.sizeObserver.disconnect();
+                },
+                inspectPhoto(image) {
+                  this.tallPhoto = image.naturalWidth > 0 && image.naturalWidth / image.naturalHeight <= 0.75;
+                }
+              }">
+              <div class="candidate-detail-content" :class="{ 'is-tall-portrait': tallPhoto }">
+                <div class="candidate-detail-main">
+                  <span class="candidate-kicker candidate-card-label">Pasangan Calon {{ $cand->formattedNumber() }}</span>
+                  <div class="candidate-body">
+                    <h3 class="candidate-names">{{ $cand->name }}</h3>
 
-                @if($cand->vision)
-                  <div class="candidate-vision">
-                    <span>VISI</span>
-                    <p>{{ $cand->vision }}</p>
+                    @if($cand->vision)
+                      <div class="candidate-vision">
+                        <span>VISI</span>
+                        <p>{{ $cand->vision }}</p>
+                      </div>
+                    @endif
+
+                    @php $missions = $cand->missionItems(); @endphp
+                    @if(!empty($missions))
+                      <ul class="mission-list">
+                        @foreach($missions as $m)
+                          <li>{{ $m }}</li>
+                        @endforeach
+                      </ul>
+                    @endif
                   </div>
-                @endif
 
-                @php $missions = $cand->missionItems(); @endphp
-                @if(!empty($missions))
-                  <ul class="mission-list">
-                    @foreach($missions as $m)
-                      <li>{{ $m }}</li>
-                    @endforeach
-                  </ul>
-                @endif
+                  @if($phase === 'persiapan')
+                    <div class="candidate-detail-actions">
+                      <x-action-button
+                        variant="secondary"
+                        size="xs"
+                        icon="#i-edit"
+                        wire:click="openEditCandidateModal('{{ $cand->id }}')"
+                        loadingText="Memuat..."
+                      >
+                        Ubah
+                      </x-action-button>
 
-                @if($phase === 'persiapan')
-                  <div style="margin-top: auto; padding-top: 14px; display: flex; gap: 8px; border-top: 1px solid #eef2f8;">
-                    <x-action-button
-                      variant="secondary"
-                      size="xs"
-                      icon="#i-edit"
-                      wire:click="openEditCandidateModal('{{ $cand->id }}')"
-                      loadingText="Memuat..."
-                    >
-                      Ubah
-                    </x-action-button>
-
-                    <x-action-button
-                      variant="danger-ghost"
-                      size="xs"
-                      icon="#i-trash"
-                      wire:click="promptDeleteCandidate('{{ $cand->id }}')"
-                      loadingText="Memuat..."
-                    >
-                      Hapus
-                    </x-action-button>
-                  </div>
-                @endif
+                      <x-action-button
+                        variant="danger-ghost"
+                        size="xs"
+                        icon="#i-trash"
+                        wire:click="promptDeleteCandidate('{{ $cand->id }}')"
+                        loadingText="Memuat..."
+                      >
+                        Hapus
+                      </x-action-button>
+                    </div>
+                  @endif
+                </div>
+                <div class="candidate-media">
+                  <x-candidate-photo :src="$cand->photoUrl()" :alt="'Foto '.$cand->name"
+                    x-init="inspectPhoto($el)" x-on:load="inspectPhoto($el)" x-on:error="inspectPhoto($el)" />
+                  <span class="candidate-photo-label" aria-hidden="true">Paslon {{ $cand->formattedNumber() }}</span>
+                </div>
               </div>
             </div>
           @endforeach

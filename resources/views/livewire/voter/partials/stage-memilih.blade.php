@@ -47,16 +47,15 @@
         x-on:keydown.space.self.prevent="chooseCandidate('{{ $cand->id }}')"
         wire:key="ballot-cand-{{ $cand->id }}"
       >
+        <span class="candidate-kicker candidate-card-label">Pasangan Calon {{ $cand->formattedNumber() }}</span>
         <div class="candidate-media">
-          <img src="{{ $cand->photoUrl() }}" alt="Foto Paslon {{ $cand->formattedNumber() }} — {{ $cand->name }}" class="candidate-photo" />
-          <span class="candidate-number">NO. {{ $cand->formattedNumber() }}</span>
+          <x-candidate-photo :src="$cand->photoUrl()" :alt="'Foto Paslon '.$cand->formattedNumber().' — '.$cand->name" />
           <span class="candidate-check" aria-hidden="true">
             <svg class="icon"><use href="#i-check"></use></svg>
           </span>
         </div>
 
         <div class="candidate-body">
-          <span class="candidate-kicker">PASANGAN CALON {{ $cand->formattedNumber() }}</span>
           <h2 class="candidate-names">{{ $cand->name }}</h2>
 
           <div class="candidate-card-actions">
