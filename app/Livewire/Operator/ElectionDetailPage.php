@@ -172,9 +172,9 @@ class ElectionDetailPage extends StaffPage
             'endsAtInput' => ['required', 'date_format:Y-m-d\TH:i'],
         ], [
             'startsAtInput.required' => 'Waktu Mulai wajib diisi.',
-            'startsAtInput.date_format' => 'Format Waktu Mulai harus tahun-bulan-tanggal jam:menit.',
+            'startsAtInput.date_format' => 'Format Waktu Mulai harus tanggal-bulan-tahun jam:menit.',
             'endsAtInput.required' => 'Waktu Selesai wajib diisi.',
-            'endsAtInput.date_format' => 'Format Waktu Selesai harus tahun-bulan-tanggal jam:menit.',
+            'endsAtInput.date_format' => 'Format Waktu Selesai harus tanggal-bulan-tahun jam:menit.',
         ]);
 
         try {

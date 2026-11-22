@@ -136,7 +136,7 @@
       <form wire:submit="saveSchedule" novalidate>
         <div class="grid-2col" style="gap: 16px;">
           <div class="form-field" style="margin-top: 0;">
-            <label for="sched-start" class="field-label">Waktu Mulai (Tahun-Bulan-Tanggal Jam:Menit) <span class="req">*</span></label>
+            <label for="sched-start" class="field-label">Waktu Mulai<span class="req">*</span></label>
             <input
               id="sched-start"
               type="datetime-local"
@@ -157,7 +157,7 @@
           </div>
 
           <div class="form-field" style="margin-top: 0;">
-            <label for="sched-end" class="field-label">Waktu Selesai (Tahun-Bulan-Tanggal Jam:Menit) <span class="req">*</span></label>
+            <label for="sched-end" class="field-label">Waktu Selesai<span class="req">*</span></label>
             <input
               id="sched-end"
               type="datetime-local"
