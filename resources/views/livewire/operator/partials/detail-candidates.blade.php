@@ -1,5 +1,5 @@
 {{-- FR-011, BR-011, BR-024, AC-013: Section 2 Daftar Pasangan Calon (Collapsible Dropdown + Nomor 2) --}}
-<section class="panel collapsible-panel" style="margin-bottom: 16px;" x-data="{ open: true }">
+<section class="panel collapsible-panel" style="margin-bottom: 16px;" x-data="{ open: true, visionCandidate: null }">
   <div
     class="panel-head collapsible-head"
     role="button"
@@ -81,22 +81,21 @@
                   <span class="candidate-kicker candidate-card-label">Pasangan Calon {{ $cand->formattedNumber() }}</span>
                   <div class="candidate-body">
                     <h3 class="candidate-names">{{ $cand->name }}</h3>
-
-                    @if($cand->vision)
-                      <div class="candidate-vision">
-                        <span>VISI</span>
-                        <p>{{ $cand->vision }}</p>
-                      </div>
-                    @endif
-
-                    @php $missions = $cand->missionItems(); @endphp
-                    @if(!empty($missions))
-                      <ul class="mission-list">
-                        @foreach($missions as $m)
-                          <li>{{ $m }}</li>
-                        @endforeach
-                      </ul>
-                    @endif
+                    @php
+                      $visionCandidate = [
+                          'number' => $cand->formattedNumber(),
+                          'name' => $cand->name,
+                          'photo' => $cand->photoUrl(),
+                          'vision' => $cand->vision,
+                          'missions' => $cand->missionItems(),
+                      ];
+                    @endphp
+                    <button type="button" class="btn btn-sm btn-secondary candidate-vision-button"
+                      aria-haspopup="dialog" aria-controls="operator-candidate-vision"
+                      x-on:click="visionCandidate = @js($visionCandidate); $refs.visionDialog.showModal()">
+                      <svg class="icon" aria-hidden="true"><use href="#i-eye"></use></svg>
+                      <span>Lihat Visi dan Misi</span>
+                    </button>
                   </div>
 
                   @if($phase === 'persiapan')
@@ -135,6 +134,38 @@
       @endif
     </div>
   </div>
+
+  <dialog id="operator-candidate-vision" class="modal candidate-vision-dialog" x-ref="visionDialog"
+    aria-labelledby="operator-candidate-vision-title" x-on:close="visionCandidate = null">
+    <div class="modal-header">
+      <h2 id="operator-candidate-vision-title">Visi dan Misi Pasangan Calon</h2>
+      <button type="button" class="icon-btn" aria-label="Tutup dialog" x-on:click="$refs.visionDialog.close()">
+        <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="candidate-vision-heading">
+        <img :src="visionCandidate?.photo || null" alt="" />
+        <div>
+          <span class="candidate-kicker" x-text="'Pasangan Calon ' + (visionCandidate?.number ?? '')"></span>
+          <h3 class="candidate-names" x-text="visionCandidate?.name"></h3>
+        </div>
+      </div>
+      <div class="candidate-vision">
+        <span>Visi</span>
+        <p x-text="visionCandidate?.vision || 'Belum ada visi yang dicantumkan.'"></p>
+      </div>
+      <div class="candidate-vision">
+        <span>Daftar Misi</span>
+        <ul class="mission-list" x-show="visionCandidate?.missions.length">
+          <template x-for="(mission, index) in visionCandidate?.missions ?? []" :key="index">
+            <li x-text="mission"></li>
+          </template>
+        </ul>
+        <p x-show="!visionCandidate?.missions.length">Belum ada misi yang dicantumkan.</p>
+      </div>
+    </div>
+  </dialog>
 </section>
 
 {{-- FR-011: Modal Tambah/Ubah Paslon --}}

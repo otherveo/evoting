@@ -2783,6 +2783,46 @@ ol {
   overflow-wrap: anywhere;
 }
 
+.candidate-vision-button {
+  align-self: flex-start;
+  max-width: 100%;
+  margin-top: 12px;
+  white-space: normal;
+}
+
+.candidate-vision-dialog {
+  margin: auto;
+  padding: 0;
+  color: var(--ink);
+  transform: none;
+}
+
+.candidate-vision-dialog:not([open]) {
+  display: none;
+}
+
+.candidate-vision-dialog::backdrop {
+  background: rgb(15 27 61 / 45%);
+  backdrop-filter: blur(4px);
+}
+
+.candidate-vision-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.candidate-vision-heading img {
+  max-width: 78px;
+  max-height: 78px;
+  flex: none;
+  border-radius: 11px;
+}
+
+.candidate-vision-dialog .candidate-vision {
+  overflow-wrap: anywhere;
+}
+
 .candidate-detail-actions {
   grid-row: 4;
   display: grid;
@@ -5579,10 +5619,30 @@ ol {
 }
 
 .election-card-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  padding-top: 4px;
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.election-card-actions > .btn {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  text-align: center;
+  white-space: normal;
+}
+
+.election-card-actions > .btn-primary,
+.election-card-actions > .btn-danger-ghost {
+  grid-column: 1 / -1;
+}
+
+.election-card-actions > .btn-danger-ghost {
+  margin-top: 6px;
+  border-style: dashed;
 }
 
 .grid-2col {
