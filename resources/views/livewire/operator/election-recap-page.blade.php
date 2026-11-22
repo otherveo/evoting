@@ -5,6 +5,7 @@
 
 @assets
   <link rel="stylesheet" href="{{ asset('css/operator/recap-reveal.css') }}?v={{ filemtime(public_path('css/operator/recap-reveal.css')) }}" />
+  <link rel="stylesheet" href="{{ asset('css/operator/recap-race.css') }}?v={{ filemtime(public_path('css/operator/recap-race.css')) }}" />
   <script src="{{ asset('js/operator/recap-reveal.js') }}?v={{ filemtime(public_path('js/operator/recap-reveal.js')) }}"></script>
 @endassets
 
@@ -211,6 +212,20 @@
         aria-label="Pilih Mode Tampilan Rekapitulasi"
         x-data="{
           choosingMode: null,
+          animationStep: 'type',
+          raceDelay: '3000',
+          savingRace: false,
+          openAnimationPicker() {
+            this.animationStep = 'type';
+            this.$refs.animationPicker.showModal();
+          },
+          saveRace(mode) {
+            if (this.savingRace) return;
+            this.savingRace = true;
+            $wire.saveRaceSetup(mode, mode === 'auto' ? this.raceDelay : null).finally(() => {
+              this.savingRace = false;
+            });
+          },
           selectMode(mode) {
             if (this.choosingMode !== null) return;
             this.choosingMode = mode;
@@ -261,14 +276,14 @@
             class="mode-choice-card is-animasi"
             :class="{ 'is-loading-card': choosingMode === 'animasi' }"
             :disabled="choosingMode !== null"
-            x-on:click="selectMode('animasi')"
+            x-on:click="openAnimationPicker()"
           >
             <span class="mode-choice-icon">
               <svg class="icon"><use href="#i-sparkles"></use></svg>
             </span>
             <h3>Mode Animasi (Reveal Bertahap)</h3>
             <p>
-              Atur jeda antar angka suara, susun urutan tampil paslon tanpa membocorkan jumlah suara, lalu jalankan animasi hitung-naik dan papan peringkat langsung di browser.
+              Pilih penghitungan bergantian per paslon atau balapan satu suara demi satu.
             </p>
             <span class="mode-choice-cta" x-show="choosingMode !== 'animasi'">
               <span>Siapkan Mode Animasi</span>
@@ -280,6 +295,48 @@
             </span>
           </button>
         </div>
+
+        <dialog class="race-picker" aria-labelledby="recap-animation-picker-title" x-ref="animationPicker"
+          x-on:cancel="if (savingRace) $event.preventDefault()">
+          <div class="modal-header">
+            <h2 id="recap-animation-picker-title" x-text="animationStep === 'type' ? 'Pilih Tipe Animasi' : 'Tipe Balapan'">Pilih Tipe Animasi</h2>
+            <button type="button" class="icon-btn" aria-label="Tutup pilihan animasi" :disabled="savingRace"
+              x-on:click="$refs.animationPicker.close()">
+              <svg class="icon"><use href="#i-x"></use></svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="race-picker-options" x-show="animationStep === 'type'">
+              <button type="button" class="btn btn-secondary"
+                x-on:click="$refs.animationPicker.close(); selectMode('animasi')">Tipe Sekuensial</button>
+              <button type="button" class="btn btn-primary" x-on:click="animationStep = 'race'; $nextTick(() => $refs.raceManual.focus())">Tipe Balapan</button>
+            </div>
+            <div x-show="animationStep === 'race'">
+              <p class="field-hint">Buka satu suara per klik atau jalankan reveal dengan jeda yang Anda tentukan.</p>
+              <div class="race-picker-options">
+                <button type="button" class="btn btn-secondary" x-ref="raceManual" :disabled="savingRace"
+                  x-on:click="saveRace('manual')">Reveal Manual</button>
+                <button type="button" class="btn btn-primary" :disabled="savingRace"
+                  x-on:click="animationStep = 'auto'; $nextTick(() => $refs.initialRaceDelay.focus())">Reveal Otomatis</button>
+              </div>
+            </div>
+            <form x-show="animationStep === 'auto'" x-on:submit.prevent.stop="saveRace('auto')">
+              <label class="field-label" for="initial-race-delay">Jeda antar suara (ms)</label>
+              <input id="initial-race-delay" class="field-input" type="text" inputmode="numeric"
+                required pattern="[0-9]+" x-ref="initialRaceDelay" :value="raceDelay"
+                x-on:input="raceDelay = $event.target.value = $event.target.value.replace(/[^0-9]/g, '')"
+                aria-describedby="initial-race-delay-hint" />
+              <p class="field-hint" id="initial-race-delay-hint">20–10.000 ms. Jeda dapat diubah saat reveal berjalan.</p>
+              <button type="submit" class="btn btn-primary"
+                :disabled="savingRace || Number(raceDelay) < 20 || Number(raceDelay) > 10000"
+                x-text="savingRace ? 'Menyimpan...' : 'Simpan'">Simpan</button>
+            </form>
+          </div>
+          <div class="modal-footer" x-show="animationStep !== 'type'">
+            <button type="button" class="btn btn-secondary" :disabled="savingRace"
+              x-on:click="animationStep = animationStep === 'auto' ? 'race' : 'type'">Kembali</button>
+          </div>
+        </dialog>
 
         {{-- Popup Loading Instan Saat Memproses Pilihan Mode (Teleport ke body agar blur penuh 100% layar) --}}
         <template x-teleport="body">

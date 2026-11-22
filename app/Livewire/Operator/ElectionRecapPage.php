@@ -35,10 +35,22 @@ class ElectionRecapPage extends StaffPage
     #[Locked]
     public bool $showRevealScreen = false;
 
+    #[Locked]
+    public bool $showRaceScreen = false;
+
     public function mount(Election $election, VotingService $voting): void
     {
         $this->election = $election;
         $this->revealDelayInput = (int) ($election->reveal_delay_ms ?: 150);
+        $this->showRaceScreen = request()->routeIs('operator.elections.recap.race');
+        if ($this->showRaceScreen) {
+            if (! session()->has($this->raceSetupKey()) || ! $this->recapAvailable($voting)) {
+                $this->redirectRoute('operator.elections.recap', $election);
+            }
+
+            return;
+        }
+
         $this->showRevealScreen = request()->routeIs('operator.elections.recap.reveal');
         if ($this->showRevealScreen && (! session()->has($this->revealSetupKey()) || ! $this->recapAvailable($voting))) {
             $this->redirectRoute('operator.elections.recap', $election);
@@ -51,6 +63,48 @@ class ElectionRecapPage extends StaffPage
     private function revealSetupKey(): string
     {
         return 'recap_reveal_setup:'.Auth::guard('staff')->id().':'.$this->election->id;
+    }
+
+    private function raceSetupKey(): string
+    {
+        return 'recap_race_setup:'.Auth::guard('staff')->id().':'.$this->election->id;
+    }
+
+    public function saveRaceSetup(string $mode, ?string $delay, VotingService $voting): void
+    {
+        $this->election->refresh();
+        abort_unless($this->ensureActiveOperator() && $this->recapAvailable($voting), 403);
+
+        if (! in_array($mode, ['manual', 'auto'], true)
+            || ($mode === 'auto' && ($delay === null || ! ctype_digit($delay) || (int) $delay < 20 || (int) $delay > 10000))) {
+            $this->dispatch('toast', message: 'Pilih cara reveal dan gunakan jeda antara 20 dan 10.000 ms.', type: 'warning');
+
+            return;
+        }
+
+        session([$this->raceSetupKey() => ['mode' => $mode, 'delay' => $mode === 'auto' ? (int) $delay : 3000]]);
+        $this->redirectRoute('operator.elections.recap.race', $this->election);
+    }
+
+    /** @return array{ok: bool, votes?: array<string, int>} */
+    public function loadRaceSnapshot(VotingService $voting): array
+    {
+        $this->election->refresh();
+        if (! $this->showRaceScreen || ! session()->has($this->raceSetupKey())
+            || ! $this->ensureActiveOperator() || ! $this->recapAvailable($voting)) {
+            return ['ok' => false];
+        }
+
+        try {
+            $results = $voting->operatorElectionResults($this->election->id);
+            if ($results['ok']) {
+                return ['ok' => true, 'votes' => array_column($results['items'], 'vote_count', 'candidate_id')];
+            }
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal memuat suara untuk Tipe Balapan.');
+        }
+
+        return ['ok' => false];
     }
 
     public function saveRevealSetup(int $delayMs, array $orderIds, VotingService $voting): void
@@ -637,6 +691,13 @@ class ElectionRecapPage extends StaffPage
             'name' => (string) $c->name,
             'photo_url' => $c->photoUrl(),
         ])->values()->all();
+
+        if ($this->showRaceScreen && $isRecapOpen && session()->has($this->raceSetupKey())) {
+            return view('livewire.operator.election-race-page', [
+                'candidates' => $revealCandidatesMeta,
+                'raceSetup' => session($this->raceSetupKey()),
+            ]);
+        }
 
         // Data suara HANYA dimuat saat render jika Mode Biasa aktif.
         // Untuk Mode Animasi, data suara baru ditarik lewat fetchRevealResults() setelah tombol "Play" ditekan!

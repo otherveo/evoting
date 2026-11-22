@@ -901,6 +901,32 @@ class EvotingSystemTest extends TestCase
         $recapA->call('openRecap');
         $this->assertTrue($election->fresh()->recap_open);
 
+        $setupUrl = route('operator.elections.recap', $election);
+        $raceUrl = route('operator.elections.recap.race', $election);
+        $this->get($setupUrl)
+            ->assertOk()
+            ->assertSee('Tipe Sekuensial')
+            ->assertSee('Tipe Balapan');
+        $this->get($raceUrl)->assertRedirect($setupUrl);
+        $recapA->call('saveRaceSetup', 'auto', '19')->assertNoRedirect();
+        $recapA->call('saveRaceSetup', 'auto', '30.5')->assertNoRedirect();
+        $recapA->call('saveRaceSetup', 'auto', '10001')->assertNoRedirect();
+        $recapA->call('saveRaceSetup', 'manual', null)->assertRedirect($raceUrl);
+        $this->get($raceUrl)
+            ->assertOk()
+            ->assertSee('Papan Peringkat')
+            ->assertSee('Buka Suara')
+            ->assertSeeHtml(Js::from(['mode' => 'manual', 'delay' => 3000])->toHtml())
+            ->assertDontSee('vote_count');
+        $recapA->call('saveRaceSetup', 'auto', '50')->assertRedirect($raceUrl);
+        $this->get($raceUrl)
+            ->assertOk()
+            ->assertSeeHtml(Js::from(['mode' => 'auto', 'delay' => 50])->toHtml());
+
+        $recapA->call('closeRecap');
+        $this->get($raceUrl)->assertRedirect($setupUrl);
+        $recapA->call('openRecap');
+
         // --- BAGIAN B.2 & B.3: Mode Animasi (metadata paslon saja di awal; suara baru ditarik saat Play) ---
         $recapA->call('setRecapMode', 'animasi')
             ->assertSet('activeViewMode', 'animasi')
@@ -920,7 +946,6 @@ class EvotingSystemTest extends TestCase
         $this->assertCount(3, $animMeta);
         $this->assertArrayNotHasKey('vote_count', $animMeta[0]);
 
-        $setupUrl = route('operator.elections.recap', $election);
         $revealUrl = route('operator.elections.recap.reveal', $election);
         $this->get($revealUrl)->assertRedirect($setupUrl);
 

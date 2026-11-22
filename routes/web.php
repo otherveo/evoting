@@ -49,6 +49,7 @@ Route::prefix('operator')
         Route::get('/elections/{election}/monitor', VoterMonitorPage::class)->whereUuid('election')->name('elections.monitor');
         Route::get('/elections/{election}/recap', ElectionRecapPage::class)->whereUuid('election')->name('elections.recap');
         Route::get('/elections/{election}/recap/reveal', ElectionRecapPage::class)->whereUuid('election')->name('elections.recap.reveal');
+        Route::get('/elections/{election}/recap/balapan', ElectionRecapPage::class)->whereUuid('election')->name('elections.recap.race');
     });
 
 // Area Pemilih (UI-014 s.d. UI-017) — Akses via Token QR Sekali Pakai
