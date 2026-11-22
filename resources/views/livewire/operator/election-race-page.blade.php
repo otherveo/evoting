@@ -54,7 +54,7 @@
         </div>
         <div class="race-control-row race-action-grid">
           <button type="button" class="btn btn-primary" x-show="mode === 'manual'" x-on:click="openVote()"
-            :disabled="switching || inFlight > 0 || remaining === 0">Buka Suara</button>
+            :disabled="switching || inFlight > 0 || remaining === 0">Buka Surat Suara</button>
           <button type="button" class="btn btn-primary" x-show="mode === 'auto'" x-on:click="toggleAuto()"
             :disabled="switching || remaining === 0"
             x-text="autoRunning ? 'Jeda Reveal' : 'Mulai Reveal'">Mulai Reveal</button>
