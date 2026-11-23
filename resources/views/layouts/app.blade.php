@@ -66,7 +66,7 @@
             @if(isset($activeElection) && $activeElection instanceof \App\Models\Election)
               <a href="{{ route('operator.elections.detail', $activeElection) }}" wire:navigate class="nav-link {{ request()->routeIs('operator.elections.detail') ? 'is-active' : '' }}">
                 <svg class="icon"><use href="#i-calendar"></use></svg>
-                <span class="nav-label-full">Konfigurasi &amp; Paslon</span>
+                <span class="nav-label-full">Detail Pemilihan</span>
                 <span class="nav-label-short">Detail</span>
               </a>
               <a href="{{ route('operator.elections.monitor', $activeElection) }}" wire:navigate class="nav-link {{ request()->routeIs('operator.elections.monitor') ? 'is-active' : '' }}">

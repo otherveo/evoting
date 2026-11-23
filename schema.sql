@@ -122,6 +122,7 @@ create table if not exists evoting.candidates (
   number integer not null check (number >= 1),
   name text not null,
   photo_path text null,
+  public_photo_visible boolean not null default true,
   vision text null,
   missions jsonb null,
   created_at timestamptz not null default now(),
@@ -132,6 +133,7 @@ create index if not exists candidates_election_id_idx
   on evoting.candidates (election_id);
 alter table evoting.candidates add column if not exists vision text null;
 alter table evoting.candidates add column if not exists missions jsonb null;
+alter table evoting.candidates add column if not exists public_photo_visible boolean not null default true;
 
 -- DB-004 — Hak Pilih. Satu baris = satu hak suara satu pemilih.
 -- name_normalized: nama dilowercase + spasi digabung (dibuat aplikasi) untuk

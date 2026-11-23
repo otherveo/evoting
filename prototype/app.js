@@ -1563,7 +1563,7 @@ async function showResetConfirm(voterId) {
     return;
   }
   if (voter.status !== 'sedang') {
-    showToast('Reset hanya tersedia untuk pemilih berstatus Sedang memilih.', 'warning');
+    showToast('Reset hanya tersedia untuk pemilih yang sedang memilih.', 'warning');
     renderOperatorPage();
     return;
   }

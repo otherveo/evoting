@@ -87,7 +87,7 @@
             </a>
             <a href="{{ route('operator.elections.detail', $el) }}" wire:navigate class="btn btn-sm btn-secondary">
               <svg class="icon"><use href="#i-calendar"></use></svg>
-              <span>Konfigurasi &amp; Paslon</span>
+              <span>Detail Pemilihan</span>
             </a>
             <a href="{{ route('operator.elections.recap', $el) }}" wire:navigate class="btn btn-sm btn-soft">
               <svg class="icon"><use href="#i-chart"></use></svg>

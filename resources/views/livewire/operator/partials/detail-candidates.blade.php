@@ -90,12 +90,34 @@
                           'missions' => $cand->missionItems(),
                       ];
                     @endphp
-                    <button type="button" class="btn btn-sm btn-secondary candidate-vision-button"
+                    <button type="button" class="btn btn-secondary btn-block candidate-vision-button"
                       aria-haspopup="dialog" aria-controls="operator-candidate-vision"
                       x-on:click="visionCandidate = @js($visionCandidate); $refs.visionDialog.showModal()">
-                      <svg class="icon" aria-hidden="true"><use href="#i-eye"></use></svg>
+                      <svg class="icon" aria-hidden="true"><use href="#i-expand"></use></svg>
                       <span>Lihat Visi dan Misi</span>
                     </button>
+                    @if($cand->photo_path)
+                      @php
+                        $photoVisible = $cand->public_photo_visible ?? true;
+                        $photoAction = "setCandidatePublicPhoto('{$cand->id}', ".($photoVisible ? 'false' : 'true').')';
+                      @endphp
+                      <div class="candidate-photo-setting">
+                        <button type="button" class="candidate-photo-switch" role="switch"
+                          aria-checked="{{ $photoVisible ? 'true' : 'false' }}"
+                          aria-labelledby="public-photo-label-{{ $cand->id }}"
+                          wire:click="{{ $photoAction }}" wire:target="{{ $photoAction }}"
+                          wire:loading.attr="disabled">
+                          <span class="candidate-photo-switch-copy">
+                            <strong id="public-photo-label-{{ $cand->id }}">Foto di daftar publik</strong>
+                            <small wire:loading.remove wire:target="{{ $photoAction }}">
+                              {{ $photoVisible ? 'Tampil untuk pemilih' : 'Disembunyikan' }}
+                            </small>
+                            <small wire:loading wire:target="{{ $photoAction }}">Menyimpan...</small>
+                          </span>
+                          <span class="candidate-photo-switch-track" aria-hidden="true"></span>
+                        </button>
+                      </div>
+                    @endif
                   </div>
 
                   @if($phase === 'persiapan')
@@ -135,37 +157,7 @@
     </div>
   </div>
 
-  <dialog id="operator-candidate-vision" class="modal candidate-vision-dialog" x-ref="visionDialog"
-    aria-labelledby="operator-candidate-vision-title" x-on:close="visionCandidate = null">
-    <div class="modal-header">
-      <h2 id="operator-candidate-vision-title">Visi dan Misi Pasangan Calon</h2>
-      <button type="button" class="icon-btn" aria-label="Tutup dialog" x-on:click="$refs.visionDialog.close()">
-        <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
-      </button>
-    </div>
-    <div class="modal-body">
-      <div class="candidate-vision-heading">
-        <img :src="visionCandidate?.photo || null" alt="" />
-        <div>
-          <span class="candidate-kicker" x-text="'Pasangan Calon ' + (visionCandidate?.number ?? '')"></span>
-          <h3 class="candidate-names" x-text="visionCandidate?.name"></h3>
-        </div>
-      </div>
-      <div class="candidate-vision">
-        <span>Visi</span>
-        <p x-text="visionCandidate?.vision || 'Belum ada visi yang dicantumkan.'"></p>
-      </div>
-      <div class="candidate-vision">
-        <span>Daftar Misi</span>
-        <ul class="mission-list" x-show="visionCandidate?.missions.length">
-          <template x-for="(mission, index) in visionCandidate?.missions ?? []" :key="index">
-            <li x-text="mission"></li>
-          </template>
-        </ul>
-        <p x-show="!visionCandidate?.missions.length">Belum ada misi yang dicantumkan.</p>
-      </div>
-    </div>
-  </dialog>
+  <x-candidate-vision-dialog id="operator-candidate-vision" />
 </section>
 
 {{-- FR-011: Modal Tambah/Ubah Paslon --}}

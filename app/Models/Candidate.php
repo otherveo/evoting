@@ -29,6 +29,7 @@ class Candidate extends Model
     {
         return [
             'number' => 'integer',
+            'public_photo_visible' => 'boolean',
             'missions' => 'array',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',

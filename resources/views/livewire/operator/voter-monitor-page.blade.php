@@ -153,7 +153,7 @@
             <strong>{{ $integrity['total_votes'] }} suara</strong>
           </div>
           <div class="meta-item">
-            <span>Hak Pilih Berstatus "Sudah memilih"</span>
+            <span>Hak Pilih Terpakai</span>
             <strong>{{ $integrity['total_voted'] }} pemilih</strong>
           </div>
           <div class="meta-item">

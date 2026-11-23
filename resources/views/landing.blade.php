@@ -205,5 +205,9 @@
         </div>
       </div>
     </section>
+    <a href="{{ route('public.candidates.index') }}" wire:navigate class="btn btn-primary btn-lg">
+      <svg class="icon" aria-hidden="true"><use href="#i-users"></use></svg>
+      <span>Lihat daftar paslon</span>
+    </a>
   </div>
 @endcomponent

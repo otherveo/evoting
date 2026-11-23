@@ -48,7 +48,7 @@
           <svg class="icon"><use href="#i-shield"></use></svg>
           <span>Status Integritas Suara</span>
         </h2>
-        <p class="panel-sub">Memastikan jumlah suara anonim sama dengan jumlah Hak Pilih berstatus Sudah memilih dan tidak melebihi Hak Pilih terdaftar.</p>
+        <p class="panel-sub">Memastikan jumlah suara anonim sama dengan jumlah Hak Pilih yang terpakai dan tidak melebihi Hak Pilih terdaftar.</p>
       </div>
       <span class="status-badge {{ $integrity['is_consistent'] ? 'is-sudah' : 'is-sedang' }}">
         <span class="status-dot"></span>
@@ -68,7 +68,7 @@
         <span class="result-summary-icon"><svg class="icon"><use href="#i-user-check"></use></svg></span>
         <div>
           <strong>{{ number_format((int) $integrity['total_voted'], 0, ',', '.') }}</strong>
-          <span>Hak Pilih Berstatus "Sudah memilih"</span>
+          <span>Hak Pilih Terpakai</span>
         </div>
       </div>
       <div class="result-summary-card">
@@ -108,7 +108,7 @@
         </p>
       @else
         <p class="locked-lede">
-          <strong>{{ $integrity['total_voted'] }} / {{ $election->max_voter_rights }} suara terpakai</strong> — seluruh kuota hak pilih harus terpakai, atau akhiri pemilihan lebih awal pada halaman Konfigurasi &amp; Jadwal untuk membuka rekapitulasi.
+          <strong>{{ $integrity['total_voted'] }} / {{ $election->max_voter_rights }} suara terpakai</strong> — seluruh kuota hak pilih harus terpakai, atau akhiri pemilihan lebih awal pada halaman Detail Pemilihan &amp; Jadwal untuk membuka rekapitulasi.
         </p>
       @endif
 
@@ -147,7 +147,7 @@
         @if(!$canUnlockRecap && $phase !== 'ditutup')
           <a href="{{ route('operator.elections.detail', $election) }}" wire:navigate class="btn btn-secondary">
             <svg class="icon"><use href="#i-calendar"></use></svg>
-            <span>Konfigurasi &amp; Akhiri Pemilihan</span>
+            <span>Akhiri Pemilihan</span>
           </a>
         @endif
 

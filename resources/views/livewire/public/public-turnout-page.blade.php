@@ -14,7 +14,7 @@
 
       <h1 id="turnout-heading">{{ $election->name }}</h1>
       <p>
-        Halaman ini menampilkan jumlah keseluruhan pemilih yang telah menyelesaikan pemberian suara (berstatus <code>Sudah memilih</code>) secara agregat dan anonim.
+        Jumlah ini menunjukkan berapa banyak orang yang sudah memilih. Pilihan setiap orang tetap rahasia.
       </p>
 
       <div class="total-period">

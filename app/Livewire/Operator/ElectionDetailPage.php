@@ -331,6 +331,33 @@ class ElectionDetailPage extends StaffPage
         $this->showCandidateModal = true;
     }
 
+    public function setCandidatePublicPhoto(string $candidateId, bool $visible, AuditService $audit): void
+    {
+        $candidate = $this->election->candidates()->findOrFail($candidateId);
+        $currentVisibility = $candidate->public_photo_visible ?? true;
+        if (! $candidate->photo_path || $currentVisibility === $visible) {
+            return;
+        }
+
+        try {
+            $candidate->getConnection()->transaction(function () use ($candidate, $visible, $audit) {
+                $candidate->public_photo_visible = $visible;
+                $candidate->save();
+                $audit->log(
+                    actorType: 'operator',
+                    actorId: Auth::guard('staff')->id(),
+                    action: 'ubah_visibilitas_foto_paslon',
+                    objectType: 'candidate',
+                    objectId: $candidate->id,
+                    detail: ['election_id' => $this->election->id, 'public_photo_visible' => $visible],
+                );
+            });
+            $this->dispatch('toast', message: $visible ? 'Foto ditampilkan di daftar publik.' : 'Foto disembunyikan dari daftar publik.', type: 'success');
+        } catch (Throwable $e) {
+            $this->reportSafeError($e, 'Gagal mengubah tampilan foto paslon di daftar publik.');
+        }
+    }
+
     public function closeCandidateModal(): void
     {
         $this->showCandidateModal = false;

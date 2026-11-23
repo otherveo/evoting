@@ -207,6 +207,85 @@ class EvotingSystemTest extends TestCase
         }
     }
 
+    public function test_public_candidate_directory_respects_schedule_and_photo_visibility(): void
+    {
+        $index = route('public.candidates.index');
+        $this->get(route('home'))->assertOk()->assertSee('Lihat daftar paslon');
+        $this->get($index)->assertOk()->assertSee('Belum ada daftar paslon');
+
+        $operator = StaffAccount::create([
+            'username' => 'operator-paslon',
+            'full_name' => 'Operator Paslon',
+            'password_hash' => Hash::make('SandiUjiOperator123!'),
+            'role' => 'operator',
+            'is_active' => true,
+            'must_change_password' => false,
+        ]);
+        $scheduled = ['starts_at' => now()->addDay(), 'ends_at' => now()->addDays(2), 'max_voter_rights' => 30];
+        $election = Election::create(['name' => 'Pemilihan Terjadwal'] + $scheduled);
+        $draft = Election::create(['name' => 'Pemilihan Draf', 'max_voter_rights' => 30]);
+        Candidate::on('staff')->create(['election_id' => $draft->id, 'number' => 1, 'name' => 'Paslon Draf']);
+        Candidate::on('staff')->create(['election_id' => $election->id, 'number' => 2, 'name' => 'Paslon Tanpa Foto']);
+        $candidate = Candidate::on('staff')->create([
+            'election_id' => $election->id,
+            'number' => 1,
+            'name' => 'Paslon Dengan Foto',
+            'photo_path' => 'public-example.jpg',
+            'vision' => 'Visi lengkap',
+            'missions' => ['Misi satu', 'Misi dua'],
+        ]);
+
+        $url = route('public.candidates', $election);
+        $this->get($index)->assertRedirect($url);
+        $this->get(route('public.candidates', $draft))->assertNotFound();
+        $this->get($url)->assertOk()
+            ->assertSeeInOrder(['Paslon Nomor 01', 'Paslon Nomor 02'])
+            ->assertSee('Lihat paslon ini')
+            ->assertSee($candidate->photoUrl())
+            ->assertSee('Visi lengkap')
+            ->assertSee('Misi satu')
+            ->assertSee('Misi dua');
+
+        $other = Election::create(['name' => 'Pemilihan Lain'] + $scheduled);
+        Candidate::on('staff')->create(['election_id' => $other->id, 'number' => 1, 'name' => 'Paslon Lain']);
+        $this->get($index)->assertOk()
+            ->assertSee($url)
+            ->assertSee(route('public.candidates', $other))
+            ->assertDontSee('Pemilihan Draf');
+
+        $editor = Livewire::actingAs($operator, 'staff')->test(ElectionDetailPage::class, ['election' => $election]);
+        $editor->call('setCandidatePublicPhoto', $candidate->id, false)->assertDispatched('toast');
+        $this->assertFalse($candidate->fresh()->public_photo_visible);
+        $this->get($url)->assertOk()->assertSee('Paslon Nomor 01')->assertDontSee('public-example.jpg');
+        $editor->call('setCandidatePublicPhoto', $candidate->id, true)->assertDispatched('toast');
+        $this->get($url)->assertOk()->assertSee($candidate->photoUrl());
+    }
+
+    public function test_public_candidate_directory_excludes_election_names_with_practice_prefixes(): void
+    {
+        $index = route('public.candidates.index');
+        $schedule = ['starts_at' => now()->addDay(), 'ends_at' => now()->addDays(2), 'max_voter_rights' => 30];
+
+        foreach (['Train Pilketos', 'TRAINING Pilketos', 'Simulasi Pilketos', 'Simulations Pilketos', 'Tes Pilketos', 'Test Pilketos', 'Testing Pilketos', 'Latih Pilketos', 'Latihan Pilketos'] as $name) {
+            $election = Election::create(['name' => $name] + $schedule);
+            Candidate::on('staff')->create(['election_id' => $election->id, 'number' => 1, 'name' => 'Paslon Uji']);
+
+            $this->get(route('public.candidates', $election))->assertNotFound();
+        }
+
+        $this->get($index)->assertOk()->assertSee('Belum ada daftar paslon');
+
+        $election = Election::create(['name' => 'Pilketos setelah simulasi'] + $schedule);
+        Candidate::on('staff')->create(['election_id' => $election->id, 'number' => 1, 'name' => 'Paslon Resmi']);
+
+        $url = route('public.candidates', $election);
+        $this->get($index)->assertRedirect($url);
+        $this->get($index.'?pilih=1')->assertOk()
+            ->assertSee($election->name)
+            ->assertDontSee('TRAINING Pilketos');
+        $this->get($url)->assertOk()->assertSee($election->name);
+    }
+
     public function test_failed_photo_upload_hides_raw_curl_error_and_shows_friendly_message(): void
     {
         $operator = StaffAccount::create([
@@ -915,7 +994,7 @@ class EvotingSystemTest extends TestCase
         $this->get($raceUrl)
             ->assertOk()
             ->assertSee('Papan Peringkat')
-            ->assertSee('Buka Suara')
+            ->assertSee('Buka Surat Suara')
             ->assertSeeHtml(Js::from(['mode' => 'manual', 'delay' => 3000])->toHtml())
             ->assertDontSee('vote_count');
         $recapA->call('saveRaceSetup', 'auto', '50')->assertRedirect($raceUrl);

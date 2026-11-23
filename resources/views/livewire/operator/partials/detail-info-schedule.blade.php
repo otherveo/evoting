@@ -244,7 +244,7 @@
         <svg class="icon"><use href="#i-alert"></use></svg>
         <div>
           <strong>Tidak dapat dibuka kembali</strong>
-          <p>Waktu Selesai akan dimajukan ke waktu sekarang. Pemilih yang masih berstatus <code>Sedang memilih</code> tidak dapat lagi mengirim konfirmasi, dan hasil perolehan suara akan langsung dibuka.</p>
+          <p>Waktu Selesai akan dimajukan ke waktu sekarang. Pemilih yang masih dalam keadaan <code>Sedang memilih</code> tidak dapat lagi mengirim konfirmasi, dan hasil perolehan suara akan langsung dibuka.</p>
         </div>
       </div>
     </div>

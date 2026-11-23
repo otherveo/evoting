@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\PublicCandidatesController;
 use App\Livewire\Admin\AuditLogPage;
 use App\Livewire\Admin\OperatorIndexPage;
 use App\Livewire\Auth\ActivateAccountPage;
@@ -58,6 +59,11 @@ Route::middleware(['throttle:voter-access'])->group(function () {
 });
 
 // Area Publik (UI-018 & UI-019) — Tanpa Login (KP-008)
+Route::middleware('throttle:public-access')->name('public.')->group(function () {
+    Route::get('/paslon', [PublicCandidatesController::class, 'index'])->name('candidates.index');
+    Route::get('/{election}/paslon', [PublicCandidatesController::class, 'show'])->whereUuid('election')->name('candidates');
+});
+
 Route::prefix('p')
     ->name('public.')
     ->middleware(['throttle:public-access'])
