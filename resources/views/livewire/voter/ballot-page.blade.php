@@ -20,12 +20,10 @@
   x-data="{
     get clientStage() { return this.reviewedId ? 'konfirmasi' : @js($stage); },
     clientSelectedId: null,
-    clientReadIds: [],
     activeVmId: null,
     reviewedId: null,
     submittingVote: false,
     candidatesMap: @js($candidatesClientMap),
-    get allCandidateIds() { return Object.keys(this.candidatesMap); },
     get reviewedCand() { return this.candidatesMap[this.reviewedId] || null; },
     get activeStepIndex() {
       if (this.clientStage === 'verifikasi') return 1;
@@ -40,22 +38,12 @@
     get activeVmCand() {
       return this.activeVmId ? (this.candidatesMap[this.activeVmId] || null) : null;
     },
-    isCandidateRead(id) {
-      return this.clientReadIds.includes(id);
-    },
-    get readCandidatesCount() {
-      return this.clientReadIds.length;
-    },
-    get hasReadAllCandidates() {
-      return this.readCandidatesCount > 0 && this.readCandidatesCount === this.allCandidateIds.length;
-    },
     chooseCandidate(id) {
       if (!this.reviewedId && this.candidatesMap[id]) this.clientSelectedId = id;
     },
     openVisionMissionModal(id) {
       if (!this.candidatesMap[id]) return;
       this.activeVmId = id;
-      if (!this.isCandidateRead(id)) this.clientReadIds.push(id);
     },
     closeVisionMissionModal() {
       this.activeVmId = null;
@@ -63,10 +51,6 @@
     goToConfirm() {
       if (!this.clientSelectedId) {
         window.showToast('Pilih satu pasangan calon terlebih dahulu.', 'warning');
-        return;
-      }
-      if (!this.hasReadAllCandidates) {
-        window.showToast('Anda belum boleh lanjut sebelum membaca seluruh visi & misi setiap paslon.', 'warning');
         return;
       }
       this.reviewedId = this.clientSelectedId;
@@ -80,7 +64,7 @@
     submitFinalVote() {
       if (this.submittingVote || !this.reviewedCand) return;
       this.submittingVote = true;
-      $wire.confirmVote(this.reviewedId, [...this.clientReadIds]).finally(() => {
+      $wire.confirmVote(this.reviewedId).finally(() => {
         this.submittingVote = false;
       });
     }

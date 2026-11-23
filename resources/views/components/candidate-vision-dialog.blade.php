@@ -4,7 +4,7 @@
   aria-labelledby="{{ $id }}-title" x-on:close="visionCandidate = null">
   <div class="modal-header">
     <h2 id="{{ $id }}-title">Visi dan Misi Pasangan Calon</h2>
-    <button type="button" class="icon-btn" aria-label="Tutup dialog" x-on:click="$refs.visionDialog.close()">
+    <button type="button" class="icon-btn" aria-label="Tutup dialog" autofocus x-on:click="$refs.visionDialog.close()">
       <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
     </button>
   </div>

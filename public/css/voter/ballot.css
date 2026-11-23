@@ -74,69 +74,6 @@
   border-top: 1px solid #eef2f8;
 }
 
-/* Tombol "Lihat Visi & Misi": beda warna tegas antara belum dibaca vs sudah dibaca */
-.candidate-vm-btn {
-  width: 100%;
-  justify-content: space-between;
-  font-size: 0.76rem;
-  font-weight: 750;
-  border-radius: 11px;
-  padding: 8px 12px;
-  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
-}
-
-.candidate-vm-btn.is-unread {
-  background: #f1f5f9;
-  border: 1.5px solid #cbd5e1;
-  color: #334155;
-}
-
-.candidate-vm-btn.is-unread:hover {
-  background: #e2e8f0;
-  border-color: #94a3b8;
-  color: #0f172a;
-}
-
-.candidate-vm-btn.is-read {
-  background: #dcfce7;
-  border: 1.5px solid #4ade80;
-  color: #166534;
-  box-shadow: 0 4px 12px -6px rgba(22, 101, 52, 0.35);
-}
-
-.candidate-vm-btn.is-read:hover {
-  background: #bbf7d0;
-  border-color: #22c55e;
-  color: #14532d;
-}
-
-.candidate-vm-btn-main {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.candidate-vm-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 7px;
-  border-radius: 999px;
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
-.candidate-vm-btn.is-unread .candidate-vm-badge {
-  background: #e2e8f0;
-  color: #475569;
-}
-
-.candidate-vm-btn.is-read .candidate-vm-badge {
-  background: #16a34a;
-  color: #ffffff;
-}
-
 /* Tombol eksplisit "Pilih Paslon Ini" */
 .candidate-choose-btn {
   width: 100%;
@@ -152,41 +89,6 @@
   color: #ffffff;
   border-color: transparent;
   box-shadow: 0 8px 18px -10px rgba(22, 53, 125, 0.75);
-}
-
-/* Indikator ringkas progres baca visi & misi di atas bar konfirmasi */
-.vm-read-progress {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 14px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  font-size: 0.74rem;
-  font-weight: 650;
-  border: 1px solid #f2dfbd;
-  background: #fff9ee;
-  color: #7d4908;
-}
-
-.vm-read-progress.is-complete {
-  border-color: #cceeda;
-  background: #effbf3;
-  color: #14663a;
-}
-
-.vm-read-progress-left {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.vm-read-progress-left .icon {
-  width: 16px;
-  height: 16px;
-  flex: none;
 }
 
 /* Modal Visi & Misi Paslon */

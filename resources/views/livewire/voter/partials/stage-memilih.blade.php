@@ -17,7 +17,7 @@
       </div>
       <h1>Pilih Satu Pasangan Calon</h1>
       <p class="lede">
-        Baca visi &amp; misi setiap pasangan calon melalui tombol <strong>Lihat Visi &amp; Misi</strong>, pilih satu pasangan calon, lalu tekan <strong>Lanjut ke Konfirmasi</strong>.
+        Pilih satu pasangan calon, lalu tekan <strong>Lanjut ke Konfirmasi</strong>.
       </p>
     </div>
 
@@ -61,18 +61,12 @@
           <div class="candidate-card-actions">
             <button
               type="button"
-              class="btn btn-sm candidate-vm-btn"
-              :class="isCandidateRead('{{ $cand->id }}') ? 'is-read' : 'is-unread'"
+              class="btn btn-sm btn-secondary btn-block"
+              aria-haspopup="dialog"
               x-on:click.stop="openVisionMissionModal('{{ $cand->id }}')"
             >
-              <span class="candidate-vm-btn-main">
-                <svg class="icon" x-show="!isCandidateRead('{{ $cand->id }}')"><use href="#i-eye"></use></svg>
-                <svg class="icon" x-show="isCandidateRead('{{ $cand->id }}')" x-cloak><use href="#i-check-circle"></use></svg>
-                <span>Lihat Visi &amp; Misi</span>
-              </span>
-              <span class="candidate-vm-badge" x-text="isCandidateRead('{{ $cand->id }}') ? 'Sudah Dibaca' : 'Belum Dibaca'">
-                Belum Dibaca
-              </span>
+              <svg class="icon" aria-hidden="true"><use href="#i-eye"></use></svg>
+              <span>Lihat Visi &amp; Misi</span>
             </button>
 
             <button
@@ -93,18 +87,6 @@
         </div>
       </div>
     @endforeach
-  </div>
-
-  {{-- Indikator status baca visi & misi seluruh paslon --}}
-  <div class="vm-read-progress" :class="{ 'is-complete': hasReadAllCandidates }">
-    <div class="vm-read-progress-left">
-      <svg class="icon" x-show="!hasReadAllCandidates"><use href="#i-info"></use></svg>
-      <svg class="icon" x-show="hasReadAllCandidates" x-cloak><use href="#i-check-circle"></use></svg>
-      <span x-text="hasReadAllCandidates ? 'Seluruh visi & misi pasangan calon telah Anda baca. Silakan lanjut ke konfirmasi.' : 'Wajib membaca visi & misi seluruh pasangan calon sebelum melanjutkan ke tahap konfirmasi.'">
-        Wajib membaca visi &amp; misi seluruh pasangan calon sebelum melanjutkan ke tahap konfirmasi.
-      </span>
-    </div>
-    <strong x-text="readCandidatesCount + ' / ' + allCandidateIds.length + ' Paslon Dibaca'"></strong>
   </div>
 
   <div class="ballot-bar">

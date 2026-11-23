@@ -828,7 +828,7 @@ class EvotingSystemTest extends TestCase
         $this->assertNull(Election::find($election->id));
     }
 
-    public function test_update_v5_ballot_gate_recap_reveal_and_css(): void
+    public function test_update_v5_ballot_recap_reveal_and_css(): void
     {
         $voting = app(VotingService::class);
         $dbNow = $voting->databaseNow();
@@ -885,7 +885,7 @@ class EvotingSystemTest extends TestCase
         $sched = $voting->setElectionSchedule($election->id, $dbNow->subMinute(), $dbNow->addHours(3), $operatorA->id);
         $this->assertTrue($sched['ok']);
 
-        // --- BAGIAN A: Kartu paslon, tombol eksplisit, popup visi/misi, dan gate baca di server ---
+        // --- BAGIAN A: Popup visi/misi opsional dan konfirmasi suara ---
         $vr1 = $voting->createVoterRight($election->id, 'Pemilih Satu V5', $operatorA->id);
         $vr2 = $voting->createVoterRight($election->id, 'Pemilih Dua V5', $operatorA->id);
         $vr3 = $voting->createVoterRight($election->id, 'Pemilih Tiga V5', $operatorA->id);
@@ -904,18 +904,10 @@ class EvotingSystemTest extends TestCase
             ->assertDontSeeHtml('<div class="candidate-vision">')
             ->assertSeeHtml('role="radio"');
 
-        $allIds = [$c1->id, $c2->id, $c3->id];
-        foreach ([[], [$c1->id, $c2->id], [$c1->id, $c2->id, $c2->id], [$c1->id, $c2->id, []]] as $incomplete) {
-            $ballot->call('confirmVote', $c1->id, $incomplete)
-                ->assertSet('stage', 'memilih')
-                ->assertDispatched('ballot-edit')
-                ->assertDispatched('toast', message: 'Anda belum boleh lanjut sebelum membaca seluruh visi & misi setiap paslon.', type: 'warning');
-        }
-
-        $ballot->call('confirmVote', (string) Str::uuid(), $allIds)
+        $ballot->call('confirmVote', (string) Str::uuid())
             ->assertSet('stage', 'memilih')
             ->assertDispatched('ballot-edit')
-            ->call('confirmVote', $c1->id, $allIds)
+            ->call('confirmVote', $c1->id)
             ->assertSet('stage', 'selesai');
 
         $this->assertSame('recap_locked', $voting->operatorElectionResults($election->id)['code']);

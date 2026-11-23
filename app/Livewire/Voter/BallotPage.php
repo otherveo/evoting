@@ -272,7 +272,7 @@ class BallotPage extends Component
         }
     }
 
-    public function confirmVote(VotingService $voting, string $candidateId, array $readCandidateIds): void
+    public function confirmVote(VotingService $voting, string $candidateId): void
     {
         if ($this->stage !== 'memilih' || $this->waitingForDeviceApproval || ! $this->electionId) {
             return;
@@ -286,14 +286,6 @@ class BallotPage extends Component
 
                 return;
             }
-            if (! array_is_list($readCandidateIds) || count($readCandidateIds) !== count($roster)
-                || array_filter($readCandidateIds, 'is_string') !== $readCandidateIds || array_diff($roster, $readCandidateIds)) {
-                $this->dispatch('ballot-edit');
-                $this->dispatch('toast', message: 'Anda belum boleh lanjut sebelum membaca seluruh visi & misi setiap paslon.', type: 'warning');
-
-                return;
-            }
-
             $result = $voting->confirmVote(
                 rawToken: $this->token,
                 browserId: $this->browserId(),
