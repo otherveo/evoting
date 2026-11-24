@@ -1319,7 +1319,7 @@ on conflict (key) do nothing;
 
 -- Awal jendela hitung v7 (bila penanda belum ada -> '-infinity', hitung semua).
 create or replace function evoting.fn_device_limit_since()
-returns timestamptz language sql stable set search_path = evoting as $$
+returns timestamptz language sql stable security definer set search_path = evoting as $$
   select coalesce(
     (select value::timestamptz from evoting.cache where key = 'device_limit_v7_since'),
     '-infinity'::timestamptz);
@@ -1334,7 +1334,7 @@ create or replace function evoting.fn_device_use_count(
   p_browser_id text,
   p_exclude_voter_right_id uuid default null
 )
-returns integer language sql stable set search_path = evoting as $$
+returns integer language sql stable security definer set search_path = evoting as $$
   select count(*)::int from (
     select distinct d.voter_right_id
     from evoting.device_access_logs d
@@ -1351,7 +1351,7 @@ $$;
 
 -- Apakah perangkat ini sedang diblokir manual oleh Admin pada pemilihan ini.
 create or replace function evoting.fn_device_blocked(p_election_id uuid, p_browser_id text)
-returns boolean language sql stable set search_path = evoting as $$
+returns boolean language sql stable security definer set search_path = evoting as $$
   select exists (
     select 1 from evoting.device_blocks b
     where b.election_id = p_election_id
@@ -1371,7 +1371,7 @@ create or replace function evoting.fn_device_open_gate(
   p_voter_right_id uuid,
   p_browser_id text
 )
-returns text language plpgsql set search_path = evoting as $$
+returns text language plpgsql security definer set search_path = evoting as $$
 begin
   if evoting.fn_device_blocked(p_election_id, p_browser_id) then
     return 'device_blocked';
@@ -1509,7 +1509,8 @@ revoke all privileges on all functions in schema evoting from evoting_app;
 grant select on evoting.v_elections, evoting.candidates to evoting_app;
 grant execute on function evoting.fn_open_qr, evoting.fn_start_voting, evoting.fn_confirm_vote,
   evoting.fn_check_device_approval, evoting.fn_election_results, evoting.fn_integrity_report,
-  evoting.fn_live_election_results, evoting.fn_device_use_count, evoting.fn_device_blocked to evoting_app;
+  evoting.fn_live_election_results, evoting.fn_device_use_count, evoting.fn_device_blocked,
+  evoting.fn_device_limit_since, evoting.fn_device_open_gate to evoting_app;
 
 grant select, insert on evoting.staff_accounts to evoting_staff;
 grant update (password_hash, is_active, totp_secret, totp_enabled, must_change_password, session_version, updated_at)
@@ -1532,7 +1533,8 @@ grant execute on function evoting.fn_create_voter_right, evoting.fn_reset_sessio
   evoting.fn_set_election_schedule, evoting.fn_operator_election_results, evoting.fn_decide_device_approval,
   evoting.fn_delete_election, evoting.fn_issue_access_key, evoting.fn_revoke_access_key,
   evoting.fn_block_device, evoting.fn_unblock_device,
-  evoting.fn_integrity_report to evoting_staff;
+  evoting.fn_device_limit_since, evoting.fn_device_use_count, evoting.fn_device_blocked,
+  evoting.fn_device_open_gate, evoting.fn_integrity_report to evoting_staff;
 
 -- RLS aktif di semua tabel untuk kedua role aplikasi
 -- (hak kolom/tabel di atas yang tetap membatasi). Tanpa kebijakan ini,
