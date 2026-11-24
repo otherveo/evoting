@@ -70,7 +70,7 @@
     }
   }"
 >
-  @if($stage !== 'kendala')
+  @if(! in_array($stage, ['kendala', 'ditolak_perangkat'], true))
     {{-- UI.md §1.1: Indikator 4 Langkah Linear (Verifikasi -> Memilih -> Konfirmasi -> Selesai) --}}
     <ol class="vote-steps" aria-label="Tahapan Memilih">
       <li
@@ -134,6 +134,8 @@
     @include('livewire.voter.partials.stage-selesai')
   @elseif($stage === 'kendala')
     @include('livewire.voter.partials.stage-kendala')
+  @elseif($stage === 'ditolak_perangkat')
+    @include('livewire.voter.partials.stage-ditolak-perangkat')
   @endif
 
   {{-- Perubahan 3.2: Popup Kuncian "Menunggu Persetujuan Operator" (Unclosable) Saat Perangkat Bersama Terdeteksi --}}

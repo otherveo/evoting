@@ -480,6 +480,126 @@ class EvotingSystemTest extends TestCase
         $this->assertSame(0, $finalResults['items'][1]['vote_count']);
     }
 
+    public function test_device_limit_two_uses_per_election_and_admin_block(): void
+    {
+        $voting = app(VotingService::class);
+        $dbNow = $voting->databaseNow();
+
+        $operator = StaffAccount::create([
+            'username' => 'op_device_limit',
+            'full_name' => 'Operator Batas Perangkat',
+            'password_hash' => Hash::make('SandiOperator123!'),
+            'role' => 'operator',
+            'is_active' => true,
+            'totp_secret' => null,
+            'totp_enabled' => false,
+            'must_change_password' => false,
+        ]);
+
+        $admin = StaffAccount::create([
+            'username' => 'adm_device_limit',
+            'full_name' => 'Admin Batas Perangkat',
+            'password_hash' => Hash::make('SandiAdmin123!'),
+            'role' => 'admin',
+            'is_active' => true,
+            'totp_secret' => null,
+            'totp_enabled' => false,
+            'must_change_password' => false,
+        ]);
+
+        $election = Election::create([
+            'name' => 'Pemilihan Ketua OSIS Batas Perangkat',
+            'max_voter_rights' => 5,
+        ]);
+
+        $c1 = Candidate::on('staff')->create([
+            'election_id' => $election->id,
+            'number' => 1,
+            'name' => 'Paslon Satu',
+            'vision' => 'Visi Satu',
+            'missions' => ['Misi 1A'],
+        ]);
+        $c2 = Candidate::on('staff')->create([
+            'election_id' => $election->id,
+            'number' => 2,
+            'name' => 'Paslon Dua',
+            'vision' => 'Visi Dua',
+            'missions' => ['Misi 2A'],
+        ]);
+
+        $this->assertTrue($voting->setElectionSchedule(
+            $election->id,
+            $dbNow->subMinute(),
+            $dbNow->addHours(2),
+            $operator->id
+        )['ok']);
+
+        $vr1 = $voting->createVoterRight($election->id, 'Andi Pratama', $operator->id);
+        $vr2 = $voting->createVoterRight($election->id, 'Budi Santoso', $operator->id);
+        $vr3 = $voting->createVoterRight($election->id, 'Citra Lestari', $operator->id);
+        $this->assertTrue($vr1['ok']);
+        $this->assertTrue($vr2['ok']);
+        $this->assertTrue($vr3['ok']);
+
+        $browserX = 'browser_v7_shared_1234567890123456';
+        $browserY = 'browser_v7_lain_12345678901234567';
+
+        // Penggunaan ke-1: OK; refresh token yang sama tetap dihitung 1 penggunaan.
+        $this->assertTrue($voting->openQr($vr1['raw_token'], $browserX, 'Mozilla/5.0 Test', '10.0.0.1')['ok']);
+        $this->assertTrue($voting->openQr($vr1['raw_token'], $browserX, 'Mozilla/5.0 Test', '10.0.0.1')['ok']);
+        $this->assertTrue($voting->startVoting($vr1['raw_token'], $browserX, 'Mozilla/5.0 Test', '10.0.0.1')['ok']);
+
+        // Penggunaan ke-2: OK saat membuka link (gerbang persetujuan baru di mulai memilih).
+        $this->assertTrue($voting->openQr($vr2['raw_token'], $browserX, 'Mozilla/5.0 Test', '10.0.0.1')['ok']);
+
+        // Penggunaan ke-3 di perangkat yang sama: URL sepenuhnya tidak valid.
+        $open3 = $voting->openQr($vr3['raw_token'], $browserX, 'Mozilla/5.0 Test', '10.0.0.1');
+        $this->assertFalse($open3['ok']);
+        $this->assertSame('device_limit_reached', $open3['code']);
+        $this->assertSame('Satu perangkat yang sama hanya diizinkan maksimal 2x digunakan. Silakan cari perangkat lain untuk melanjutkan proses.', $open3['message']);
+
+        // Perangkat lain tidak terpengaruh.
+        $this->assertTrue($voting->openQr($vr3['raw_token'], $browserY, 'Mozilla/5.0 Test', '10.0.0.2')['ok']);
+
+        // Penolakan tercatat di log audit.
+        $this->assertTrue(DB::connection('staff')->table('evoting.audit_logs')
+            ->where('action', 'tolak_batas_perangkat')->exists());
+
+        // Penggunaan ke-2 tetap butuh persetujuan operator saat mulai memilih.
+        $start2 = $voting->startVoting($vr2['raw_token'], $browserX, 'Mozilla/5.0 Test', '10.0.0.1');
+        $this->assertFalse($start2['ok']);
+        $this->assertSame('approval_required', $start2['code']);
+
+        // Pertahanan berlapis: mulai memilih langsung untuk penggunaan ke-3 tetap ditolak.
+        $start3 = $voting->startVoting($vr3['raw_token'], $browserX, 'Mozilla/5.0 Test', '10.0.0.1');
+        $this->assertFalse($start3['ok']);
+        $this->assertSame('device_limit_reached', $start3['code']);
+
+        // Penggunaan ke-1 tetap bisa memilih sampai selesai.
+        $confirm1 = $voting->confirmVote($vr1['raw_token'], $browserX, $c1->id, 'Mozilla/5.0 Test', '10.0.0.1');
+        $this->assertTrue($confirm1['ok']);
+
+        // Blokir manual Admin: reset sesi vr2 dulu (sedang menunggu persetujuan).
+        $this->assertTrue($voting->resetSession($vr2['voter_right_id'], $operator->id, 'Uji blokir perangkat')['ok']);
+        $blocked = $voting->blockDevice($election->id, $browserX, $admin->id, 'Uji blokir v7');
+        $this->assertTrue($blocked['ok']);
+
+        $openBlocked = $voting->openQr($vr2['raw_token'], $browserX, 'Mozilla/5.0 Test', '10.0.0.1');
+        $this->assertFalse($openBlocked['ok']);
+        $this->assertSame('device_blocked', $openBlocked['code']);
+
+        // Buka blokir: perangkat bisa dipakai lagi (vr2 sudah tercatat sebagai penggunaan ke-2).
+        $unblocked = $voting->unblockDevice($election->id, $browserX, $admin->id);
+        $this->assertTrue($unblocked['ok']);
+        $this->assertTrue($voting->openQr($vr2['raw_token'], $browserX, 'Mozilla/5.0 Test', '10.0.0.1')['ok']);
+
+        // Halaman admin (Log Audit perangkat) bisa dibuka oleh Admin.
+        $this->actingAs($admin, 'staff')
+            ->withSession(['staff_2fa_verified' => true])
+            ->get(route('admin.device-usage'))
+            ->assertStatus(200);
+    }
+
     public function test_qr_custom_logo_mode_and_admin_fallback_toggle_and_app_name_branding(): void
     {
         $tokens = app(TokenService::class);
