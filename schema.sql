@@ -1592,6 +1592,53 @@ where d.access_type = 'qr_dibuka'
 group by vr.election_id, e.name, d.browser_id;
 
 -- ============================================================================
+-- Rantai kejadian keamanan global, tanpa kunci asing ke pemilihan atau suara.
+create table if not exists evoting.security_events (
+  id bigint generated always as identity primary key,
+  details jsonb not null,
+  prev_hash text not null,
+  hash text not null
+);
+alter table evoting.security_events enable row level security;
+revoke all on evoting.security_events from evoting_staff;
+
+create or replace function evoting.fn_security_event_hash(p_previous text, p_details jsonb)
+returns text language sql immutable set search_path = pg_catalog as $$
+  select encode(sha256(convert_to(p_previous || p_details::text, 'UTF8')), 'hex');
+$$;
+
+create or replace function evoting.fn_record_security_event(p_details jsonb)
+returns void language plpgsql security definer set search_path = pg_catalog, evoting as $$
+declare
+  v_previous text;
+  v_details jsonb;
+begin
+  if jsonb_typeof(p_details) is distinct from 'object'
+    or (p_details - array['event','route','method','ip','session_hash','browser','request_id']) <> '{}'::jsonb
+    or octet_length(p_details::text) > 768 then
+    raise invalid_parameter_value;
+  end if;
+  perform pg_advisory_xact_lock(94110, 1);
+  select hash into v_previous from evoting.security_events order by id desc limit 1;
+  v_previous := coalesce(v_previous, repeat('0', 64));
+  v_details := p_details || jsonb_build_object('recorded_at', extract(epoch from clock_timestamp()));
+  insert into evoting.security_events (details, prev_hash, hash)
+    values (v_details, v_previous, evoting.fn_security_event_hash(v_previous, v_details));
+end;
+$$;
+
+create or replace function evoting.fn_verify_security_events()
+returns table(records bigint, first_bad_id bigint, head text)
+language sql security definer set search_path = pg_catalog, evoting as $$
+  select count(*),
+    min(id) filter (where prev_hash <> expected or hash <> evoting.fn_security_event_hash(prev_hash, details)),
+    (select hash from evoting.security_events order by id desc limit 1)
+  from (
+    select *, lag(hash, 1, repeat('0', 64)) over (order by id) as expected
+    from evoting.security_events
+  ) events;
+$$;
+
 -- HAK AKSES + RLS (Blueprint AP-3, AP-4; SEC-010)
 -- Aplikasi (evoting_app) TIDAK punya hak pada votes; mutasi kritis hanya
 -- lewat fungsi. RLS aktif: tanpa kebijakan, role API Supabase (anon,
@@ -1610,6 +1657,8 @@ revoke all on all functions in schema evoting from public;
 revoke all privileges on all tables in schema evoting from evoting_app;
 revoke all privileges on all functions in schema evoting from evoting_app;
 grant select on evoting.v_elections, evoting.candidates to evoting_app;
+grant execute on function evoting.fn_record_security_event(jsonb) to evoting_app;
+grant execute on function evoting.fn_verify_security_events() to evoting_staff;
 grant execute on function evoting.fn_open_qr, evoting.fn_start_voting, evoting.fn_confirm_vote,
   evoting.fn_check_device_approval, evoting.fn_election_results, evoting.fn_integrity_report,
   evoting.fn_live_election_results, evoting.fn_device_use_count, evoting.fn_device_blocked,

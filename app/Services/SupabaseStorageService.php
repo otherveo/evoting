@@ -55,7 +55,6 @@ class SupabaseStorageService
             Log::error('Koneksi ke Supabase Storage gagal saat mengunggah foto paslon', [
                 'timestamp' => now()->toIso8601String(),
                 'election_id' => $electionId,
-                'candidate_id' => $candidateId,
                 'exception_class' => $e::class,
             ]);
 
@@ -67,7 +66,6 @@ class SupabaseStorageService
                 'timestamp' => now()->toIso8601String(),
                 'status' => $response->status(),
                 'election_id' => $electionId,
-                'candidate_id' => $candidateId,
             ]);
 
             throw new RuntimeException('Gagal mengunggah foto paslon ke penyimpanan. Silakan coba kembali.');
@@ -105,7 +103,6 @@ class SupabaseStorageService
         } catch (Throwable $e) {
             Log::warning('Gagal menghapus foto lama dari Supabase Storage', [
                 'timestamp' => now()->toIso8601String(),
-                'path' => $cleanPath,
             ]);
         }
     }

@@ -5,12 +5,14 @@ namespace App\Livewire\Auth;
 use App\Livewire\Concerns\HandlesSafeErrors;
 use App\Models\StaffAccount;
 use App\Services\AuditService;
+use App\Services\SecurityAudit;
 use App\Services\TotpService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 use Throwable;
 
 #[Layout('layouts.app')]
@@ -77,24 +79,14 @@ class VerifyTwoFactorPage extends Component
 
             if (RateLimiter::tooManyAttempts($throttleKey, $maxAttempts)) {
                 $seconds = RateLimiter::availableIn($throttleKey);
-                $this->errorMessage = "Terlalu banyak percobaan kode TOTP gagal. Silakan tunggu {$seconds} detik.";
-                $this->dispatch('toast', message: $this->errorMessage, type: 'error');
-
-                return;
+                throw new TooManyRequestsHttpException(max(1, $seconds), 'Terlalu banyak percobaan. Silakan coba lagi.');
             }
 
             $secret = (string) $user->totp_secret;
             if ($secret === '' || ! $totp->verifyCode($secret, $this->code, $user->id)) {
                 RateLimiter::hit($throttleKey, $decaySeconds);
 
-                $audit->log(
-                    actorType: 'admin',
-                    actorId: $user->id,
-                    action: 'verifikasi_totp_gagal',
-                    objectType: 'staff_account',
-                    objectId: $user->id,
-                    detail: ['username' => $user->username]
-                );
+                app(SecurityAudit::class)->record('totp_failed', request());
 
                 $this->code = '';
                 $this->errorMessage = 'Kode autentikator tidak sesuai atau sudah kedaluwarsa. Periksa kembali aplikasi autentikator Anda.';
@@ -123,6 +115,8 @@ class VerifyTwoFactorPage extends Component
             }
 
             $this->redirectRoute('admin.operators');
+        } catch (TooManyRequestsHttpException $e) {
+            throw $e;
         } catch (Throwable $e) {
             $this->errorMessage = 'Terjadi kendala saat memverifikasi kode TOTP. Silakan coba kembali.';
             $this->reportSafeError($e, $this->errorMessage);

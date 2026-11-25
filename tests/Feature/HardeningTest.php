@@ -8,12 +8,16 @@ use App\Livewire\Operator\ElectionIndexPage;
 use App\Models\Candidate;
 use App\Models\Election;
 use App\Models\StaffAccount;
+use App\Services\SecurityAudit;
 use App\Services\StaffAccountService;
 use App\Services\TotpService;
 use App\Services\VotingService;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Livewire\Component;
 use Livewire\Livewire;
@@ -23,6 +27,27 @@ use Tests\UsesLocalVotingDatabase;
 class HardeningTest extends TestCase
 {
     use UsesLocalVotingDatabase;
+
+    public function test_security_events_are_minimized_and_hash_chain_detects_changes(): void
+    {
+        $request = Request::create('/v/fixture-private', 'POST', [
+            'password' => 'fixture-password', 'candidate_id' => 'fixture-vote',
+        ], [], [], ['HTTP_USER_AGENT' => 'Chrome/1.0 fixture-secret']);
+        $audit = app(SecurityAudit::class);
+        $audit->record('qr_invalid', $request);
+        $audit->record('qr_invalid', $request);
+        $audit->record('rate_limited', $request);
+
+        $events = $this->fixtureDb->query('select details from evoting.security_events order by id')->fetchAll(\PDO::FETCH_COLUMN);
+        $this->assertCount(2, $events);
+        foreach (['fixture-private', 'fixture-password', 'fixture-vote', 'fixture-secret', 'candidate_id'] as $private) {
+            $this->assertStringNotContainsString($private, implode('', $events));
+        }
+        $this->assertSame('Chrome', json_decode($events[0], true)['browser']);
+        $this->artisan('audit:verify')->assertSuccessful();
+        $this->fixtureDb->exec("update evoting.security_events set details = jsonb_set(details, '{browser}', '\"Other\"')");
+        $this->artisan('audit:verify')->assertFailed();
+    }
 
     public function test_public_database_login_cannot_manage_staff_or_read_operator_results(): void
     {
@@ -87,11 +112,69 @@ class HardeningTest extends TestCase
         $send = fn ($state) => $this->postJson(Livewire::getUpdateUri(), ['components' => [[
             'snapshot' => $state, 'updates' => [],
             'calls' => [['method' => 'openCreateModal', 'params' => [], 'path' => '']],
-        ]]], ['X-Livewire' => 'true']);
+        ]]], ['X-Livewire' => 'true', 'Origin' => config('app.url')]);
         $updated = $send($snapshot)->assertOk()->json('components.0.snapshot');
         $this->assertTrue(json_decode($updated, true)['data']['showCreateModal']);
         $staff->update(['is_active' => false]);
         $send($updated)->assertForbidden();
+    }
+
+    public function test_browser_payloads_can_sign_in_upload_and_cast_anonymous_ballot(): void
+    {
+        $operator = app(StaffAccountService::class)->createAccount('transport_operator', 'Operator Uji', 'operator');
+        $operator['account']->update(['must_change_password' => false]);
+        $headers = ['X-Livewire' => '1', 'Origin' => config('app.url')];
+        $snapshot = function ($response) {
+            $this->assertSame(1, preg_match('/wire:snapshot="([^"]+)"/', $response->getContent(), $matches));
+
+            return html_entity_decode($matches[1], ENT_QUOTES | ENT_HTML5);
+        };
+        $send = fn ($current, $method, $params = [], $updates = []) => $this->postJson(Livewire::getUpdateUri(), [
+            '_token' => csrf_token(),
+            'components' => [[
+                'snapshot' => $current,
+                'calls' => [['method' => $method, 'params' => $params, 'metadata' => ['type' => 'action']]],
+                'updates' => (object) $updates,
+            ]],
+        ], $headers)->assertOk();
+
+        $login = $snapshot($this->get(route('login'))->assertOk());
+        $send($login, 'login', updates: ['username' => 'transport_operator', 'password' => $operator['temporary_password']])
+            ->assertJsonPath('components.0.effects.redirect', route('operator.elections'));
+
+        $election = Election::create(['name' => 'Pemilihan Transport', 'max_voter_rights' => 5]);
+        $candidate = Candidate::on('staff')->create(['election_id' => $election->id, 'name' => 'Paslon Satu', 'number' => 1]);
+        Candidate::on('staff')->create(['election_id' => $election->id, 'name' => 'Paslon Dua', 'number' => 2]);
+        Storage::fake('tmp-for-tests');
+        $photo = UploadedFile::fake()->createWithContent('paslon.png', base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aB9sAAAAASUVORK5CYII=',
+        ));
+        $detail = $snapshot($this->get(route('operator.elections.detail', $election))->assertOk());
+        $signed = $send($detail, '_startUpload', ['candidatePhoto', [[
+            'name' => $photo->getClientOriginalName(), 'size' => $photo->getSize(), 'type' => $photo->getMimeType(),
+        ]], false]);
+        $url = $signed->json('components.0.effects.dispatches.0.params.url');
+        $this->assertIsString($url);
+        $paths = $this->call('POST', $url, [], [], ['files' => [$photo]], [
+            'HTTP_ORIGIN' => config('app.url'),
+            'CONTENT_TYPE' => 'multipart/form-data',
+            'HTTP_ACCEPT' => 'application/json',
+        ])->assertOk()->json('paths');
+        $send($signed->json('components.0.snapshot'), '_finishUpload', ['candidatePhoto', $paths, false, false]);
+
+        $voting = app(VotingService::class);
+        $now = $voting->databaseNow();
+        $this->assertTrue($voting->setElectionSchedule($election->id, $now->subMinute(), $now->addHour(), $operator['account']->id)['ok']);
+        $qr = $voting->createVoterRight($election->id, 'Pemilih Uji', $operator['account']->id);
+        $this->assertTrue($qr['ok']);
+        auth('staff')->logout();
+        $this->withCredentials()->withCookie(config('evoting.browser_cookie_name'), 'browser_fixture_hardening_123456');
+        $ballot = $snapshot($this->get(route('voter.ballot', $qr['raw_token']))->assertOk());
+        $started = $send($ballot, 'startVoting')->json('components.0.snapshot');
+        $this->assertSame('memilih', json_decode($started, true)['data']['stage']);
+        $finished = $send($started, 'confirmVote', [$candidate->id])->json('components.0.snapshot');
+        $this->assertSame('selesai', json_decode($finished, true)['data']['stage']);
+        $this->assertSame(1, $voting->integrityReport($election->id)['total_votes']);
     }
 
     public function test_registration_request_and_confirmed_name_count_are_checked_under_the_election_lock(): void

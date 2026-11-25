@@ -5,12 +5,14 @@ namespace App\Livewire\Auth;
 use App\Livewire\Concerns\HandlesSafeErrors;
 use App\Models\StaffAccount;
 use App\Services\AuditService;
+use App\Services\SecurityAudit;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 use Throwable;
 
 #[Layout('layouts.app')]
@@ -66,10 +68,7 @@ class LoginPage extends Component
 
             if (RateLimiter::tooManyAttempts($throttleKey, $maxAttempts) || RateLimiter::tooManyAttempts($ipKey, 60)) {
                 $seconds = max(RateLimiter::availableIn($throttleKey), RateLimiter::availableIn($ipKey));
-                $this->errorMessage = "Terlalu banyak percobaan masuk yang gagal. Silakan tunggu {$seconds} detik sebelum mencoba kembali.";
-                $this->dispatch('toast', message: $this->errorMessage, type: 'error');
-
-                return;
+                throw new TooManyRequestsHttpException(max(1, $seconds), 'Terlalu banyak percobaan. Silakan coba lagi.');
             }
 
             /** @var StaffAccount|null $account */
@@ -82,17 +81,7 @@ class LoginPage extends Component
                 RateLimiter::hit($throttleKey, $decaySeconds);
                 RateLimiter::hit($ipKey, $decaySeconds);
 
-                $audit->log(
-                    actorType: $account ? $account->role : 'sistem',
-                    actorId: $account?->id,
-                    action: 'login_gagal',
-                    objectType: 'staff_account',
-                    objectId: $account?->id,
-                    detail: [
-                        'username_attempt' => $cleanUsername,
-                        'ip' => $ip,
-                    ]
-                );
+                app(SecurityAudit::class)->record('login_failed', request());
 
                 $this->password = '';
                 $this->errorMessage = 'Username atau kata sandi tidak sesuai.';
@@ -155,6 +144,8 @@ class LoginPage extends Component
             }
 
             $this->redirectRoute('operator.elections');
+        } catch (TooManyRequestsHttpException $e) {
+            throw $e;
         } catch (Throwable $e) {
             $this->errorMessage = 'Terjadi kendala saat memproses permintaan masuk. Silakan coba kembali.';
             $this->reportSafeError($e, $this->errorMessage);

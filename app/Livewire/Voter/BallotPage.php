@@ -5,6 +5,7 @@ namespace App\Livewire\Voter;
 use App\Livewire\Concerns\HandlesSafeErrors;
 use App\Models\Candidate;
 use App\Models\PublicElection;
+use App\Services\SecurityAudit;
 use App\Services\TokenService;
 use App\Services\VotingService;
 use Carbon\CarbonImmutable;
@@ -76,6 +77,7 @@ class BallotPage extends Component
                 userAgent: request()->userAgent(),
                 ip: request()->ip()
             );
+            $this->auditQrResult($openResult['code']);
 
             if ($openResult['election_id']) {
                 $this->electionId = $openResult['election_id'];
@@ -150,6 +152,7 @@ class BallotPage extends Component
                 userAgent: request()->userAgent(),
                 ip: request()->ip()
             );
+            $this->auditQrResult($result['code']);
 
             if ($result['election_id'] && ! $this->electionId) {
                 $this->electionId = $result['election_id'];
@@ -324,6 +327,7 @@ class BallotPage extends Component
                 userAgent: request()->userAgent(),
                 ip: request()->ip()
             );
+            $this->auditQrResult($result['code']);
 
             if ($result['ok'] || $result['code'] === 'already_voted') {
                 $this->stage = 'selesai';
@@ -352,6 +356,20 @@ class BallotPage extends Component
             $this->dispatch('step-changed');
         } catch (Throwable $e) {
             $this->reportSafeError($e, 'Koneksi terputus saat menyimpan suara. Silakan coba tekan Konfirmasi pilihan kembali.');
+        }
+    }
+
+    private function auditQrResult(string $code): void
+    {
+        $event = match ($code) {
+            'invalid_token' => 'qr_invalid',
+            'session_expired', 'approval_expired' => 'qr_expired',
+            'already_voted' => 'qr_used',
+            'device_limit_reached' => 'qr_device_limit',
+            default => null,
+        };
+        if ($event !== null) {
+            app(SecurityAudit::class)->record($event, request());
         }
     }
 
