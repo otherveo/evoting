@@ -1,5 +1,5 @@
 {{-- Update v7: Log Audit Penggunaan Perangkat (Admin) — batas 2x per pemilihan --}}
-<div class="container page view-enter">
+<div class="container page view-enter" x-data="{ deviceAction: null }">
   <div class="page-heading">
     <div>
       <div class="eyebrow">
@@ -100,25 +100,15 @@
                 </td>
                 <td>
                   @if($row->is_blocked)
-                    <x-action-button
-                      variant="secondary"
-                      size="sm"
-                      wire:click="unblockDevice('{{ $row->browser_id }}')"
-                      wire:confirm="Buka blokir perangkat ini? Pemilih dari perangkat ini dapat memilih kembali."
-                      loadingText="Memproses..."
-                    >
+                    <button type="button" class="btn btn-secondary btn-sm"
+                      x-on:click="deviceAction = { browser: @js($row->browser_id), unblock: true }">
                       Buka blokir
-                    </x-action-button>
-                  @else
-                    <x-action-button
-                      variant="secondary"
-                      size="sm"
-                      wire:click="blockDevice('{{ $row->browser_id }}')"
-                      wire:confirm="Blokir perangkat ini pada pemilihan ini? Pemilih dari perangkat ini langsung tidak dapat memilih dan harus memakai perangkat lain."
-                      loadingText="Memproses..."
-                    >
+                    </button>
+                  @elseif($row->use_count >= 2)
+                    <button type="button" class="btn btn-secondary btn-sm"
+                      x-on:click="deviceAction = { browser: @js($row->browser_id), unblock: false }">
                       Blokir
-                    </x-action-button>
+                    </button>
                   @endif
                 </td>
               </tr>
@@ -151,4 +141,24 @@
       </div>
     @endif
   </section>
+
+  <x-modal title="Konfirmasi Perangkat" icon="#i-shield"
+    alpineShow="deviceAction !== null" alpineClose="deviceAction = null">
+    <div class="modal-body">
+      <p x-text="deviceAction?.unblock
+        ? 'Buka blokir perangkat ini? Batas pemakaian otomatis tetap berlaku.'
+        : 'Blokir perangkat ini pada pemilihan ini? Pemilih harus memakai perangkat lain.'"></p>
+    </div>
+    <x-slot:footer>
+      <button type="button" class="btn btn-secondary" x-on:click="deviceAction = null">Batal</button>
+      <button type="button" class="btn btn-primary"
+        wire:loading.attr="disabled" wire:target="blockDevice,unblockDevice"
+        x-on:click="if (deviceAction) {
+          const { browser, unblock } = deviceAction;
+          deviceAction = null;
+          unblock ? $wire.unblockDevice(browser) : $wire.blockDevice(browser);
+        }"
+        x-text="deviceAction?.unblock ? 'Buka blokir' : 'Blokir perangkat'"></button>
+    </x-slot:footer>
+  </x-modal>
 </div>

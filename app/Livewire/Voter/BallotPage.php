@@ -245,6 +245,13 @@ class BallotPage extends Component
         try {
             $res = $voting->checkDeviceApproval($this->token, $this->browserId());
 
+            if ($res['code'] === 'device_blocked') {
+                $this->setDeviceLimitState('device_blocked');
+                $this->dispatch('step-changed');
+
+                return 'error';
+            }
+
             if ($res['code'] === 'approved') {
                 $this->approvalButtonState = 'approved';
                 $this->waitingForDeviceApproval = false;
@@ -368,6 +375,7 @@ class BallotPage extends Component
     private function setDeviceLimitState(string $code): void
     {
         $this->stage = 'ditolak_perangkat';
+        $this->waitingForDeviceApproval = false;
         $this->errorCode = $code;
 
         if ($code === 'device_blocked') {
