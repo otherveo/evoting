@@ -1,5 +1,5 @@
 {{-- UI-009, FR-023, FR-025, KP-003, NFR-016: Halaman Pantau Pemilih Operator (Polling Real-Time 3 Detik Hanya di Halaman 1) --}}
-<div class="container page view-enter" @if(($isPollingPage ?? true) && !$showRegisterModal && !$showQrModal && !$showDetailModal) wire:poll.3s.visible @endif>
+<div class="container page view-enter" data-voter-monitor @if(($isPollingPage ?? true) && !$showRegisterModal && !$showQrModal && !$showDetailModal) wire:poll.3s.visible @endif>
   <div class="page-heading">
     <div>
       <div class="eyebrow">

@@ -165,6 +165,7 @@
 
   <div id="toast-root" class="toast-root" aria-live="polite" aria-atomic="false"></div>
 
+  <script src="{{ asset('js/livewire-feedback.js') }}?v={{ filemtime(public_path('js/livewire-feedback.js')) }}"></script>
   @livewireScripts
   <script>
     document.addEventListener('livewire:navigate', () => {
@@ -179,7 +180,7 @@
       const words = text.split(/\s+/);
       if (words.length <= 2) return text;
       const lower = text.toLowerCase();
-      if (type === 'error' || type === 'warning' || lower.includes('gagal')) return 'Gagal';
+      if (type === 'error' || type === 'warning') return text;
       if (lower.includes('salin')) return 'Disalin';
       if (lower.includes('hapus')) return 'Terhapus';
       if (lower.includes('simpan')) return 'Tersimpan';
@@ -189,17 +190,6 @@
       if (lower.includes('cabut')) return 'Dicabut';
       if (lower.includes('reset')) return 'Direset';
       return 'Berhasil';
-    };
-
-    window.unlockActionButtons = function (scope = document) {
-      scope.querySelectorAll('form[data-submitting="true"]').forEach((form) => {
-        delete form.dataset.submitting;
-      });
-      scope.querySelectorAll('button[data-locked="true"], button[data-loading="true"]').forEach((btn) => {
-        delete btn.dataset.locked;
-        delete btn.dataset.loading;
-        btn.disabled = false;
-      });
     };
 
     window.showToast = function (message, type = 'info') {
@@ -228,68 +218,6 @@
       }, 2800);
     };
 
-    // 1. Capture phase: blokir klik ganda jika tombol atau form sudah terkunci
-    document.addEventListener('click', function (e) {
-      const btn = e.target.closest('button[data-action-btn="true"], button[type="submit"]');
-      if (!btn) return;
-      const form = btn.closest('form');
-      if (btn.dataset.locked === 'true' || (btn.type === 'submit' && form && form.dataset.submitting === 'true')) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        return false;
-      }
-    }, true);
-
-    // 2. Bubble phase untuk tombol non-submit (wire:click): kunci tepat setelah event diterima Livewire
-    document.addEventListener('click', function (e) {
-      const btn = e.target.closest('button[data-action-btn="true"]');
-      if (!btn || btn.disabled || btn.type === 'submit') return;
-      btn.dataset.locked = 'true';
-      btn.dataset.loading = 'true';
-      setTimeout(() => {
-        if (btn.dataset.locked === 'true') {
-          btn.disabled = true;
-        }
-      }, 0);
-      if (btn.dataset.transientOpener === 'true') {
-        setTimeout(() => {
-          delete btn.dataset.locked;
-          delete btn.dataset.loading;
-          btn.disabled = false;
-        }, 700);
-      }
-    }, false);
-
-    // 3. Submit phase untuk form (wire:submit / POST): kunci tombol submit tepat saat form disubmit
-    document.addEventListener('submit', function (e) {
-      const form = e.target;
-      if (!form || form.tagName !== 'FORM') return;
-      if (form.dataset.submitting === 'true') {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        return false;
-      }
-      form.dataset.submitting = 'true';
-      const submitBtns = form.querySelectorAll('button[type="submit"], button[data-action-btn="true"][type="submit"]');
-      submitBtns.forEach((btn) => {
-        btn.dataset.locked = 'true';
-        btn.dataset.loading = 'true';
-        setTimeout(() => {
-          if (btn.dataset.locked === 'true') {
-            btn.disabled = true;
-          }
-        }, 0);
-      });
-    }, false);
-
-    // Jika pengguna mengubah input di dalam form, buka kembali kunci tombol simpan di form tersebut
-    document.addEventListener('input', function (e) {
-      const form = e.target.closest('form');
-      if (form) {
-        window.unlockActionButtons(form);
-      }
-    }, true);
-
     // Saat scroll di luar modal (.modal-backdrop), geser area halaman di belakangnya;
     // saat scroll di dalam .modal, biarkan hanya konten modal (.modal-body) yang bergeser.
     document.addEventListener('wheel', function (e) {
@@ -299,33 +227,6 @@
         window.scrollBy({ top: e.deltaY, left: e.deltaX, behavior: 'auto' });
       }
     }, { passive: true });
-
-    document.addEventListener('livewire:initialized', () => {
-      Livewire.on('toast', (payload) => {
-        const data = Array.isArray(payload) ? payload[0] : payload;
-        if (data && data.message) {
-          const type = data.type || 'info';
-          window.showToast(data.message, type);
-          if (type === 'error' || type === 'warning') {
-            window.unlockActionButtons(document);
-          }
-        }
-      });
-
-      Livewire.hook('commit', ({ succeed, fail }) => {
-        succeed(() => {
-          requestAnimationFrame(() => {
-            if (document.querySelector('.field-error, .alert-danger')) {
-              window.unlockActionButtons(document);
-            }
-          });
-        });
-        fail(() => {
-          window.unlockActionButtons(document);
-          window.showToast('Gagal', 'error');
-        });
-      });
-    });
 
     @if(session('success'))
       document.addEventListener('DOMContentLoaded', () => window.showToast(@json(session('success')), 'success'));

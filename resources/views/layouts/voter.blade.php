@@ -50,6 +50,7 @@
 
   <div id="toast-root" class="toast-root" aria-live="polite" aria-atomic="false"></div>
 
+  <script src="{{ asset('js/livewire-feedback.js') }}?v={{ filemtime(public_path('js/livewire-feedback.js')) }}"></script>
   @livewireScripts
   <script>
     window.normalizeShortToast = function (message, type = 'info') {
@@ -61,22 +62,11 @@
       }
       const words = text.split(/\s+/).length;
       if (words <= 2) return text;
-      if (type === 'error' || type === 'warning' || lower.includes('gagal')) return 'Gagal';
+      if (type === 'error' || type === 'warning') return text;
       if (lower.includes('simpan')) return 'Tersimpan';
       if (lower.includes('setuju') || lower.includes('diizinkan')) return 'Diizinkan';
       if (lower.includes('tolak')) return 'Ditolak';
       return 'Berhasil';
-    };
-
-    window.unlockActionButtons = function (scope = document) {
-      scope.querySelectorAll('form[data-submitting="true"]').forEach((form) => {
-        delete form.dataset.submitting;
-      });
-      scope.querySelectorAll('button[data-locked="true"], button[data-loading="true"]').forEach((btn) => {
-        delete btn.dataset.locked;
-        delete btn.dataset.loading;
-        btn.disabled = false;
-      });
     };
 
     window.showToast = function (message, type = 'info') {
@@ -105,47 +95,9 @@
       }, 2800);
     };
 
-    document.addEventListener('click', function (e) {
-      const btn = e.target.closest('button[data-action-btn="true"], button[type="submit"]');
-      if (!btn) return;
-      if (btn.dataset.locked === 'true') {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        return false;
-      }
-    }, true);
-
-    document.addEventListener('click', function (e) {
-      const btn = e.target.closest('button[data-action-btn="true"]');
-      if (!btn || btn.disabled || btn.type === 'submit') return;
-      btn.dataset.locked = 'true';
-      btn.dataset.loading = 'true';
-      setTimeout(() => {
-        if (btn.dataset.locked === 'true') {
-          btn.disabled = true;
-        }
-      }, 0);
-    }, false);
-
     document.addEventListener('livewire:initialized', () => {
-      Livewire.on('toast', (payload) => {
-        const data = Array.isArray(payload) ? payload[0] : payload;
-        if (data && data.message) {
-          const type = data.type || 'info';
-          window.showToast(data.message, type);
-          if (type === 'error' || type === 'warning') {
-            window.unlockActionButtons(document);
-          }
-        }
-      });
       Livewire.on('step-changed', () => {
         window.scrollTo({ top: 0, behavior: 'auto' });
-      });
-      Livewire.hook('commit', ({ fail }) => {
-        fail(() => {
-          window.unlockActionButtons(document);
-          window.showToast('Gagal', 'error');
-        });
       });
     });
   </script>

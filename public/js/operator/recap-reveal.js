@@ -444,7 +444,7 @@ window.createRecapSim = function (el, wire) {
       if (this.running || this.loadingVotes) return;
       if (!this.validateDelay()) {
         if (typeof window.showToast === 'function') {
-          window.showToast('Gagal', 'error');
+          window.showToast('Isi jeda dengan bilangan bulat antara 20 dan 10.000 ms.', 'warning');
         }
         return;
       }
@@ -458,7 +458,7 @@ window.createRecapSim = function (el, wire) {
           const res = await wire.fetchRevealResults();
           if (!res || !res.ok) {
             this.statusText = (res && res.message) ? res.message : 'Rekapitulasi terkunci atau gagal memuat data.';
-            if (typeof window.showToast === 'function') {
+            if (res?.ok === false && typeof window.showToast === 'function') {
               window.showToast('Gagal', 'error');
             }
             return;
@@ -475,11 +475,8 @@ window.createRecapSim = function (el, wire) {
             };
           });
           this.votesLoaded = true;
-        } catch (err) {
-          this.statusText = 'Gagal menghubungi server saat memuat data suara.';
-          if (typeof window.showToast === 'function') {
-            window.showToast('Gagal', 'error');
-          }
+        } catch {
+          this.statusText = 'Data suara belum dimuat.';
           return;
         } finally {
           this.loadingVotes = false;

@@ -180,12 +180,12 @@
             const m = Number(this.elMaxRights);
             if (n.length < 3 || n.length > 160) {
               this.step1Error = 'Nama pemilihan wajib diisi minimal 3 dan maksimal 160 karakter.';
-              window.showToast('Gagal', 'error');
+              window.showToast(this.step1Error, 'warning');
               return;
             }
             if (!Number.isInteger(m) || m < 3 || m > 10000) {
               this.step1Error = 'Batas maksimum hak pilih minimal 3 dan maksimal 10000.';
-              window.showToast('Gagal', 'error');
+              window.showToast(this.step1Error, 'warning');
               return;
             }
             this.step = 2;
@@ -207,7 +207,7 @@
             this.step2Error = '';
             if (!this.canProceedStep2) {
               this.step2Error = 'Tambahkan minimal 2 pasangan calon dengan nomor urut unik dan nama lengkap.';
-              window.showToast('Gagal', 'error');
+              window.showToast(this.step2Error, 'warning');
               return;
             }
             this.step = 3;
@@ -217,12 +217,12 @@
             this.step3Error = '';
             if (!startNow && (!this.startsAt || !this.endsAt)) {
               this.step3Error = 'Waktu Mulai dan Waktu Selesai wajib diisi.';
-              window.showToast('Gagal', 'error');
+              window.showToast(this.step3Error, 'warning');
               return;
             }
             if (!startNow && this.endsAt <= this.startsAt) {
               this.step3Error = 'Waktu Selesai harus berada setelah Waktu Mulai.';
-              window.showToast('Gagal', 'error');
+              window.showToast(this.step3Error, 'warning');
               return;
             }
             this.savingWizard = true;

@@ -29,6 +29,7 @@ php artisan audit:verify
 - [ ] QR ketiga langsung menampilkan halaman penolakan tanpa tombol memilih. Monitor operator penerbit menampilkan label merah **Batas perangkat tercapai** pada polling berikutnya, sekitar tiga detik saat monitor aktif. QR ketiga tidak masuk daftar persetujuan.
 - [ ] Buka QR ketiga di browser lain. QR bisa dipakai dan peringatan aktif hilang dari monitor setelah polling. Periksa bahwa suara yang sah tercatat tepat sekali dan rekap sesuai jumlah suara yang dikonfirmasi.
 - [ ] Uji rekap, logout, dan penghapusan satu pemilihan sintetis. Jalankan kembali `php artisan audit:verify`. Cek konsol Chrome untuk pelanggaran CSP dan cek audit atau log staging untuk request sah yang ditandai oleh Origin atau whitelist.
+- [ ] Untuk regresi monitor, biarkan tab operator terbuka saat menutup tab ketiga pemilih. Kembali ke monitor dan periksa bahwa daftar hak pilih, statistik, serta peringatan tetap dapat terlihat tanpa overlay. Terbitkan ulang QR dengan throttling jaringan di DevTools. Tunggu hasilnya dan pastikan toast gagal tidak muncul sebelum respons. Jika masalah berulang, catat status HTTP dan `X-Request-ID` dari request yang terkait.
 
 ## 3. Ulangi dengan penegakan aktif
 

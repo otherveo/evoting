@@ -6409,7 +6409,6 @@ input[type="password"]::-ms-clear {
 .btn:disabled,
 .btn[disabled],
 .btn[data-loading],
-.btn[data-locked],
 .btn.is-loading {
   cursor: not-allowed !important;
   pointer-events: auto !important;
@@ -6419,13 +6418,11 @@ input[type="password"]::-ms-clear {
   box-shadow: none !important;
 }
 
-.btn[data-loading] > .btn-label-idle,
-.btn[data-locked] > .btn-label-idle {
+.btn[data-loading] > .btn-label-idle {
   display: none !important;
 }
 
-.btn[data-loading] > .btn-label-loading,
-.btn[data-locked] > .btn-label-loading {
+.btn[data-loading] > .btn-label-loading {
   display: inline-flex !important;
 }
 
