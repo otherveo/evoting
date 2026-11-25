@@ -24,7 +24,9 @@ class BallotPage extends Component
     public string $token = '';
 
     /**
-     * verifikasi | memilih | selesai | kendala
+     * verifikasi | memilih | selesai | kendala | ditolak_perangkat
+     * (ditolak_perangkat = Update v7: URL tidak valid di perangkat ini karena
+     * batas 2x atau blokir manual Admin — tanpa tombol konfirmasi apa pun)
      */
     #[Locked]
     public string $stage = 'verifikasi';
@@ -100,6 +102,19 @@ class BallotPage extends Component
 
             if ($openResult['code'] === 'device_rejected') {
                 $this->setTroubleState('device_rejected', 'Aksesmu telah ditolak oleh operator, silakan minta QR baru jika kamu memang punya hak suara');
+
+                return;
+            }
+
+            // Update v7: URL tidak valid di perangkat ini (batas 2x / blokir Admin).
+            if ($openResult['code'] === 'device_limit_reached') {
+                $this->setDeviceLimitState('device_limit_reached');
+
+                return;
+            }
+
+            if ($openResult['code'] === 'device_blocked') {
+                $this->setDeviceLimitState('device_blocked');
 
                 return;
             }
@@ -182,6 +197,15 @@ class BallotPage extends Component
                 return;
             }
 
+            // Update v7: URL tidak valid di perangkat ini (batas 2x / blokir Admin).
+            if (in_array($result['code'], ['device_limit_reached', 'device_blocked'], true)) {
+                $this->waitingForDeviceApproval = false;
+                $this->setDeviceLimitState($result['code']);
+                $this->dispatch('step-changed');
+
+                return;
+            }
+
             if (! $result['ok']) {
                 $this->waitingForDeviceApproval = false;
                 $this->setTroubleState($result['code'], $result['message']);
@@ -220,6 +244,13 @@ class BallotPage extends Component
     {
         try {
             $res = $voting->checkDeviceApproval($this->token, $this->browserId());
+
+            if ($res['code'] === 'device_blocked') {
+                $this->setDeviceLimitState('device_blocked');
+                $this->dispatch('step-changed');
+
+                return 'error';
+            }
 
             if ($res['code'] === 'approved') {
                 $this->approvalButtonState = 'approved';
@@ -309,6 +340,14 @@ class BallotPage extends Component
                 return;
             }
 
+            // Update v7: perangkat diblokir / batas 2x tercapai saat konfirmasi.
+            if (in_array($result['code'], ['device_limit_reached', 'device_blocked'], true)) {
+                $this->setDeviceLimitState($result['code']);
+                $this->dispatch('step-changed');
+
+                return;
+            }
+
             $this->setTroubleState($result['code'], $result['message']);
             $this->dispatch('step-changed');
         } catch (Throwable $e) {
@@ -325,6 +364,29 @@ class BallotPage extends Component
         $local = $expiresAt->setTimezone($tz);
         $this->sessionExpiresAtIso = $expiresAt->toIso8601String();
         $this->sessionExpiresLabel = $local->format('H:i:s').' ('.($tz === 'Asia/Makassar' ? 'WITA' : ($tz === 'Asia/Jakarta' ? 'WIB' : $local->format('T'))).')';
+    }
+
+    /**
+     * Update v7: URL tidak valid di perangkat ini (batas 2x penggunaan atau
+     * blokir manual Admin). Stage khusus 'ditolak_perangkat': hanya
+     * pemberitahuan + tombol X untuk menutup popup, tanpa tombol konfirmasi
+     * apa pun — pemilih harus memakai perangkat lain.
+     */
+    private function setDeviceLimitState(string $code): void
+    {
+        $this->stage = 'ditolak_perangkat';
+        $this->waitingForDeviceApproval = false;
+        $this->errorCode = $code;
+
+        if ($code === 'device_blocked') {
+            $this->errorTitle = 'Perangkat Ini Diblokir';
+            $this->errorDescription = 'Perangkat ini diblokir oleh Admin. Silakan gunakan perangkat lain untuk melanjutkan proses.';
+            $this->errorNextStep = 'Silakan gunakan perangkat lain untuk membuka tautan QR Anda, atau hubungi Operator di meja verifikasi.';
+        } else {
+            $this->errorTitle = 'Batas Penggunaan Perangkat Tercapai';
+            $this->errorDescription = 'Satu perangkat yang sama hanya diizinkan maksimal 2x digunakan. Silakan cari perangkat lain untuk melanjutkan proses.';
+            $this->errorNextStep = 'Silakan cari perangkat lain untuk membuka tautan QR Anda dan melanjutkan proses memilih.';
+        }
     }
 
     private function setTroubleState(string $code, string $message): void

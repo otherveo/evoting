@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\PublicCandidatesController;
 use App\Livewire\Admin\AuditLogPage;
+use App\Livewire\Admin\DeviceUsagePage;
 use App\Livewire\Admin\OperatorIndexPage;
 use App\Livewire\Auth\ActivateAccountPage;
 use App\Livewire\Auth\LoginPage;
@@ -38,6 +39,7 @@ Route::prefix('admin')
     ->group(function () {
         Route::get('/operators', OperatorIndexPage::class)->name('operators');
         Route::get('/audit-logs', AuditLogPage::class)->name('audit-logs');
+        Route::get('/device-usage', DeviceUsagePage::class)->name('device-usage');
     });
 
 // Area Operator (UI-007 s.d. UI-013) — Hanya Operator (FR-004, BR-021)

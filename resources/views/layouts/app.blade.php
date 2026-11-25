@@ -57,6 +57,11 @@
               <span class="nav-label-full">Log Audit</span>
               <span class="nav-label-short">Audit</span>
             </a>
+            <a href="{{ route('admin.device-usage') }}" wire:navigate class="nav-link {{ request()->routeIs('admin.device-usage*') ? 'is-active' : '' }}">
+              <svg class="icon"><use href="#i-monitor"></use></svg>
+              <span class="nav-label-full">Penggunaan Perangkat</span>
+              <span class="nav-label-short">Perangkat</span>
+            </a>
           @elseif($staffUser->isOperator())
             <a href="{{ route('operator.elections') }}" wire:navigate class="nav-link {{ request()->routeIs('operator.elections') ? 'is-active' : '' }}">
               <svg class="icon"><use href="#i-dashboard"></use></svg>

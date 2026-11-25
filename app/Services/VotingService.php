@@ -340,6 +340,53 @@ class VotingService
     }
 
     /**
+     * Update v7: Memanggil evoting.fn_block_device untuk memblokir manual
+     * perangkat oleh Admin (per pemilihan). 'already_blocked' dianggap berhasil
+     * (keadaan akhir yang diinginkan sudah tercapai: perangkat terblokir).
+     *
+     * @return array{ok: bool, code: string, message: string, election_id: ?string}
+     */
+    public function blockDevice(string $electionId, string $browserId, string $adminId, string $reason = ''): array
+    {
+        $row = DB::connection('staff')->selectOne(
+            'select * from evoting.fn_block_device(?::uuid, ?, ?::uuid, ?)',
+            [$electionId, $browserId, $adminId, trim($reason)]
+        );
+
+        $code = (string) ($row->o_result_code ?? 'error');
+
+        return [
+            'ok' => $code === 'ok' || $code === 'already_blocked',
+            'code' => $code,
+            'message' => $this->translateResultMessage($code, (string) ($row->o_message ?? '')),
+            'election_id' => isset($row->o_election_id) ? (string) $row->o_election_id : null,
+        ];
+    }
+
+    /**
+     * Update v7: Memanggil evoting.fn_unblock_device untuk membuka blokir
+     * manual perangkat oleh Admin (per pemilihan).
+     *
+     * @return array{ok: bool, code: string, message: string, election_id: ?string}
+     */
+    public function unblockDevice(string $electionId, string $browserId, string $adminId): array
+    {
+        $row = DB::connection('staff')->selectOne(
+            'select * from evoting.fn_unblock_device(?::uuid, ?, ?::uuid)',
+            [$electionId, $browserId, $adminId]
+        );
+
+        $code = (string) ($row->o_result_code ?? 'error');
+
+        return [
+            'ok' => $code === 'ok',
+            'code' => $code,
+            'message' => $this->translateResultMessage($code, (string) ($row->o_message ?? '')),
+            'election_id' => isset($row->o_election_id) ? (string) $row->o_election_id : null,
+        ];
+    }
+
+    /**
      * Memanggil evoting.fn_decide_device_approval untuk menyetujui atau menolak perangkat bersama.
      *
      * @return array{ok: bool, code: string, message: string, voter_right_id: ?string, election_id: ?string}
@@ -548,6 +595,9 @@ class VotingService
             'approval_required' => 'Menunggu persetujuan operator.',
             'approval_expired' => 'Batas waktu tunggu 10 menit telah berakhir.',
             'bukan_penerbit' => 'Permintaan ini hanya dapat diputuskan oleh operator yang menerbitkan QR.',
+            'device_limit_reached' => 'Satu perangkat yang sama hanya diizinkan maksimal 2x digunakan. Silakan cari perangkat lain untuk melanjutkan proses.',
+            'device_blocked' => 'Perangkat ini diblokir oleh Admin. Silakan gunakan perangkat lain untuk melanjutkan proses.',
+            'already_blocked' => 'Perangkat ini sudah diblokir pada pemilihan ini.',
             'device_rejected', 'rejected' => 'Aksesmu telah ditolak oleh operator, silakan minta QR baru jika kamu memang punya hak suara',
             'name_mismatch' => 'Nama pemilihan yang diketik tidak cocok.',
             'invalid_key' => 'Access key tidak valid atau sudah dicabut.',
