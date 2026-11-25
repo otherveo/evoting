@@ -22,6 +22,7 @@ use App\Services\TokenService;
 use App\Services\TotpService;
 use App\Services\VotingService;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -504,8 +505,8 @@ class EvotingSystemTest extends TestCase
             'password_hash' => Hash::make('SandiAdmin123!'),
             'role' => 'admin',
             'is_active' => true,
-            'totp_secret' => null,
-            'totp_enabled' => false,
+            'totp_secret' => app(TotpService::class)->generateSecret(),
+            'totp_enabled' => true,
             'must_change_password' => false,
         ]);
 
@@ -551,8 +552,27 @@ class EvotingSystemTest extends TestCase
         $this->assertTrue($voting->openQr($vr1['raw_token'], $browserX, 'Mozilla/5.0 Test', '10.0.0.1')['ok']);
         $this->assertSame('below_device_limit', $voting->blockDevice($election->id, $browserX, $admin->id, '')['code']);
 
-        // Penggunaan ke-2: OK saat membuka link (gerbang persetujuan baru di mulai memilih).
-        $this->assertTrue($voting->openQr($vr2['raw_token'], $browserX, 'Mozilla/5.0 Test', '10.0.0.1')['ok']);
+        // Pembukaan kedua dan ketiga dari dua koneksi harus bersaing atas jatah yang sama.
+        $this->fixtureDb->beginTransaction();
+        $publicDb = DB::connection('pgsql');
+        try {
+            $secondOpen = $this->fixtureDb->prepare('select o_result_code from evoting.fn_open_qr(?, ?, null, null)');
+            $secondOpen->execute([app(TokenService::class)->hashToken($vr2['raw_token']), $browserX]);
+            $this->assertSame('ok', $secondOpen->fetchColumn());
+            $publicDb->statement("set lock_timeout = '150ms'");
+            try {
+                $voting->openQr($vr3['raw_token'], $browserX, null, null);
+                $this->fail('Pembukaan ketiga harus menunggu transaksi pembukaan kedua.');
+            } catch (QueryException $e) {
+                $this->assertSame('55P03', $e->getCode());
+            }
+            $this->fixtureDb->commit();
+        } finally {
+            if ($this->fixtureDb->inTransaction()) {
+                $this->fixtureDb->rollBack();
+            }
+            $publicDb->statement('reset lock_timeout');
+        }
         $this->assertTrue($voting->startVoting($vr1['raw_token'], $browserX, 'Mozilla/5.0 Test', '10.0.0.1')['ok']);
 
         // Penggunaan ke-3 di perangkat yang sama: URL sepenuhnya tidak valid.
@@ -561,8 +581,32 @@ class EvotingSystemTest extends TestCase
         $this->assertSame('device_limit_reached', $open3['code']);
         $this->assertSame('Satu perangkat yang sama hanya diizinkan maksimal 2x digunakan. Silakan cari perangkat lain untuk melanjutkan proses.', $open3['message']);
 
+        Livewire::withCookie(config('evoting.browser_cookie_name'), $browserX)
+            ->test(BallotPage::class, ['token' => $vr3['raw_token']])
+            ->assertSet('stage', 'ditolak_perangkat')
+            ->assertSee('Batas Penggunaan Perangkat Tercapai')
+            ->assertDontSee('Mulai memilih')
+            ->assertDontSee('Konfirmasi pilihan')
+            ->assertDontSeeHtml('aria-modal="true"');
+
+        $monitor = Livewire::actingAs($operator, 'staff')
+            ->test(VoterMonitorPage::class, ['election' => $election])
+            ->assertSee('Batas perangkat tercapai')
+            ->assertSeeHtml('status-badge is-device-limit')
+            ->assertDontSee('Permintaan Persetujuan Perangkat Bersama');
+        $this->assertSame('wrong_status', $voting->decideDeviceApproval($vr3['voter_right_id'], $operator->id, 'setujui')['code']);
+
+        $staleSession = $this->fixtureDb->prepare("update evoting.voter_rights
+            set status = 'sedang_memilih', device_approval_status = 'menunggu', session_started_at = now(), session_browser_id = ?
+            where id = ?");
+        $staleSession->execute([$browserX, $vr3['voter_right_id']]);
+        $monitor->call('$refresh')->assertDontSee('Permintaan Persetujuan Perangkat Bersama');
+        $this->assertSame('device_limit_reached', $voting->decideDeviceApproval($vr3['voter_right_id'], $operator->id, 'setujui')['code']);
+        $this->assertTrue($voting->resetSession($vr3['voter_right_id'], $operator->id, 'Fixture sesi lama')['ok']);
+
         // Perangkat lain tidak terpengaruh.
         $this->assertTrue($voting->openQr($vr3['raw_token'], $browserY, 'Mozilla/5.0 Test', '10.0.0.2')['ok']);
+        $monitor->call('$refresh')->assertDontSee('Batas perangkat tercapai');
 
         // Penolakan tercatat di log audit.
         $this->assertTrue(DB::connection('staff')->table('evoting.audit_logs')
@@ -590,15 +634,36 @@ class EvotingSystemTest extends TestCase
         $this->assertFalse($openBlocked['ok']);
         $this->assertSame('device_blocked', $openBlocked['code']);
         $this->assertSame('device_blocked', $voting->checkDeviceApproval($vr2['raw_token'], $browserX)['code']);
+        $this->assertSame('device_blocked', $voting->decideDeviceApproval($vr2['voter_right_id'], $operator->id, 'setujui')['code']);
 
         // Buka blokir: perangkat bisa dipakai lagi (vr2 sudah tercatat sebagai penggunaan ke-2).
         $unblocked = $voting->unblockDevice($election->id, $browserX, $admin->id);
         $this->assertTrue($unblocked['ok']);
-        $this->assertTrue($voting->openQr($vr2['raw_token'], $browserX, 'Mozilla/5.0 Test', '10.0.0.1')['ok']);
+        $this->assertSame('approval_required', $voting->openQr($vr2['raw_token'], $browserX, 'Mozilla/5.0 Test', '10.0.0.1')['code']);
+
+        $simulation = Election::create([
+            'name' => 'Simulasi Batas Perangkat',
+            'max_voter_rights' => 5,
+        ]);
+        foreach ([1, 2] as $number) {
+            Candidate::on('staff')->create(['election_id' => $simulation->id, 'number' => $number, 'name' => 'Paslon Simulasi '.$number]);
+        }
+        $this->assertTrue($voting->setElectionSchedule($simulation->id, $dbNow->subMinute(), $dbNow->addHours(2), $operator->id)['ok']);
+        $simulationFirst = $voting->createVoterRight($simulation->id, 'Simulasi Satu', $operator->id);
+        $simulationSecond = $voting->createVoterRight($simulation->id, 'Simulasi Dua', $operator->id);
+        $simulationThird = $voting->createVoterRight($simulation->id, 'Simulasi Tiga', $operator->id);
+        $this->assertTrue($simulationFirst['ok']);
+        $this->assertTrue($simulationSecond['ok']);
+        $this->assertTrue($simulationThird['ok']);
+        $this->assertTrue($voting->openQr($simulationFirst['raw_token'], $browserX, null, null)['ok']);
+        $this->assertTrue($voting->openQr($simulationSecond['raw_token'], $browserX, null, null)['ok']);
+        $this->assertSame('ok', $voting->startVoting($simulationFirst['raw_token'], $browserX, null, null)['code']);
+        $this->assertSame('approval_required', $voting->startVoting($simulationSecond['raw_token'], $browserX, null, null)['code']);
+        $this->assertSame('device_limit_reached', $voting->openQr($simulationThird['raw_token'], $browserX, null, null)['code']);
 
         // Halaman admin (Log Audit perangkat) bisa dibuka oleh Admin.
         $this->actingAs($admin, 'staff')
-            ->withSession(['staff_2fa_verified' => true])
+            ->withSession(['staff_2fa_verified' => true, 'staff_session_version' => 1])
             ->get(route('admin.device-usage'))
             ->assertStatus(200);
     }
@@ -819,15 +884,18 @@ class EvotingSystemTest extends TestCase
         $checkApproved = $voting->checkDeviceApproval($vr2['raw_token'], $sharedBrowser);
         $this->assertSame('approved', $checkApproved['code']);
 
-        // Voter 3 starts on the SAME device -> locked -> Operator A rejects Voter 3
-        $this->assertTrue($voting->openQr($vr3['raw_token'], $sharedBrowser, 'Chrome Android', '10.0.0.10')['ok']);
-        $start3 = $voting->startVoting($vr3['raw_token'], $sharedBrowser, 'Chrome Android', '10.0.0.10');
+        // Exercise operator rejection on a separate device with one prior use.
+        $rejectBrowser = 'reject_browser_device_80884E_123456';
+        $rejectPeer = $voting->createVoterRight($election->id, 'Pemilih Pendamping Tolak', $operator->id);
+        $this->assertTrue($voting->openQr($rejectPeer['raw_token'], $rejectBrowser, 'UA', null)['ok']);
+        $this->assertTrue($voting->openQr($vr3['raw_token'], $rejectBrowser, 'Chrome Android', '10.0.0.10')['ok']);
+        $start3 = $voting->startVoting($vr3['raw_token'], $rejectBrowser, 'Chrome Android', '10.0.0.10');
         $this->assertSame('approval_required', $start3['code']);
 
         $rejectRes = $voting->decideDeviceApproval($vr3['voter_right_id'], $operator->id, 'tolak');
         $this->assertTrue($rejectRes['ok']);
 
-        $checkRejected = $voting->checkDeviceApproval($vr3['raw_token'], $sharedBrowser);
+        $checkRejected = $voting->checkDeviceApproval($vr3['raw_token'], $rejectBrowser);
         $this->assertSame('rejected', $checkRejected['code']);
         $this->assertSame(
             'Aksesmu telah ditolak oleh operator, silakan minta QR baru jika kamu memang punya hak suara',
@@ -835,7 +903,7 @@ class EvotingSystemTest extends TestCase
         );
 
         // Old QR of Voter 3 is permanently revoked
-        $reopen3 = $voting->openQr($vr3['raw_token'], $sharedBrowser, 'Chrome Android', '10.0.0.10');
+        $reopen3 = $voting->openQr($vr3['raw_token'], $rejectBrowser, 'Chrome Android', '10.0.0.10');
         $this->assertFalse($reopen3['ok']);
         $this->assertSame('device_rejected', $reopen3['code']);
 
@@ -845,18 +913,21 @@ class EvotingSystemTest extends TestCase
             (election_id, name, name_normalized, token_hash) values (?, 'Legacy', 'legacy', ?) returning id");
         $legacy->execute([$election->id, $legacyPair['hash']]);
         $legacyId = $legacy->fetchColumn();
-        $this->assertTrue($voting->openQr($legacyPair['raw'], $sharedBrowser, 'UA', null)['ok']);
-        $this->assertSame('approval_required', $voting->startVoting($legacyPair['raw'], $sharedBrowser, 'UA', null)['code']);
+        $legacyBrowser = 'legacy_browser_device_80884E_123456';
+        $legacyPeer = $voting->createVoterRight($election->id, 'Pemilih Pendamping Legacy', $operator->id);
+        $this->assertTrue($voting->openQr($legacyPeer['raw_token'], $legacyBrowser, 'UA', null)['ok']);
+        $this->assertTrue($voting->openQr($legacyPair['raw'], $legacyBrowser, 'UA', null)['ok']);
+        $this->assertSame('approval_required', $voting->startVoting($legacyPair['raw'], $legacyBrowser, 'UA', null)['code']);
         $this->assertSame('bukan_penerbit', $voting->decideDeviceApproval($legacyId, $operatorB->id, 'setujui')['code']);
         $this->assertTrue($voting->resetSession($legacyId, $operatorB->id, 'Verifikasi ulang di meja petugas')['ok']);
         $reissued = $voting->reissueToken($legacyId, $operatorB->id, 'QR lama tanpa penerbit');
-        $this->assertSame('approval_required', $voting->startVoting($reissued['raw_token'], $sharedBrowser, 'UA', null)['code']);
+        $this->assertSame('approval_required', $voting->startVoting($reissued['raw_token'], $legacyBrowser, 'UA', null)['code']);
         $this->assertSame('bukan_penerbit', $voting->decideDeviceApproval($legacyId, $operator->id, 'setujui')['code']);
         $this->assertTrue($voting->decideDeviceApproval($legacyId, $operatorB->id, 'setujui')['ok']);
 
         // UPDATE V4 BAGIAN A: Monitor pagination (25 per page) + poll only on page 1
         DB::connection('staff')->select(
-            "select vr.* from generate_series(1, 23) g cross join lateral evoting.fn_create_voter_right(?::uuid, 'Pemilih Paginasi ' || g, 'pemilih paginasi ' || g, encode(sha256(('tok_v4_' || g || '_' || ?)::bytea), 'hex'), ?::uuid) vr",
+            "select vr.* from generate_series(1, 21) g cross join lateral evoting.fn_create_voter_right(?::uuid, 'Pemilih Paginasi ' || g, 'pemilih paginasi ' || g, encode(sha256(('tok_v4_' || g || '_' || ?)::bytea), 'hex'), ?::uuid) vr",
             [$election->id, uniqid(), $operator->id]
         );
 

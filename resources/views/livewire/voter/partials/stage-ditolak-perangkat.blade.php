@@ -1,7 +1,5 @@
-{{-- Update v7: URL tidak valid di perangkat ini (batas 2x penggunaan per perangkat
-  atau blokir manual Admin). Hanya pemberitahuan + tombol X untuk menutup popup;
-  TIDAK ada tombol konfirmasi apa pun — pemilih harus memakai perangkat lain. --}}
-<div class="view-enter" wire:key="stage-ditolak-perangkat" x-data="{ deviceLimitModalOpen: true }">
+<div class="view-enter" wire:key="stage-ditolak-perangkat"
+  @if($errorCode === 'device_blocked') x-data="{ deviceLimitModalOpen: true }" @endif>
   <section class="state-page" aria-labelledby="device-limit-heading">
     <div class="state-icon is-danger" aria-hidden="true">
       <svg class="icon"><use href="#i-alert"></use></svg>
@@ -15,6 +13,7 @@
     <h1 id="device-limit-heading">{{ $errorTitle }}</h1>
     <p>{{ $errorDescription }}</p>
 
+    @if($errorCode === 'device_blocked')
     <dl class="state-details">
       <div>
         <dt>Pemilihan</dt>
@@ -32,8 +31,10 @@
         Tautan QR ini tidak dapat dipakai lagi pada perangkat ini. Silakan buka tautan QR Anda dari <strong>perangkat lain</strong>, atau hubungi Operator di meja verifikasi apabila Anda merasa ini keliru.
       </div>
     </div>
+    @endif
   </section>
 
+  @if($errorCode === 'device_blocked')
   <x-modal
     title="Perangkat Tidak Dapat Digunakan"
     icon="#i-alert"
@@ -55,4 +56,5 @@
       </p>
     </div>
   </x-modal>
+  @endif
 </div>

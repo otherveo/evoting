@@ -499,7 +499,7 @@ begin
   -- Update v7: gerbang batas perangkat (trigger pembukaan link bilik).
   -- Pembukaan ini TIDAK dicatat sebagai 'qr_dibuka' bila ditolak.
   if v_vr.session_browser_id = p_browser_id
-    and v_vr.session_started_at < evoting.fn_device_limit_since()
+    and v_vr.session_started_at < evoting.fn_device_election_cutoff(v_vr.election_id)
     and v_vr.session_started_at + interval '10 minutes' > now() then
     perform pg_advisory_xact_lock(hashtext(v_vr.election_id::text || '|' || p_browser_id));
     if evoting.fn_device_blocked(v_vr.election_id, p_browser_id) then
@@ -511,11 +511,11 @@ begin
   if v_gate is not null then
     insert into evoting.device_access_logs (voter_right_id, access_type, browser_id, user_agent, ip_address)
     values (v_vr.id, 'akses_ditolak', p_browser_id, p_user_agent, p_ip);
-    insert into evoting.audit_logs (actor_type, actor_id, action, object_type, object_id, detail)
+    insert into evoting.audit_logs (actor_type, actor_id, action, object_type, object_id, detail, created_at)
     values ('sistem', null,
             case when v_gate = 'device_blocked' then 'tolak_perangkat_diblokir' else 'tolak_batas_perangkat' end,
             'voter_right', v_vr.id,
-            jsonb_build_object('election_id', v_vr.election_id, 'browser_id', p_browser_id));
+            jsonb_build_object('election_id', v_vr.election_id, 'browser_id', p_browser_id), clock_timestamp());
     return query select v_gate,
       case when v_gate = 'device_blocked'
         then 'Perangkat ini diblokir oleh Admin. Silakan gunakan perangkat lain untuk melanjutkan proses.'
@@ -552,7 +552,7 @@ begin
         v_vr.id, v_vr.election_id, v_vr.status, v_phase, v_vr.session_started_at + interval '10 minutes';
       return;
     end if;
-    if v_vr.session_started_at >= evoting.fn_device_limit_since() then
+    if v_vr.session_started_at >= evoting.fn_device_election_cutoff(v_vr.election_id) then
       insert into evoting.device_access_logs (voter_right_id, access_type, browser_id, user_agent, ip_address, accessed_at)
       values (v_vr.id, 'qr_dibuka', p_browser_id, p_user_agent, p_ip, clock_timestamp());
     end if;
@@ -586,6 +586,7 @@ returns table(o_result_code text, o_message text, o_voter_right_id uuid, o_elect
 language plpgsql security definer set search_path = evoting as $$
 declare
   v_vr evoting.voter_rights%rowtype;
+  v_gate text;
   v_is_shared boolean;
   v_first_open timestamptz;
 begin
@@ -613,6 +614,15 @@ begin
   if v_vr.status = 'sedang_memilih' then
     if v_vr.session_browser_id = p_browser_id
        and v_vr.session_started_at + interval '10 minutes' > now() then
+      v_gate := evoting.fn_device_session_gate(v_vr.election_id, v_vr.id, p_browser_id, v_vr.session_started_at);
+      if v_gate is not null then
+        return query select v_gate,
+          case when v_gate = 'device_blocked'
+            then 'Perangkat ini diblokir oleh Admin. Silakan gunakan perangkat lain untuk melanjutkan proses.'
+            else 'Satu perangkat yang sama hanya diizinkan maksimal 2x digunakan. Silakan cari perangkat lain untuk melanjutkan proses.' end,
+          v_vr.id, v_vr.election_id;
+        return;
+      end if;
       if v_vr.device_approval_status = 'menunggu' then
         return query select 'approval_required', 'Menunggu persetujuan operator.', v_vr.id, v_vr.election_id;
         return;
@@ -653,7 +663,7 @@ begin
   where d.voter_right_id = v_vr.id
     and d.browser_id = p_browser_id
     and d.access_type = 'qr_dibuka'
-    and d.accessed_at >= evoting.fn_device_limit_since();
+    and d.accessed_at >= evoting.fn_device_election_cutoff(v_vr.election_id);
 
   if v_first_open is null then
     return query select 'wrong_status', 'Buka kembali tautan QR sebelum mulai memilih.', v_vr.id, v_vr.election_id;
@@ -668,7 +678,7 @@ begin
       and vr2.election_id = v_vr.election_id
       and vr2.id <> v_vr.id
       and d.access_type = 'qr_dibuka'
-      and d.accessed_at >= evoting.fn_device_limit_since()
+      and d.accessed_at >= evoting.fn_device_election_cutoff(v_vr.election_id)
       and d.accessed_at < v_first_open
   ) into v_is_shared;
 
@@ -717,6 +727,7 @@ returns table(o_result_code text, o_message text, o_voter_right_id uuid, o_elect
 language plpgsql security definer set search_path = evoting as $$
 declare
   v_vr evoting.voter_rights%rowtype;
+  v_gate text;
 begin
   select * into v_vr from evoting.voter_rights
   where token_hash = p_token_hash for update;
@@ -752,16 +763,13 @@ begin
     return query select 'device_rejected', 'Aksesmu telah ditolak oleh operator, silakan minta QR baru jika kamu memang punya hak suara', v_vr.id, v_vr.election_id;
     return;
   end if;
-  -- Update v7: pertahanan berlapis — tidak ada jalur API langsung yang bisa
-  -- meloloskan suara dari perangkat yang diblokir Admin atau sudah dipakai 2x.
-  perform pg_advisory_xact_lock(hashtext(v_vr.election_id::text || '|' || p_browser_id));
-  if evoting.fn_device_blocked(v_vr.election_id, p_browser_id) then
-    return query select 'device_blocked', 'Perangkat ini diblokir oleh Admin. Silakan gunakan perangkat lain untuk melanjutkan proses.', v_vr.id, v_vr.election_id;
-    return;
-  end if;
-  if v_vr.session_started_at >= evoting.fn_device_limit_since()
-    and evoting.fn_device_open_gate(v_vr.election_id, v_vr.id, p_browser_id) = 'device_limit_reached' then
-    return query select 'device_limit_reached', 'Satu perangkat yang sama hanya diizinkan maksimal 2x digunakan. Silakan cari perangkat lain untuk melanjutkan proses.', v_vr.id, v_vr.election_id;
+  v_gate := evoting.fn_device_session_gate(v_vr.election_id, v_vr.id, p_browser_id, v_vr.session_started_at);
+  if v_gate is not null then
+    return query select v_gate,
+      case when v_gate = 'device_blocked'
+        then 'Perangkat ini diblokir oleh Admin. Silakan gunakan perangkat lain untuk melanjutkan proses.'
+        else 'Satu perangkat yang sama hanya diizinkan maksimal 2x digunakan. Silakan cari perangkat lain untuk melanjutkan proses.' end,
+      v_vr.id, v_vr.election_id;
     return;
   end if;
   if not exists (select 1 from evoting.candidates
@@ -1003,6 +1011,7 @@ returns table(o_result_code text, o_message text, o_voter_right_id uuid, o_elect
 language plpgsql security definer set search_path = evoting as $$
 declare
   v_vr evoting.voter_rights%rowtype;
+  v_gate text;
   v_revoked_hash text;
 begin
   perform evoting.require_active_operator(p_operator_id);
@@ -1026,6 +1035,15 @@ begin
 
   if v_vr.session_started_at + interval '10 minutes' <= now() then
     return query select 'approval_expired', 'Masa persetujuan sudah habis.', v_vr.id, v_vr.election_id;
+    return;
+  end if;
+  v_gate := evoting.fn_device_session_gate(v_vr.election_id, v_vr.id, v_vr.session_browser_id, v_vr.session_started_at);
+  if v_gate is not null then
+    return query select v_gate,
+      case when v_gate = 'device_blocked'
+        then 'Perangkat ini diblokir oleh Admin. Silakan gunakan perangkat lain untuk melanjutkan proses.'
+        else 'Satu perangkat yang sama hanya diizinkan maksimal 2x digunakan. Silakan cari perangkat lain untuk melanjutkan proses.' end,
+      v_vr.id, v_vr.election_id;
     return;
   end if;
   if p_decision = 'setujui' then
@@ -1079,6 +1097,7 @@ returns table(
 language plpgsql security definer set search_path = evoting as $$
 declare
   v_vr evoting.voter_rights%rowtype;
+  v_gate text;
 begin
   select * into v_vr from evoting.voter_rights where token_hash = p_token_hash for update;
   if v_vr.id is null then
@@ -1127,6 +1146,17 @@ begin
     return;
   end if;
 
+  if v_vr.status = 'sedang_memilih' then
+    v_gate := evoting.fn_device_session_gate(v_vr.election_id, v_vr.id, p_browser_id, v_vr.session_started_at);
+  end if;
+  if v_gate is not null then
+    return query select v_gate,
+      case when v_gate = 'device_blocked'
+        then 'Perangkat ini diblokir oleh Admin. Silakan gunakan perangkat lain untuk melanjutkan proses.'
+        else 'Satu perangkat yang sama hanya diizinkan maksimal 2x digunakan. Silakan cari perangkat lain untuk melanjutkan proses.' end,
+      v_vr.id, v_vr.election_id, null::timestamptz;
+    return;
+  end if;
   if v_vr.status = 'sedang_memilih' and v_vr.device_approval_status in ('disetujui', 'tidak_perlu') then
     return query select 'approved', 'Diizinkan',
       v_vr.id, v_vr.election_id, v_vr.session_started_at + interval '10 minutes';
@@ -1304,7 +1334,7 @@ $$;
 -- 1x penggunaan = 1 link bilik dibuka oleh satu pemilih (satu QR token) di
 -- perangkat itu; refresh token yang sama dihitung 1x (distinct voter_right).
 -- Penegakan server-side di fn_open_qr (trigger utama), fn_start_voting dan
--- fn_confirm_vote (pertahanan berlapis). Training/latihan/tes tidak dihitung.
+-- fn_confirm_vote (pertahanan berlapis). Simulasi ikut dibatasi sejak v8.
 -- Penggunaan sebelum penanda device_limit_v7_since tidak dihitung (grandfather).
 -- ============================================================================
 
@@ -1339,8 +1369,34 @@ returns timestamptz language sql stable security definer set search_path = evoti
     '-infinity'::timestamptz);
 $$;
 
+-- Ringkas pencarian penolakan pada monitor operator.
+create index if not exists audit_logs_device_limit_idx
+  on evoting.audit_logs (object_id, created_at desc)
+  where action = 'tolak_batas_perangkat' and object_type = 'voter_right';
+
+-- Cutoff simulasi yang sudah ada dibekukan saat aktivasi v8.
+alter table evoting.elections add column if not exists device_limit_cutover_at timestamptz null;
+with activation as (
+  insert into evoting.cache (key, value, expiration)
+  values ('device_limit_v8_since', to_char(now() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'), 2147483647)
+  on conflict (key) do nothing
+  returning value::timestamptz as activated_at
+)
+update evoting.elections e
+set device_limit_cutover_at = activation.activated_at
+from activation
+where e.device_limit_cutover_at is null
+  and e.name ~* '^[[:space:]]*(Train(?:ing)?|Simula(?:si|tion)s?|Tes(?:t(?:ing)?)?|Latih(?:an)?)';
+
+create or replace function evoting.fn_device_election_cutoff(p_election_id uuid)
+returns timestamptz language sql stable security definer set search_path = evoting as $$
+  select coalesce(
+    (select e.device_limit_cutover_at from evoting.elections e where e.id = p_election_id),
+    evoting.fn_device_limit_since());
+$$;
+
 -- Hitung penggunaan perangkat: jumlah pemilih (voter_right) berbeda yang
--- membuka link di perangkat ini pada pemilihan ini, sejak penanda v7.
+-- membuka link di perangkat ini pada pemilihan ini, sejak cutoff pemilihan.
 -- p_exclude_voter_right_id: pemilih yang sedang membuka (pembukaan ulang
 -- tokennya sendiri tidak dihitung sebagai penggunaan baru).
 create or replace function evoting.fn_device_use_count(
@@ -1353,13 +1409,11 @@ returns integer language sql stable security definer set search_path = evoting a
     select distinct d.voter_right_id
     from evoting.device_access_logs d
     join evoting.voter_rights vr on vr.id = d.voter_right_id
-    join evoting.elections e on e.id = vr.election_id
     where d.browser_id = p_browser_id
       and vr.election_id = p_election_id
       and d.access_type = 'qr_dibuka'
       and (p_exclude_voter_right_id is null or d.voter_right_id <> p_exclude_voter_right_id)
-      and e.name !~* '^[[:space:]]*(Train(?:ing)?|Simula(?:si|tion)s?|Tes(?:t(?:ing)?)?|Latih(?:an)?)'
-      and d.accessed_at >= evoting.fn_device_limit_since()
+      and d.accessed_at >= evoting.fn_device_election_cutoff(p_election_id)
   ) s;
 $$;
 
@@ -1396,11 +1450,39 @@ begin
     where d.voter_right_id = p_voter_right_id
       and d.browser_id = p_browser_id
       and d.access_type = 'qr_dibuka'
-      and d.accessed_at >= evoting.fn_device_limit_since()
+      and d.accessed_at >= evoting.fn_device_election_cutoff(p_election_id)
   ) then
     return null;
   end if;
   if evoting.fn_device_use_count(p_election_id, p_browser_id, p_voter_right_id) >= 2 then
+    return 'device_limit_reached';
+  end if;
+  return null;
+end;
+$$;
+
+-- Sesi sebelum cutoff tetap sah. Sesi baru butuh pembukaan QR yang diterima.
+create or replace function evoting.fn_device_session_gate(
+  p_election_id uuid, p_voter_right_id uuid, p_browser_id text, p_started_at timestamptz
+)
+returns text language plpgsql security definer set search_path = evoting as $$
+declare
+  v_since timestamptz := evoting.fn_device_election_cutoff(p_election_id);
+begin
+  perform pg_advisory_xact_lock(hashtext(p_election_id::text || '|' || p_browser_id));
+  if evoting.fn_device_blocked(p_election_id, p_browser_id) then
+    return 'device_blocked';
+  end if;
+  if p_started_at < v_since then
+    return null;
+  end if;
+  if not exists (
+    select 1 from evoting.device_access_logs d
+    where d.voter_right_id = p_voter_right_id
+      and d.browser_id = p_browser_id
+      and d.access_type = 'qr_dibuka'
+      and d.accessed_at >= v_since
+  ) then
     return 'device_limit_reached';
   end if;
   return null;
@@ -1438,7 +1520,9 @@ begin
     return;
   end if;
   perform pg_advisory_xact_lock(hashtext(p_election_id::text || '|' || p_browser_id));
-  if evoting.fn_device_use_count(p_election_id, p_browser_id) < 2 then
+  if exists (select 1 from evoting.elections e where e.id = p_election_id
+      and e.name ~* '^[[:space:]]*(Train(?:ing)?|Simula(?:si|tion)s?|Tes(?:t(?:ing)?)?|Latih(?:an)?)')
+    or evoting.fn_device_use_count(p_election_id, p_browser_id) < 2 then
     return query select 'below_device_limit', 'Perangkat belum digunakan dua kali pada pemilihan ini.', p_election_id;
     return;
   end if;

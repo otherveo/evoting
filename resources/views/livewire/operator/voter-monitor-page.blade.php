@@ -66,6 +66,22 @@
     </div>
   @endif
 
+  <div aria-live="polite">
+    @if($countDeviceLimit > 0)
+      <div class="page-alert">
+        <div class="alert alert-danger">
+          <div class="alert-flex">
+            <svg class="icon" aria-hidden="true"><use href="#i-alert"></use></svg>
+            <div>
+              <strong>Batas perangkat tercapai</strong>
+              <p>{{ $countDeviceLimit }} tautan QR ditolak pada perangkat yang sudah digunakan dua kali. Pemilih dapat membuka QR dari perangkat lain.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    @endif
+  </div>
+
   {{-- KP-004, FR-030: Peringatan Sesi Kedaluwarsa --}}
   @if($countExpired > 0 && $phase === 'berlangsung')
     <div class="page-alert">

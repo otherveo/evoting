@@ -245,8 +245,8 @@ class BallotPage extends Component
         try {
             $res = $voting->checkDeviceApproval($this->token, $this->browserId());
 
-            if ($res['code'] === 'device_blocked') {
-                $this->setDeviceLimitState('device_blocked');
+            if (in_array($res['code'], ['device_limit_reached', 'device_blocked'], true)) {
+                $this->setDeviceLimitState($res['code']);
                 $this->dispatch('step-changed');
 
                 return 'error';
@@ -368,9 +368,7 @@ class BallotPage extends Component
 
     /**
      * Update v7: URL tidak valid di perangkat ini (batas 2x penggunaan atau
-     * blokir manual Admin). Stage khusus 'ditolak_perangkat': hanya
-     * pemberitahuan + tombol X untuk menutup popup, tanpa tombol konfirmasi
-     * apa pun — pemilih harus memakai perangkat lain.
+     * blokir manual Admin). Halaman penolakan mengarahkan pemilih ke perangkat lain.
      */
     private function setDeviceLimitState(string $code): void
     {

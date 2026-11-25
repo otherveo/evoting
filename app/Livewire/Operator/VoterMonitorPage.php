@@ -326,6 +326,7 @@ class VoterMonitorPage extends StaffPage
 
         $phase = $this->election->currentPhase();
         $tz = (string) config('evoting.display_timezone', 'Asia/Makassar');
+        $currentOperatorId = Auth::guard('staff')->id();
 
         $allMonitorRows = DB::connection('staff')->select('
             with ir as materialized (
@@ -347,6 +348,14 @@ class VoterMonitorPage extends StaffPage
                 d_last.browser_id as last_browser_id,
                 d_last.user_agent as last_user_agent,
                 d_last.access_type as last_access_type,
+                (denial.created_at is not null and not exists (
+                    select 1
+                    from evoting.device_access_logs d
+                    where d.voter_right_id = m.id
+                      and d.access_type = \'qr_dibuka\'
+                      and d.accessed_at > denial.created_at
+                      and d.browser_id is distinct from denial.browser_id
+                )) as device_limit_reached,
                 (
                     select coalesce(jsonb_agg(jsonb_build_object(
                         \'id\', s.id,
@@ -374,9 +383,19 @@ class VoterMonitorPage extends StaffPage
                 order by d.accessed_at desc
                 limit 1
             ) d_last on true
+            left join lateral (
+                select a.created_at, a.detail->>\'browser_id\' as browser_id
+                from evoting.audit_logs a
+                where vr.issued_by = ?::uuid
+                  and a.object_id = m.id
+                  and a.object_type = \'voter_right\'
+                  and a.action = \'tolak_batas_perangkat\'
+                order by a.created_at desc, a.id desc
+                limit 1
+            ) denial on true
             where m.election_id = ?::uuid
             order by vr.created_at desc, vr.id asc
-        ', [$this->election->id, $this->election->id]);
+        ', [$this->election->id, $currentOperatorId, $this->election->id]);
 
         $allCollection = collect($allMonitorRows)->map(function ($row) {
             $peers = [];
@@ -394,13 +413,10 @@ class VoterMonitorPage extends StaffPage
             return $row;
         });
 
-        /** @var StaffAccount|null $currentOperator */
-        $currentOperator = Auth::guard('staff')->user();
-        $currentOperatorId = $currentOperator?->id;
-
         $pendingApprovals = $allCollection->filter(function ($r) use ($currentOperatorId) {
             $isWaiting = $r->status === 'sedang_memilih'
                 && ($r->device_approval_status ?? 'tidak_perlu') === 'menunggu'
+                && ! $r->device_limit_reached
                 && ! $r->session_expired;
 
             if (! $isWaiting) {
@@ -416,7 +432,8 @@ class VoterMonitorPage extends StaffPage
         $countSudah = $allCollection->where('status', 'sudah_memilih')->count();
         $countExpired = $allCollection->where('session_expired', true)->count();
         $countDeviceWarning = $allCollection->where('device_warning', true)->count();
-        $countAttention = $allCollection->filter(fn ($r) => $r->session_expired || $r->device_warning)->count();
+        $countDeviceLimit = $allCollection->where('device_limit_reached', true)->count();
+        $countAttention = $allCollection->filter(fn ($r) => $r->session_expired || $r->device_warning || $r->device_limit_reached)->count();
 
         $totalVotesCast = $totalRights > 0 ? (int) ($allCollection->first()->total_votes_cast ?? 0) : 0;
         $integrity = [
@@ -448,7 +465,7 @@ class VoterMonitorPage extends StaffPage
             if ($this->statusFilter === 'sudah_memilih' && $row->status !== 'sudah_memilih') {
                 return false;
             }
-            if ($this->statusFilter === 'attention' && ! $row->session_expired && ! $row->device_warning) {
+            if ($this->statusFilter === 'attention' && ! $row->session_expired && ! $row->device_warning && ! $row->device_limit_reached) {
                 return false;
             }
             if (trim($this->search) !== '') {
@@ -528,6 +545,7 @@ class VoterMonitorPage extends StaffPage
             'countSudah' => $countSudah,
             'countExpired' => $countExpired,
             'countDeviceWarning' => $countDeviceWarning,
+            'countDeviceLimit' => $countDeviceLimit,
             'countAttention' => $countAttention,
             'integrity' => $integrity,
             'detailData' => $detailData,

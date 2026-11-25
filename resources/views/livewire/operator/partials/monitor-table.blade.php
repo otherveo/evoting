@@ -108,7 +108,7 @@
         <div
           class="voter-row"
           wire:key="vr-{{ $row->id }}"
-          x-show="matchesRow(@js((string) $row->name), @js((string) $row->status), @js((bool) ($row->session_expired || $row->device_warning)))"
+          x-show="matchesRow(@js((string) $row->name), @js((string) $row->status), @js((bool) ($row->session_expired || $row->device_warning || $row->device_limit_reached)))"
         >
           <div class="voter-identity">
             <span class="avatar" style="--avatar-h: {{ $hue }};">{{ $initials }}</span>
@@ -154,7 +154,12 @@
               @endif
             </div>
 
-            @if($row->device_warning)
+            @if($row->device_limit_reached)
+              <span class="status-badge is-device-limit">
+                <span class="status-dot"></span>
+                Batas perangkat tercapai
+              </span>
+            @elseif($row->device_warning)
               <div class="shared-device-box">
                 <div class="shared-device-head">
                   <div class="shared-flag">

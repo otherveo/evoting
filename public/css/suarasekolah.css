@@ -1218,6 +1218,12 @@ ol {
   border: 1px solid #cdeedb;
 }
 
+.status-badge.is-device-limit {
+  color: var(--red);
+  background: var(--red-soft);
+  border: 1px solid currentColor;
+}
+
 .device-cell {
   min-width: 0;
 }
