@@ -1,0 +1,67 @@
+name: Security checks
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: local-ci-owner
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      EVOTING_TEST_PORT: 5432
+      EVOTING_TEST_OWNER_PASSWORD: local-ci-owner
+      EVOTING_TEST_APP_PASSWORD: local-ci-app
+      EVOTING_TEST_STAFF_PASSWORD: local-ci-staff
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: pdo_pgsql
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install and audit locked dependencies
+        run: |
+          composer install --no-interaction --prefer-dist
+          composer audit --locked
+          npm audit --audit-level=moderate
+      - name: Prepare isolated test environment
+        env:
+          PGPASSWORD: local-ci-owner
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d postgres <<'SQL'
+          create role anon;
+          create role authenticated;
+          create role service_role;
+          create database evoting_test_template;
+          SQL
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d evoting_test_template <<'SQL'
+          create schema storage;
+          create table storage.buckets(id text primary key, name text, public boolean);
+          create table storage.objects(bucket_id text);
+          \i schema.sql
+          alter role evoting_app password 'local-ci-app';
+          alter role evoting_staff password 'local-ci-staff';
+          SQL
+      - name: Check route coverage and run feature tests
+        run: |
+          php artisan security:whitelist-check
+          php artisan test
