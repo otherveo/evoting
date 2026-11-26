@@ -1,0 +1,204 @@
+/* =========================================================
+   SuaraSekolah — Prototype E-Voting Sekolah
+   Design tokens & base
+   ========================================================= */
+:root {
+  --bg: #f4f7fc;
+  --bg-deep: #edf2fa;
+  --surface: #ffffff;
+  --surface-soft: #f8fafd;
+  --surface-tint: #f2f6ff;
+  --ink: #0b1428;
+  --ink-soft: #1e2a44;
+  --muted: #62708a;
+  --muted-soft: #8a97ad;
+  --line: #e4e9f2;
+  --line-strong: #d2dae8;
+  --brand: #16357d;
+  --brand-bright: #2457c5;
+  --brand-soft: #eaf0ff;
+  --brand-softer: #f4f7ff;
+  --teal: #0f766e;
+  --teal-soft: #e3faf6;
+  --green: #137a43;
+  --green-soft: #e4f8ec;
+  --amber: #a75b08;
+  --amber-soft: #fff3df;
+  --red: #b3261e;
+  --red-soft: #fdeceb;
+  --violet: #6d3fc0;
+  --violet-soft: #f2ebff;
+  --shadow-xs: 0 1px 2px rgba(14, 27, 56, 0.04);
+  --shadow-sm: 0 6px 18px -10px rgba(14, 27, 56, 0.18);
+  --shadow-md: 0 18px 45px -24px rgba(14, 27, 56, 0.3);
+  --shadow-lg: 0 30px 80px -30px rgba(9, 21, 47, 0.45);
+  --radius-sm: 10px;
+  --radius: 16px;
+  --radius-lg: 22px;
+  --radius-xl: 28px;
+  --font: "Segoe UI Variable", "Segoe UI", Inter, "Helvetica Neue", Arial, sans-serif;
+  --container: 1200px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  color: var(--ink);
+  background: var(--bg);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body.modal-open {
+  overflow: hidden;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+a {
+  color: var(--brand-bright);
+  text-decoration: none;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+}
+
+::selection {
+  background: #c9d8ff;
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline: 3px solid rgba(36, 87, 197, 0.36);
+  outline-offset: 2px;
+}
+
+.svg-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.icon {
+  width: 1.2em;
+  height: 1.2em;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.container {
+  width: min(var(--container), 100% - 48px);
+  margin-inline: auto;
+}
+
+/* Ambient background */
+.ambient {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background:
+    radial-gradient(1100px 700px at 8% -10%, rgba(206, 221, 255, 0.72), transparent 65%),
+    radial-gradient(900px 600px at 105% 8%, rgba(197, 244, 235, 0.48), transparent 60%),
+    linear-gradient(180deg, #f7f9fe 0%, #f3f6fc 48%, #f6f8fc 100%);
+}
+
+.ambient-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(2px);
+  opacity: 0.65;
+}
+
+.ambient-orb-1 {
+  width: 520px;
+  height: 520px;
+  top: 28%;
+  left: -280px;
+  background: radial-gradient(circle, rgba(123, 165, 255, 0.28), transparent 68%);
+}
+
+.ambient-orb-2 {
+  width: 620px;
+  height: 620px;
+  right: -320px;
+  bottom: -180px;
+  background: radial-gradient(circle, rgba(71, 209, 188, 0.18), transparent 68%);
+}
+
+.ambient-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.28;
+  background-image:
+    linear-gradient(rgba(22, 53, 125, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(22, 53, 125, 0.045) 1px, transparent 1px);
+  background-size: 52px 52px;
+  mask-image: linear-gradient(180deg, black, transparent 72%);
+  -webkit-mask-image: linear-gradient(180deg, black, transparent 72%);
+}

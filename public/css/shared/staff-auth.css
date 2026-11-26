@@ -1,0 +1,39 @@
+/* Auth Card (UI-001, UI-002, UI-003) */
+.auth-shell {
+  min-height: calc(100dvh - 78px);
+  display: grid;
+  place-items: center;
+  padding: 28px 16px 48px;
+}
+
+.auth-card {
+  width: min(460px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  padding: 34px;
+}
+
+.auth-card-wide {
+  width: min(580px, 100%);
+}
+
+.auth-head {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.auth-head h1 {
+  margin-top: 10px;
+  font-size: clamp(1.45rem, 2.8vw, 1.85rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.auth-head p {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}

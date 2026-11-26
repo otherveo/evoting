@@ -14,7 +14,7 @@
   <meta name="theme-color" content="#132a63" />
   <link rel="icon" type="image/png" href="{{ asset('SMPN7-e-voting_logo.png') }}" />
   <title>{{ isset($title) ? $title . ' — ' . $appName : $appName . ' — Sistem Pemungutan Suara Digital' }}</title>
-  <link rel="stylesheet" href="{{ asset('css/suarasekolah.css') }}?v={{ filemtime(public_path('css/suarasekolah.css')) }}" />
+  @include('partials.shared-styles')
   @stack('styles')
   @livewireStyles
 </head>

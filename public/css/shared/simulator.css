@@ -1,0 +1,100 @@
+/* =========================================================
+   Simulator page
+   ========================================================= */
+.narrow-page {
+  max-width: 900px;
+}
+
+.sim-list {
+  padding: 0 23px 8px;
+}
+
+.sim-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 15px 0;
+  border-bottom: 1px solid #edf1f7;
+}
+
+.sim-row:last-child {
+  border-bottom: 0;
+}
+
+.sim-identity {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex: 1;
+  min-width: 0;
+}
+
+.sim-identity .voter-id-copy {
+  min-width: 0;
+}
+
+.sim-name {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sim-hint {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.sim-status {
+  flex: none;
+}
+
+.sim-action {
+  flex: none;
+}
+
+.sim-action .btn {
+  min-height: 36px;
+  padding: 7px 12px;
+  font-size: 0.74rem;
+}
+
+.sim-guide {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.sim-guide-card {
+  padding: 15px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 15px;
+}
+
+.sim-guide-card span {
+  color: var(--brand-bright);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sim-guide-card p {
+  margin-top: 5px;
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+  font-weight: 650;
+}
+
+.sim-guide-card small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.45;
+}

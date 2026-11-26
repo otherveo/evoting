@@ -1,0 +1,106 @@
+/* Election Cards & Grid (UI-007, UI-008) */
+.election-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.election-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 22px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  gap: 16px;
+}
+
+.election-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.election-card-title {
+  font-size: 1.08rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+}
+
+.election-card-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  font-size: 0.76rem;
+}
+
+.election-card-meta dt {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.election-card-meta dd {
+  margin: 2px 0 0;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.election-card-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.election-card-actions > .btn {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  text-align: center;
+  white-space: normal;
+}
+
+.election-card-actions > .btn-primary,
+.election-card-actions > .btn-danger-ghost {
+  grid-column: 1 / -1;
+}
+
+.election-card-actions > .btn-danger-ghost {
+  margin-top: 6px;
+  border-style: dashed;
+}
+
+.grid-2col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.field-textarea {
+  width: 100%;
+  min-height: 88px;
+  padding: 10px 12px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line-strong);
+  border-radius: 11px;
+  font-size: 0.82rem;
+  resize: vertical;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.field-textarea:focus {
+  outline: none;
+  border-color: #7da2f1;
+  box-shadow: 0 0 0 4px rgba(45, 99, 220, 0.12);
+}

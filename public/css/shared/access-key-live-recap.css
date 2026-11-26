@@ -1,0 +1,80 @@
+/* Access Key Panel & Live Recap Red Danger Banner */
+.access-key-panel {
+  padding: 18px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 15px;
+}
+
+.access-key-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.live-recap-danger-banner {
+  position: sticky;
+  top: 74px;
+  z-index: 40;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, #991b1b 0%, #b91c1c 100%);
+  color: #ffffff;
+  border: 2px solid #fecaca;
+  border-radius: 15px;
+  box-shadow: 0 14px 28px -14px rgba(153, 27, 27, 0.65);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.live-recap-danger-banner .icon {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  color: #fef2f2;
+  margin-top: 1px;
+}
+
+@media (max-width: 760px) {
+  .landing-benefits,
+  .landing-flow-section {
+    padding: 24px 18px;
+  }
+
+  .landing-benefits-grid,
+  .landing-flow-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .collapsible-head {
+    flex-wrap: wrap;
+  }
+}
+
+.landing-benefit {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 12px;
+  align-items: center;
+}
+
+.landing-benefit-icon {
+  grid-column: 1;
+  grid-row: 1;
+  margin-bottom: 0;
+}
+
+.landing-benefit h3 {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.landing-benefit .landing-benefit-line,
+.landing-benefit p {
+  grid-column: 1 / -1;
+}

@@ -1,0 +1,228 @@
+/* =========================================================
+   Buttons & links
+   ========================================================= */
+.btn {
+  --btn-bg: #fff;
+  --btn-color: var(--ink-soft);
+  --btn-border: var(--line-strong);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 17px;
+  border: 1px solid var(--btn-border);
+  border-radius: 12px;
+  background: var(--btn-bg);
+  color: var(--btn-color);
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  line-height: 1.2;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease,
+    border-color 150ms ease,
+    background 150ms ease,
+    color 150ms ease;
+}
+
+.btn .icon {
+  width: 17px;
+  height: 17px;
+  stroke-width: 2;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.btn-primary {
+  --btn-color: #fff;
+  --btn-border: transparent;
+  background:
+    radial-gradient(circle at 15% 0%, rgba(255, 255, 255, 0.22), transparent 45%),
+    linear-gradient(145deg, #183b8c, #2457c5);
+  box-shadow: 0 10px 20px -12px rgba(22, 53, 125, 0.75);
+}
+
+.btn-primary:hover {
+  background:
+    radial-gradient(circle at 15% 0%, rgba(255, 255, 255, 0.25), transparent 45%),
+    linear-gradient(145deg, #15347a, #1f4eb3);
+  box-shadow: 0 14px 24px -12px rgba(22, 53, 125, 0.8);
+}
+
+.btn-secondary {
+  background: #fff;
+  border-color: var(--line-strong);
+  color: var(--ink-soft);
+}
+
+.btn-secondary:hover {
+  border-color: #b8c5db;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+
+.btn-ghost:hover {
+  color: var(--ink);
+  background: var(--surface-tint);
+}
+
+.btn-soft {
+  background: var(--brand-soft);
+  border-color: transparent;
+  color: var(--brand);
+}
+
+.btn-soft:hover {
+  background: #dfe8ff;
+}
+
+.btn-danger {
+  --btn-color: #fff;
+  --btn-border: transparent;
+  background: linear-gradient(145deg, #a22119, #c53a31);
+  box-shadow: 0 10px 20px -12px rgba(179, 38, 30, 0.65);
+}
+
+.btn-danger:hover {
+  background: linear-gradient(145deg, #8f1c15, #b82b23);
+}
+
+.btn-danger-ghost {
+  background: #fff8f7;
+  border-color: #f4cfcc;
+  color: var(--red);
+}
+
+.btn-danger-ghost:hover {
+  background: var(--red-soft);
+  border-color: #eeb4b0;
+}
+
+.btn-warn-ghost {
+  background: #fffaf1;
+  border-color: #f0d9b5;
+  color: var(--amber);
+}
+
+.btn-warn-ghost:hover {
+  background: var(--amber-soft);
+  border-color: #e8c58e;
+}
+
+.btn-lg {
+  min-height: 52px;
+  padding: 13px 22px;
+  border-radius: 14px;
+  font-size: 0.92rem;
+}
+
+.btn-sm {
+  min-height: 37px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  font-size: 0.76rem;
+}
+
+.btn-xs {
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 9px;
+  font-size: 0.71rem;
+  gap: 5px;
+}
+
+.btn-xs .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 150ms ease, background 150ms ease, border-color 150ms ease;
+}
+
+.icon-btn:hover {
+  color: var(--ink);
+  background: var(--surface-soft);
+  border-color: var(--line-strong);
+}
+
+.icon-btn .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.btn.is-loading {
+  pointer-events: none;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+}
+
+.btn-secondary .spinner,
+.btn-ghost .spinner,
+.btn-soft .spinner {
+  border-color: rgba(22, 53, 125, 0.18);
+  border-top-color: currentColor;
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 0.77rem;
+  font-weight: 650;
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  color: var(--red);
+  text-decoration-color: currentColor;
+}

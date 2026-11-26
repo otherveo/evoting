@@ -1,0 +1,141 @@
+/* Single-Screen Root Landing Page */
+.landing-shell {
+  min-height: calc(100dvh - 78px);
+  display: grid;
+  place-items: center;
+  padding: 20px 16px 28px;
+}
+
+.landing-card {
+  width: min(860px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  padding: 36px 40px;
+  position: relative;
+  overflow: hidden;
+}
+
+.landing-card::before {
+  content: "";
+  position: absolute;
+  top: -120px;
+  right: -90px;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(36, 87, 197, 0.1), transparent 70%);
+  pointer-events: none;
+}
+
+.landing-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.landing-logo {
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
+  object-fit: contain;
+  flex: none;
+}
+
+.landing-main h1 {
+  font-size: clamp(1.65rem, 3vw, 2.3rem);
+  font-weight: 850;
+  letter-spacing: -0.04em;
+  line-height: 1.13;
+  color: var(--ink);
+  max-width: 720px;
+}
+
+.landing-lede {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  max-width: 680px;
+}
+
+.landing-pillars {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 22px 0 26px;
+}
+
+.landing-pillar {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 13px 14px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.landing-pillar strong {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+
+.landing-pillar > div > span {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.71rem;
+  line-height: 1.42;
+  color: var(--muted);
+}
+
+.landing-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.landing-voter-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.landing-voter-hint .icon {
+  width: 15px;
+  height: 15px;
+  color: var(--brand);
+  flex: none;
+}
+
+@media (max-width: 760px) {
+  .landing-card {
+    padding: 24px 20px;
+  }
+
+  .landing-pillars {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin: 18px 0 20px;
+  }
+
+  .landing-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .landing-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

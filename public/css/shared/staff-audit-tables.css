@@ -1,0 +1,100 @@
+/* Staff & Audit Tables (UI-004, UI-006) */
+.data-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.data-table th {
+  padding: 13px 20px;
+  color: var(--muted-soft);
+  background: var(--surface-soft);
+  border-bottom: 1px solid var(--line);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 14px 20px;
+  border-bottom: 1px solid #edf1f7;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  vertical-align: middle;
+}
+
+.data-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.data-table tr:hover td {
+  background: #f9fbff;
+}
+
+.code-pill {
+  display: inline-block;
+  padding: 3px 8px;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--brand);
+  background: var(--brand-soft);
+  border-radius: 7px;
+}
+
+.temp-password-box {
+  padding: 14px 16px;
+  background: #f4f8ff;
+  border: 1px dashed #9ab6f0;
+  border-radius: 13px;
+  margin-top: 12px;
+}
+
+.temp-password-box code {
+  display: block;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--brand);
+  margin-top: 4px;
+  user-select: all;
+}
+
+@media (max-width: 860px) {
+  .grid-2col {
+    grid-template-columns: 1fr;
+  }
+  .auth-card {
+    padding: 24px 20px;
+  }
+}
+
+@media print {
+  .site-header,
+  .site-footer,
+  .heading-actions,
+  .voter-tools,
+  .modal-footer,
+  .no-print {
+    display: none !important;
+  }
+  .modal-backdrop {
+    position: static !important;
+    background: none !important;
+    padding: 0 !important;
+  }
+  .modal {
+    box-shadow: none !important;
+    border: 1px solid #000 !important;
+    max-height: none !important;
+    width: 100% !important;
+  }
+}

@@ -1,0 +1,99 @@
+/* =========================================================
+   Production Refinements (UI.md U1-U9 & MOTION.md M1-M9)
+   + Staff Auth, Admin, and Multi-Election Surfaces
+   ========================================================= */
+:root {
+  --muted: #4f5d75;
+  --muted-soft: #56657e;
+  --duration-fast: 150ms;
+  --duration-surface: 180ms;
+  --duration-overlay: 220ms;
+  --duration-dialog: 260ms;
+  --duration-progress: 350ms;
+  --duration-step: 360ms;
+  --duration-celebration: 420ms;
+}
+
+/* U2: Accessible contrast on warm winner surface */
+.winner-label {
+  color: #704b10;
+}
+.winner-note {
+  color: #5c4d32;
+}
+
+/* U3: Readable instructional microcopy minimum size */
+.micro,
+.session-note,
+.vote-footnote,
+.candidate-vision span,
+.result-kicker,
+.success-meta span,
+.locked-footnote,
+.public-updated {
+  font-size: 0.75rem;
+}
+
+/* U4: Use declared surface tokens */
+.panel,
+.vote-card,
+.modal {
+  background-color: var(--surface);
+}
+
+/* U6: Comfortable touch targets on touch devices */
+@media (pointer: coarse), (max-width: 760px) {
+  .filter-pill,
+  .btn-sm,
+  .btn-xs,
+  .icon-btn {
+    min-height: 44px;
+  }
+  .icon-btn {
+    min-width: 44px;
+  }
+}
+
+/* U7 & M9: Static snapshot indicator for manual-refresh public turnout */
+.snapshot-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4be0b9;
+  box-shadow: 0 0 0 3px rgba(75, 224, 185, 0.18);
+  animation: none !important;
+}
+
+/* U8 & M3: QR preview is a static object, not a button */
+.qr-frame,
+.qr-frame:hover {
+  transform: none !important;
+  box-shadow: 0 10px 24px -18px rgba(14, 27, 56, 0.45) !important;
+}
+
+.qr-svg-wrap svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 220px;
+  margin-inline: auto;
+  border-radius: 6px;
+}
+
+/* M2: Remove decorative candidate photo zoom */
+.candidate-photo,
+.candidate-card:hover .candidate-photo {
+  transform: none !important;
+}
+
+/* M4: Static locked-results ring */
+.locked-ring {
+  animation: none !important;
+}
+
+/* M7: Consistent progress bar transition */
+.progress span,
+.result-bar span,
+.total-progress span {
+  transition: width var(--duration-progress) ease;
+}
