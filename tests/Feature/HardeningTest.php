@@ -121,6 +121,11 @@ class HardeningTest extends TestCase
 
     public function test_browser_payloads_can_sign_in_upload_and_cast_anonymous_ballot(): void
     {
+        config([
+            'security.origin_mode' => 'enforce',
+            'security.whitelist_mode' => 'enforce',
+            'security.csp_mode' => 'enforce',
+        ]);
         $operator = app(StaffAccountService::class)->createAccount('transport_operator', 'Operator Uji', 'operator');
         $operator['account']->update(['must_change_password' => false]);
         $headers = ['X-Livewire' => '1', 'Origin' => config('app.url')];
@@ -138,9 +143,11 @@ class HardeningTest extends TestCase
             ]],
         ], $headers)->assertOk();
 
-        $login = $snapshot($this->get(route('login'))->assertOk());
+        $login = $snapshot($this->get(route('login'))->assertOk()->assertHeader('Content-Security-Policy'));
         $send($login, 'login', updates: ['username' => 'transport_operator', 'password' => $operator['temporary_password']])
             ->assertJsonPath('components.0.effects.redirect', route('operator.elections'));
+        $this->assertAuthenticatedAs($operator['account'], 'staff');
+        $this->get(route('operator.elections'))->assertOk();
 
         $election = Election::create(['name' => 'Pemilihan Transport', 'max_voter_rights' => 5]);
         $candidate = Candidate::on('staff')->create(['election_id' => $election->id, 'name' => 'Paslon Satu', 'number' => 1]);

@@ -71,6 +71,47 @@ class SecurityHttpTest extends TestCase
         $this->artisan('security:whitelist-check')->assertFailed();
     }
 
+    public function test_https_from_fastcgi_keeps_livewire_on_the_public_origin_after_real_ip_rewrite(): void
+    {
+        config(['security.csp_mode' => 'enforce', 'security.hsts_max_age' => 86400]);
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.1'])
+            ->get('http://evoting.test/login', ['X-Forwarded-Proto' => 'https'])
+            ->assertOk()
+            ->assertHeaderMissing('Strict-Transport-Security')
+            ->assertSee('data-update-uri="http://evoting.test/', false);
+
+        Livewire::flushState();
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.1'])
+            ->get('https://evoting.test/login')
+            ->assertOk()
+            ->assertHeader('Strict-Transport-Security', 'max-age=86400')
+            ->assertHeader('Content-Security-Policy')
+            ->assertSee('data-update-uri="https://evoting.test/', false);
+    }
+
+    public function test_local_origin_must_match_the_loopback_request_and_is_disabled_in_production(): void
+    {
+        config(['app.url' => 'https://evoting.test', 'security.origin_mode' => 'enforce']);
+        $this->app->instance('env', 'local');
+        $this->mock(SecurityAudit::class, function ($audit) {
+            $audit->shouldReceive('record')->with('origin_rejected', \Mockery::type(Request::class))->times(4);
+        });
+
+        $url = 'http://127.0.0.1:8000/logout';
+        $session = ['_token' => 'fixture-session-token'];
+        $form = ['_token' => $session['_token']];
+        $headers = ['Origin' => 'http://127.0.0.1:8000'];
+        $this->withSession($session)->post($url, $form, $headers)->assertRedirect();
+        $this->withSession($session)->post($url, $form, ['Origin' => 'http://localhost:8000'])->assertForbidden();
+        $this->withSession($session)->post($url, $form, ['Origin' => 'http://127.0.0.1:8001'])->assertForbidden();
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.1'])
+            ->withSession($session)->post($url, $form, $headers)->assertForbidden();
+
+        $this->app->instance('env', 'production');
+        $this->withServerVariables(['REMOTE_ADDR' => '127.0.0.1'])
+            ->withSession($session)->post($url, $form, $headers)->assertForbidden();
+    }
+
     public function test_origin_and_whitelist_do_not_replace_csrf_validation(): void
     {
         $this->app->instance('env', 'local');
