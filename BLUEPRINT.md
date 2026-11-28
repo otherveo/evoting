@@ -68,7 +68,7 @@ Menjadi acuan teknis tunggal untuk memahami, memelihara, dan mengembangkan DigiV
 
 ## 2.2 Referensi
 
-`PRD.md` v1.1 (kebutuhan), `schema.sql` (skema), `DEPLOY.md` (penyebaran), `README.md` (ringkasan; beberapa bagiannya tidak sinkron, `GAP-004`), `docs/update-v1.md` – `update-v5.md` (catatan perubahan), `AMANDEMEN-PRD.md`.
+`PRD.md` v1.1 (kebutuhan), `schema.sql` (skema), `DEPLOY.md` (penyebaran), `README.md` (ringkasan; beberapa bagiannya tidak sinkron, `GAP-004`), `docs/update/update-v1.md` – `update-v5.md` (catatan perubahan), `AMANDEMEN-PRD.md`.
 
 ## 2.3 Prinsip arsitektur yang terlihat di kode
 
@@ -896,7 +896,7 @@ Disusun dari pembacaan kode pada commit `4e31fb2` (temuan awal pada `c98c55b`; s
 |---|---|---|---|---|
 | GAP-001 | **Sebagian tertutup** | Sedang | Kata sandi role `evoting_app` sempat tertulis di `schema.sql` yang dipublikasikan; commit `4bd8985` menggantinya dengan placeholder. Audit internal (`docs/security/AUDIT-2026-11.md`) menyatakan pemilik telah mengonfirmasi rotasi dan bahwa riwayat Git lokal masih memuat versi lama. Rotasi belum diverifikasi oleh penyusun dokumen. | Verifikasi bahwa kredensial lama tidak lagi berlaku dan semua pengguna kredensial memakai hasil rotasi. |
 | GAP-002 | Terbuka | Rendah | `evoting.voting_session_minutes` dan `evoting.operator_poll_seconds` di `config/evoting.php` tidak dipakai: 10 menit tertulis di SQL dan PHP, 3 detik di Blade. | Hapus kunci atau sambungkan. |
-| GAP-003 | Terbuka | **Tinggi** | `fn_delete_election` menghapus `votes` dan `audit_logs` terkait pemilihan lewat bendera transaksi yang membuka trigger `fn_forbid_change`. `docs/update-v1.md` (Perubahan 6) menyatakan audit tidak ikut dihapus. Fungsi kini memeriksa Operator aktif. | Putuskan kebijakan (`OD-016`); bila audit harus bertahan, kecualikan dari penghapusan. |
+| GAP-003 | Terbuka | **Tinggi** | `fn_delete_election` menghapus `votes` dan `audit_logs` terkait pemilihan lewat bendera transaksi yang membuka trigger `fn_forbid_change`. `docs/update/update-v1.md` (Perubahan 6) menyatakan audit tidak ikut dihapus. Fungsi kini memeriksa Operator aktif. | Putuskan kebijakan (`OD-016`); bila audit harus bertahan, kecualikan dari penghapusan. |
 | GAP-004 | Terbuka | Sedang | `README.md` tidak sinkron dengan kode: kata sandi Operator "minimum 10 dengan kombinasi" (kode: minimal 8, tanpa kompleksitas), path publik `/p/{election}/partisipasi` dan `/hasil` (kode: `/turnout` dan `/results`), dan hasil terkunci hanya lewat `fn_election_results` (kini ada jalur Operator dan Rekap Langsung). | Perbarui `README.md`; putuskan `OD-015`. |
 | GAP-005 | **Tertutup** | — | Penguncian Nama Kembar dan idempotensi registrasi kini di basis data (`p_confirmed_matches`, `registration_id` unik, kunci pemilihan). | — |
 | GAP-006 | Terbuka | Sedang | "Paslon hanya diubah saat Persiapan" dan "batas tidak di bawah jumlah Hak Pilih" hanya di aplikasi; `evoting_staff` memiliki DML penuh pada `candidates` dan UPDATE `max_voter_rights`; kolom batas hanya ber-CHECK `>= 1`. | Trigger penjaga pada `candidates` dan `elections`. |
@@ -904,7 +904,7 @@ Disusun dari pembacaan kode pada commit `4e31fb2` (temuan awal pada `c98c55b`; s
 | GAP-008 | **Tertutup** | — | Proxy tepercaya kini dari `TRUSTED_PROXIES` (kosong bawaan), bukan `*`. | Isi dengan alamat proxy sebenarnya. |
 | GAP-009 | **Tertutup (di kode)** | — | Seluruh halaman staf mewarisi `StaffPage` (Gate pada setiap permintaan Livewire) dan middleware didaftarkan sebagai persisten. Diuji `HardeningTest` (tidak dijalankan di sini). | — |
 | GAP-010 | **Tertutup (di kode)** | — | `staff_accounts.session_version` menginvalidasi sesi lama setelah reset/nonaktif/ganti kata sandi. | — |
-| GAP-011 | **Sebagian tertutup** | Sedang | Kini 28 tes PHPUnit (12 + 8 + 8) dan satu tes browser Node memakai basis data lokal dari template. `docs/update-v8.md` menyebut kasus perebutan jatah terakhir dari dua koneksi (tidak ditelusuri penyusun); tetap tidak ada tes konkurensi untuk satu token satu suara, introspeksi skema privasi (`votes` tanpa waktu/relasi), halaman publik jumlah/hasil, polling monitor, atau hapus pemilihan. Tes dilewati bila variabel uji tidak diatur. Tidak dijalankan oleh penyusun dokumen. | Tambah `TC-016` – `TC-023`. |
+| GAP-011 | **Sebagian tertutup** | Sedang | Kini 28 tes PHPUnit (12 + 8 + 8) dan satu tes browser Node memakai basis data lokal dari template. `docs/update/update-v8.md` menyebut kasus perebutan jatah terakhir dari dua koneksi (tidak ditelusuri penyusun); tetap tidak ada tes konkurensi untuk satu token satu suara, introspeksi skema privasi (`votes` tanpa waktu/relasi), halaman publik jumlah/hasil, polling monitor, atau hapus pemilihan. Tes dilewati bila variabel uji tidak diatur. Tidak dijalankan oleh penyusun dokumen. | Tambah `TC-016` – `TC-023`. |
 | GAP-012 | Terbuka | Rendah | Terbitkan Ulang QR menimpa `token_hash` (tanpa riwayat); penanda QR ditolak (`rejected_token:*`) dan Mode QR (`evoting_config:*`) disimpan di tabel `cache`; menghapus cache menghilangkan keduanya. Akses dengan QR lama tidak tercatat di log perangkat. | Simpan di tabel khusus. |
 | GAP-013 | Terbuka | Rendah | Audit `login_gagal` menyimpan teks username yang diketik dan IP; `buat_hak_pilih` menyimpan nama pemilih; tidak ada retensi (`OD-004`). | Tetapkan retensi. |
 | GAP-014 | Terbuka | Sedang | TOTP buatan sendiri (`TotpService`, RFC 6238); tanpa kode pemulihan; pencegahan replay lewat cache berkas. | Pertimbangkan pustaka teruji dan kode pemulihan. |
@@ -923,7 +923,7 @@ Tambahan: log akses web server memuat `/v/{token}` kecuali diredaksi; `DEPLOY.md
 
 | Dilakukan | Tidak dilakukan |
 |---|---|
-| Membaca `schema.sql`, rute, middleware, layanan, model, komponen Livewire, konfigurasi, tes, `DEPLOY.md`, `README.md`, `docs/update-v1` – `v5` dan selisih commit sampai `f01eaba` (`docs/update-v7.md` tidak ada, v7 dibaca dari kode dan komentar `schema.sql`; `docs/update-v8.md` dan `docs/security/*` dibaca) | Menjalankan aplikasi atau tes, memeriksa lingkungan produksi |
+| Membaca `schema.sql`, rute, middleware, layanan, model, komponen Livewire, konfigurasi, tes, `DEPLOY.md`, `README.md`, `docs/update/update-v1` – `v5` dan selisih commit sampai `f01eaba` (`docs/update-v7.md` tidak ada, v7 dibaca dari kode dan komentar `schema.sql`; `docs/update/update-v8.md` dan `docs/security/*` dibaca) | Menjalankan aplikasi atau tes, memeriksa lingkungan produksi |
 | Memeriksa konsistensi ID PRD dan BLUEPRINT dan validitas sintaks diagram Mermaid | Memverifikasi perilaku Livewire pada permintaan pembaruan secara dinamis; menguji konkurensi pada kode yang dibangun |
 
 ---
@@ -933,7 +933,7 @@ Tambahan: log akses web server memuat `/v/{token}` kecuali diredaksi; `DEPLOY.md
 | Tanggal | Commit/sumber | Perubahan | Bagian terdampak |
 |---|---|---|---|
 | 17 November | `schema.sql` awal, `AMANDEMEN-PRD.md` | Skema tim menggantikan SQL v1.0; TOTP hanya Admin | 3.4, 3.5 |
-| 18–21 November | `docs/update-v1` – `v5` | Rebranding, persetujuan perangkat, wizard, hapus pemilihan, Access Key dan Rekap Langsung, rekap berkunci dan animasi, gerbang visi-misi | 3.4 – 3.14 |
+| 18–21 November | `docs/update/update-v1` – `v5` | Rebranding, persetujuan perangkat, wizard, hapus pemilihan, Access Key dan Rekap Langsung, rekap berkunci dan animasi, gerbang visi-misi | 3.4 – 3.14 |
 | 21–22 November | `4bd8985`, `1073087`, `d64d652`, `77719fb`, `6e062bd` | Dua role basis data (`evoting_app`, `evoting_staff`); `require_active_operator`; idempotensi registrasi dan penjaga Nama Kembar di basis data; gerbang rekap di basis data; `StaffPage` + Gate + middleware persisten; `session_version`; `TRUSTED_PROXIES`; pelaporan galat basis data aman; basis data uji lokal dari template dan `HardeningTest`; setelan dan pemutaran rekap dipisah (rute `/recap/reveal`, `/recap/balapan`), tipe Balapan | 2.3, 3.1, 3.2, 3.4, 3.5, 3.10, 3.11, 3.15, 3.16, 4 |
 | 23 November | `fac2b91` | **Gerbang baca visi-misi dicabut** (`proceedToConfirm` dan daftar paslon terbaca pada `confirmVote` dihapus; tahap Konfirmasi di klien); perbaikan bug popup Operator | API-035, VAL-025 (dicabut), FR-040/BR-037 (dicabut) |
 | 25 November | `00c83ef` | **Update v8:** `fn_device_election_cutoff`, `fn_device_session_gate`, kolom `elections.device_limit_cutover_at`, penanda `device_limit_v8_since`; batas perangkat berlaku untuk simulasi; QR ketiga ditolak saat dibuka tanpa menambah hitungan; banner dan label merah monitor Operator | DB-002, DB-042, 3.6.4b, FR-043, GAP-020 |

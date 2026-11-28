@@ -7,7 +7,7 @@
 | Basis kode | Repositori `otherveo/evoting`, cabang `main`, commit `f01eaba` (26 November 2026, "Split SuaraSekolah stylesheets by feature") |
 | Nama produk | **DigiVoting** (sebelumnya "E-Voting"; nama teknis `evoting` pada schema, role, dan konfigurasi tetap) |
 | Sumber kebenaran | `discussion.md` (rujukan `D§n`); keputusan pemilik produk (`KP-xxx`, termasuk `AMANDEMEN-PRD.md`); **kode sumber** untuk perilaku yang sudah berjalan |
-| Dokumen pendamping | `BLUEPRINT.md` (arsitektur dan implementasi apa adanya), `schema.sql`, `DEPLOY.md`, `docs/update-v1.md` – `docs/update-v5.md` (catatan perubahan) |
+| Dokumen pendamping | `BLUEPRINT.md` (arsitektur dan implementasi apa adanya), `schema.sql`, `DEPLOY.md`, `docs/update/update-v1.md` – `docs/update/update-v5.md` (catatan perubahan) |
 | Bahasa | Indonesia |
 
 > **Posisi dokumen.** PRD v1.0 ditulis sebelum aplikasi ada. Aplikasi kini berjalan, jadi dokumen ini **mendokumentasikan produk sebagaimana terbangun**. Bila implementasi memilih jalan yang berbeda dari rencana v1.0, PRD mengikuti implementasi dan perubahannya dicatat di 2.7 (`CH`). Bila implementasi belum memenuhi suatu aturan, aturan itu **tetap tertulis** dan kekurangannya dicatat di Bagian 4 dan di `BLUEPRINT.md` Bagian 4 (`GAP`).
@@ -20,8 +20,8 @@
 |---|---|
 | Amandemen PRD (`KP-009`) | TOTP hanya untuk Admin: `FR-001`, `FR-002`, `FR-007`, `BR-022`, `NFR-001`, `WF-002`, `WF-003` |
 | Implementasi awal (`KP-010` – `KP-012`) | Foto, visi, misi paslon; Mode QR oleh Admin; hosting AWS; zona waktu WITA |
-| `docs/update-v1` – `update-v4` (`KP-013` – `KP-016`, `KP-019` – `KP-021`) | Rebranding DigiVoting; persetujuan perangkat bersama; wizard pembuatan pemilihan; hapus pemilihan; batas hak pilih 3–10.000; pagination monitor; kunci tombol dan idempotensi |
-| `docs/update-v1` §7 dan `update-v5` (`KP-017`, `KP-018`) | Access Key rekap langsung; kunci dan animasi rekap Operator; gerbang baca visi-misi. **Kebijakan "hasil tidak tampil sebelum Waktu Selesai" dilonggarkan** (`BR-026` berubah) |
+| `docs/update/update-v1` – `update-v4` (`KP-013` – `KP-016`, `KP-019` – `KP-021`) | Rebranding DigiVoting; persetujuan perangkat bersama; wizard pembuatan pemilihan; hapus pemilihan; batas hak pilih 3–10.000; pagination monitor; kunci tombol dan idempotensi |
+| `docs/update/update-v1` §7 dan `update-v5` (`KP-017`, `KP-018`) | Access Key rekap langsung; kunci dan animasi rekap Operator; gerbang baca visi-misi. **Kebijakan "hasil tidak tampil sebelum Waktu Selesai" dilonggarkan** (`BR-026` berubah) |
 | Hardening 21–22 November (`KP-022`, `KP-023`) | Dua login basis data (pemilih/publik dan staf), pemeriksaan Operator aktif di dalam fungsi, penjaga Nama Kembar dan idempotensi registrasi di basis data, otorisasi diperbarui pada setiap permintaan Livewire, sesi staf berversi, proxy tepercaya dikonfigurasi; pemutaran rekap Animasi dipisah dari pengaturannya dan ada tipe **Balapan** (`CH-009`, `FR-013`, `FR-034`, `FR-039`) |
 | Update v7 (24–25 November) | Batas penggunaan perangkat dan blokir manual oleh Admin (`KP-025`); gerbang visi-misi dicabut (`CH-012`) |
 | Update v8 dan pengerasan keamanan (25–26 November) | Batas perangkat juga untuk simulasi dan penolakan QR ketiga saat dibuka (`KP-027`); pengerasan permintaan web dan log peristiwa keamanan berantai hash (`KP-028`, `NFR-017`) |
@@ -32,7 +32,7 @@
 | Tanggal | Commit | Perubahan | Dampak pada PRD |
 |---|---|---|---|
 | 17 November | `AMANDEMEN-PRD.md` | TOTP hanya Admin | `KP-009`, `CH-003` |
-| 18–21 November | `docs/update-v1` – `update-v5` | Rebranding, persetujuan perangkat, wizard, hapus pemilihan, Access Key, rekap berkunci dan animasi, gerbang visi-misi | `KP-013` – `KP-021`, `FR-034` – `FR-041` |
+| 18–21 November | `docs/update/update-v1` – `update-v5` | Rebranding, persetujuan perangkat, wizard, hapus pemilihan, Access Key, rekap berkunci dan animasi, gerbang visi-misi | `KP-013` – `KP-021`, `FR-034` – `FR-041` |
 | 21–22 November | `4bd8985`, `1073087`, `d64d652`, `77719fb` | Pengerasan otorisasi dan basis data; pemutaran rekap dipisah, tipe Balapan | `KP-022`, `KP-023`, `CH-009`, `FR-013`, `FR-034`, `FR-039` |
 | 22–23 November | `6e062bd`, `3871641` | **Daftar Paslon Publik** (`/paslon` dan `/{election}/paslon`); Operator dapat menampilkan atau menyembunyikan foto paslon di daftar publik; visi-misi paslon dipindah ke dialog; penyempurnaan kontrol Operator dan landing | `KP-024`, `CH-010`, `FR-042`, `BR-039`, `UI-024`, `AC-053`, `OD-014` terjawab sebagian |
 | 23 November | `fac2b91` | **Gerbang baca visi-misi dicabut**: Pemilih tidak lagi wajib membuka visi-misi tiap paslon sebelum lanjut; tombol Lihat Visi & Misi tetap ada; perbaikan bug popup halaman Operator | `CH-012`, `FR-040` dan `BR-037` dicabut, `FR-017`, `NFR-012`, `WF-005`, `AC-019`, `AC-051` |
@@ -197,7 +197,7 @@ flowchart LR
 | KP-024 | **Daftar Paslon Publik:** halaman tanpa login yang menampilkan paslon (nomor, nama, foto, visi, misi) untuk pemilihan yang sudah berjadwal dan memiliki paslon; pemilihan bernama pelatihan/simulasi/tes tidak dicantumkan; Operator dapat menampilkan atau menyembunyikan foto tiap paslon di daftar publik. | Kode dan commit 22–23 November (`6e062bd`, `3871641`) |
 | KP-025 | **Batas penggunaan perangkat (update v7):** satu perangkat (Pengenal Browser) hanya boleh dipakai **dua pemilih berbeda per pemilihan**; pemilih ketiga ditolak. Admin dapat memblokir manual perangkat yang sudah dipakai dua kali pada suatu pemilihan, dan membuka blokirnya. Pemilihan bernama pelatihan/simulasi/tes tidak dihitung; penggunaan sebelum penanda mulai berlaku tidak dihitung. | Kode dan commit 24–25 November (`7b9e110`, `5f58566`) |
 | KP-026 | **Gerbang baca visi-misi dicabut** (mengubah `KP-018`). | Kode dan commit 23 November (`fac2b91`) |
-| KP-027 | **Update v8 — batas perangkat:** batas dua penggunaan berlaku untuk pemilihan resmi **dan simulasi**; dihitung saat tautan QR sah dibuka (refresh QR yang sama = satu penggunaan); penggunaan kedua memerlukan persetujuan Operator penerbit; QR ketiga ditolak saat dibuka tanpa menambah hitungan, membuka sesi, atau mengajukan persetujuan; pemilihan resmi memakai cutoff v7, simulasi yang sudah ada dibekukan saat v8 diaktifkan; Operator penerbit melihat peringatan merah. Filter perangkat Admin tetap mengecualikan simulasi. | `docs/update-v8.md`, commit `00c83ef` |
+| KP-027 | **Update v8 — batas perangkat:** batas dua penggunaan berlaku untuk pemilihan resmi **dan simulasi**; dihitung saat tautan QR sah dibuka (refresh QR yang sama = satu penggunaan); penggunaan kedua memerlukan persetujuan Operator penerbit; QR ketiga ditolak saat dibuka tanpa menambah hitungan, membuka sesi, atau mengajukan persetujuan; pemilihan resmi memakai cutoff v7, simulasi yang sudah ada dibekukan saat v8 diaktifkan; Operator penerbit melihat peringatan merah. Filter perangkat Admin tetap mengecualikan simulasi. | `docs/update/update-v8.md`, commit `00c83ef` |
 | KP-028 | **Pengerasan keamanan web:** pemeriksaan Origin, daftar putih bentuk parameter permintaan, CSP (mode laporan) dan HSTS, pemulihan IP klien dari Cloudflare, log peristiwa keamanan berantai hash, CI keamanan, audit keamanan November 2026. | `docs/security/*`, commit `bff3fa1`, `9b1e73f` |
 
 ### Perubahan (`CH`)
